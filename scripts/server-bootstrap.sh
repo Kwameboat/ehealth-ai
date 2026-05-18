@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 APP_DIR="${APP_DIR:-$HOME/ehealth-ai}"
-NODE_ROOT="${NODE_ROOT:-$HOME/ehealth_ai}"
 cd "$APP_DIR"
 
 echo "==> eHealth AI server bootstrap in $APP_DIR"
@@ -31,11 +30,9 @@ cd backend && npm install --omit=dev 2>/dev/null || npm install
 npm rebuild better-sqlite3 2>/dev/null || true
 cd "$APP_DIR"
 
-mkdir -p "$NODE_ROOT/backend/db" backend/db
-if [ -d "$APP_DIR" ] && [ -d "$NODE_ROOT" ]; then
-  rsync -a --exclude node_modules --exclude 'backend/db/*.db' "$APP_DIR/" "$NODE_ROOT/" 2>/dev/null || true
-fi
-chmod 755 backend/db "$NODE_ROOT/backend/db" 2>/dev/null || true
+ln -sfn "$APP_DIR" "$HOME/ehealth_ai" 2>/dev/null || true
+mkdir -p backend/db
+chmod 755 backend/db 2>/dev/null || true
 
 if [ ! -f backend/.env ]; then
   echo "WARNING: backend/.env missing — copy from backend/.env.example and add keys."

@@ -1,52 +1,27 @@
-# Fix 503 on admin login
+# Fix 503 + "Unable to find app venv folder"
 
-## Cause
+## Red error in cPanel
 
-**503** = Node app is not running on the server (Passenger cannot start it).  
-SSL can be fine while the API is still down.
+> Unable to find app venv folder by this path: '%(app_venv)s'
 
-## Fix in cPanel (do in order)
+The Node.js app is **broken**. You must **destroy it and create a new one** with root **`ehealth-ai`** (hyphen).
 
-### 1. Change startup file (important)
+**Full steps:** see **`cpanel/FIX-VENV-ERROR.md`**
 
-**Setup Node.js App** → edit your app:
+### Short version
 
-| Field | Set to |
-|-------|--------|
-| Application startup file | **`server.js`** (root file, not `backend/server.js`) |
+1. **DESTROY** the current Node.js app (`ehealth_ai`)
+2. **Create Application** with root **`ehealth-ai`**, startup **`server.js`**, URL **ehealthaigh.com**
+3. Re-add env vars (include **`NODE_ENV=production`**)
+4. **Run NPM Install** → must complete without red errors
+5. **RESTART**
+6. Test: https://www.ehealthaigh.com/api/health
 
-Click **SAVE**.
+### Env paths (use hyphen `ehealth-ai`)
 
-### 2. Add env vars if missing
+```
+DATABASE_PATH=/home/ehealtha/ehealth-ai/backend/db/medassistant.db
+WEB_DIST_PATH=/home/ehealtha/ehealth-ai/dist
+```
 
-| Name | Value |
-|------|--------|
-| `NODE_ENV` | `production` |
-| `ALLOWED_ORIGINS` | `https://ehealthaigh.com,https://www.ehealthaigh.com,http://ehealthaigh.com,http://www.ehealthaigh.com` |
-
-### 3. Stop → Install → Start
-
-1. **STOP APP**
-2. **Run NPM Install**
-3. **RESTART**
-
-### 4. Test API
-
-Open: **https://www.ehealthaigh.com/api/health**
-
-- **Good:** `{"status":"ok","db":true,...}`
-- **DB error JSON:** run **Run NPM Install** again, then **RESTART**
-- **HTML 503 page:** click **RESTART** again; check `~/ehealth_ai/startup-check.log` in File Manager
-
-### 5. Admin login
-
-**https://www.ehealthaigh.com/admin** — `admin` / your `ADMIN_PASSWORD` (default `admin123`)
-
-## Keep these settings
-
-| Field | Value |
-|-------|--------|
-| Application root | `ehealth_ai` |
-| Application URL | `ehealthaigh.com` |
-
-Code deploys to `ehealth-ai` and syncs to `ehealth_ai` automatically.
+Do **not** use application root `ehealth_ai` (underscore) — that caused the venv error.

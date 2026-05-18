@@ -17,9 +17,9 @@ The Node backend must run via **Phusion Passenger** (cPanel Node.js app). Each d
 |-------|--------|
 | Node.js version | 18 or 20 (22 OK) |
 | Application mode | Production |
-| Application root | `ehealth_ai` |
+| Application root | **`ehealth-ai`** (hyphen — same as FTP deploy) |
 | Application URL | `ehealthaigh.com` |
-| Application startup file | `backend/server.js` |
+| Application startup file | **`server.js`** |
 
 ### 2. Environment variables
 
