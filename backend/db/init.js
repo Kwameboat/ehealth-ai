@@ -1,8 +1,13 @@
-const Database = require('better-sqlite3');
+const path = require('path');
+const { createRequire } = require('module');
+
+// Load better-sqlite3 from backend/node_modules only (not nodevenv global prebuilds)
+const backendRequire = createRequire(path.join(__dirname, '..', 'package.json'));
+const Database = backendRequire('better-sqlite3');
+
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const fs = require('fs');
-const path = require('path');
 
 const DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, 'medassistant.db');
 

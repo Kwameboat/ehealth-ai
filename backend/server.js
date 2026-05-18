@@ -1,6 +1,9 @@
 const path = require('path');
 const Module = require('module');
 
+// cPanel sets NODE_PATH to nodevenv/lib/node_modules (prebuilt for newer glibc → GLIBC_2.29 errors)
+delete process.env.NODE_PATH;
+
 // cPanel may install node_modules in ehealth-ai/ instead of ehealth-ai/backend/
 for (const dir of [path.join(__dirname, 'node_modules'), path.join(__dirname, '..', 'node_modules')]) {
   if (!Module.globalPaths.includes(dir)) Module.globalPaths.unshift(dir);
