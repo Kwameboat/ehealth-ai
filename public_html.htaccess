@@ -1,8 +1,22 @@
-# SPA fallback for eHealth AI PWA (Expo static export)
+# eHealth AI — public_html (static PWA + admin UI)
+# API routes must NOT be rewritten to index.html (handled by Node.js app)
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
+
+  # Let Node/Passenger handle API (do not serve SPA for these)
+  RewriteRule ^api(/|$) - [L]
+  RewriteRule ^admin/api(/|$) - [L]
+
+  # Admin panel static assets (if served from public_html/admin)
+  RewriteRule ^admin/?$ admin/index.html [L]
+
+  # PWA static files
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # SPA fallback for app routes only
   RewriteRule ^ index.html [L]
 </IfModule>

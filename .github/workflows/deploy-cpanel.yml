@@ -94,14 +94,20 @@ jobs:
               cp -f public/manifest.json ~/public_html/ 2>/dev/null || true
               cp -f public/sw.js ~/public_html/ 2>/dev/null || true
               cp -r public/icons ~/public_html/ 2>/dev/null || true
-              cat > ~/public_html/.htaccess << 'HTEOF'
+              cp -f public_html.htaccess ~/public_html/.htaccess 2>/dev/null || cat > ~/public_html/.htaccess << 'HTEOF'
             <IfModule mod_rewrite.c>
               RewriteEngine On
               RewriteBase /
-              RewriteCond %{REQUEST_FILENAME} !-f
-              RewriteCond %{REQUEST_FILENAME} !-d
+              RewriteRule ^api(/|$) - [L]
+              RewriteRule ^admin/api(/|$) - [L]
+              RewriteRule ^admin/?$ admin/index.html [L]
+              RewriteCond %{REQUEST_FILENAME} -f [OR]
+              RewriteCond %{REQUEST_FILENAME} -d
+              RewriteRule ^ - [L]
               RewriteRule ^ index.html [L]
             </IfModule>
             HTEOF
+              mkdir -p ~/public_html/admin
+              cp -r backend/public/admin/* ~/public_html/admin/ 2>/dev/null || true
               echo "Published PWA to public_html"
             fi

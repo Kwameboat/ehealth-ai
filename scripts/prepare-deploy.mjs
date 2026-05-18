@@ -11,6 +11,8 @@ const out = path.join(root, 'deploy-bundle');
 
 const COPY_DIRS = ['dist', 'public', 'backend', 'assets', 'SRC'];
 const COPY_FILES = [
+  'server.js',
+  'public_html.htaccess',
   'package.json',
   'package-lock.json',
   'app.json',
