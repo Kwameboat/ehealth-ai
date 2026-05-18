@@ -1,4 +1,11 @@
 const path = require('path');
+const Module = require('module');
+
+// cPanel may install node_modules in ehealth-ai/ instead of ehealth-ai/backend/
+for (const dir of [path.join(__dirname, 'node_modules'), path.join(__dirname, '..', 'node_modules')]) {
+  if (!Module.globalPaths.includes(dir)) Module.globalPaths.unshift(dir);
+}
+
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const cors = require('cors');
@@ -144,7 +151,12 @@ function onListen() {
 
 module.exports = app;
 
-// cPanel Passenger sets PORT; bind localhost when proxied
 const listenPort = Number(process.env.PORT) || PORT;
-const listenHost = process.env.PORT ? '127.0.0.1' : HOST;
-app.listen(listenPort, listenHost, onListen);
+const underPassenger = Boolean(process.env.PASSENGER_APP_ENV || process.env.PASSENGER_SPAWN_WORK_DIR);
+
+if (underPassenger) {
+  // Phusion Passenger — do not call listen(); export app only
+  console.log('eHealth AI API (Passenger mode)');
+} else {
+  app.listen(listenPort, HOST, onListen);
+}
