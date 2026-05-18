@@ -1,8 +1,9 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
 const cors = require('cors');
 const express = require('express');
 const fs = require('fs');
-const path = require('path');
 const { initDatabase } = require('./db/init');
 const { requireAppAuth } = require('./middleware/appSecret');
 
@@ -13,7 +14,12 @@ const adminRoutes = require('./routes/admin');
 const paymentRoutes = require('./routes/payments');
 const { paystackWebhookHandler } = require('./routes/payments');
 
-initDatabase();
+try {
+  initDatabase();
+} catch (err) {
+  console.error('Database init failed:', err);
+  throw err;
+}
 
 const app = express();
 const isProd = process.env.NODE_ENV === 'production';
@@ -117,7 +123,7 @@ app.use((req, res) => {
 const underPassenger =
   Boolean(process.env.PASSENGER_APP_ENV) ||
   Boolean(process.env.PASSENGER_SPAWN_WORK_DIR) ||
-  Boolean(process.env.PHUSION_PASSENGER);
+  typeof global.PhusionPassenger !== 'undefined';
 
 function onListen() {
   const listenPort = Number(process.env.PORT) || PORT;
@@ -129,10 +135,7 @@ function onListen() {
 
 module.exports = app;
 
-// cPanel Passenger sets PORT; local dev uses PORT or 3001
-const listenPort = Number(process.env.PORT) || PORT;
-if (underPassenger || process.env.PORT) {
-  app.listen(listenPort, HOST, onListen);
-} else if (require.main === module) {
-  app.listen(listenPort, HOST, onListen);
+// Passenger (cPanel): export app only — do NOT call listen() or you get 503
+if (!underPassenger && require.main === module) {
+  app.listen(Number(process.env.PORT) || PORT, HOST, onListen);
 }

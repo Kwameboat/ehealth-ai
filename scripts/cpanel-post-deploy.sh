@@ -89,19 +89,7 @@ merge_htaccess() {
     fi
   fi
 
-  if [ -z "$passblock" ] && [ -d "$NODE_ROOT/backend" ]; then
-    local node_bin
-    node_bin="$(resolve_node_bin)"
-    passblock="# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
-PassengerAppRoot \"$NODE_ROOT\"
-PassengerBaseURI \"/\"
-PassengerNodejs \"$node_bin\"
-PassengerAppType node
-PassengerStartupFile backend/server.js
-PassengerAppEnv production
-# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END"
-    echo "Injected Passenger block (app=$NODE_ROOT node=$node_bin)"
-  fi
+  # Never inject Passenger manually — wrong node path causes 503. Use cPanel RESTART instead.
 
   {
     if [ -n "$passblock" ]; then
@@ -119,17 +107,23 @@ PassengerAppEnv production
 }
 merge_htaccess
 
-# npm in Node app root (native modules must be built on server)
-if [ -f "$NODE_ROOT/package.json" ] && command -v npm >/dev/null 2>&1; then
-  mkdir -p "$NODE_ROOT/backend/db"
-  echo "npm install in $NODE_ROOT ..."
-  (cd "$NODE_ROOT" && npm install --omit=dev) || (cd "$NODE_ROOT" && npm install) || echo "WARN: root npm install failed"
-  if [ -f "$NODE_ROOT/backend/package.json" ]; then
-    echo "npm install in $NODE_ROOT/backend ..."
-    (cd "$NODE_ROOT/backend" && npm install --omit=dev) || (cd "$NODE_ROOT/backend" && npm install) || echo "WARN: backend npm install failed"
-  fi
+# npm + native sqlite (must use same Node binary as cPanel Passenger)
+mkdir -p "$NODE_ROOT/backend/db"
+NPM_BIN=""
+NODE_BIN="$(resolve_node_bin)"
+if [ -n "$NODE_BIN" ] && [ -x "$(dirname "$NODE_BIN")/npm" ]; then
+  NPM_BIN="$(dirname "$NODE_BIN")/npm"
+fi
+if [ -n "$NPM_BIN" ] && [ -f "$NODE_ROOT/backend/package.json" ]; then
+  echo "npm install via $NPM_BIN in $NODE_ROOT/backend ..."
+  (cd "$NODE_ROOT/backend" && "$NPM_BIN" install --omit=dev) || (cd "$NODE_ROOT/backend" && "$NPM_BIN" install) || true
+  (cd "$NODE_ROOT/backend" && "$NPM_BIN" rebuild better-sqlite3) || echo "WARN: better-sqlite3 rebuild failed"
+  echo "Startup check ..."
+  (cd "$NODE_ROOT/backend" && "$NODE_BIN" -e "require('better-sqlite3'); require('./db/init').initDatabase(); console.log('DB OK');") || echo "WARN: startup check failed — use cPanel Run NPM Install + RESTART"
+elif command -v npm >/dev/null 2>&1; then
+  (cd "$NODE_ROOT/backend" && npm install --omit=dev) || true
 else
-  echo "WARN: npm not available — use cPanel Run NPM Install + Restart"
+  echo "WARN: npm not found — cPanel -> Run NPM Install -> RESTART"
 fi
 
 # Touch Passenger restart (cPanel / Phusion)

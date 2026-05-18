@@ -29,9 +29,13 @@ Click **RESTART** (not just Save).
 
 This applies Passenger + restarts the API. **Required after every deploy** if you see 503 or login errors.
 
-### 4. Run AutoSSL
+### 4. Fix SSL (if browser still says “Dangerous”)
 
-**SSL/TLS Status** → **Run AutoSSL** for `ehealthaigh.com` (fixes “Dangerous” / broken HTTPS).
+cPanel “SSL Active” can still be **wrong hostname** on the certificate.
+
+**SSL/TLS** → **Manage SSL Sites** → select **ehealthaigh.com** → **Run AutoSSL**.
+
+See `cpanel/SSL-FIX.md` for details. Until fixed, use **http://** (not https).
 
 ### 5. Test
 
