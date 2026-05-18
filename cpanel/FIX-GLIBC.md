@@ -12,15 +12,20 @@ cPanel loads a **prebuilt** `better-sqlite3` from `nodevenv`, not your app. Your
 
 ```bash
 source /home/ehealtha/nodevenv/ehealth-ai/20/bin/activate
+unset NODE_PATH
+
 cd /home/ehealtha/ehealth-ai/backend
 
-# Remove wrong global copy (Node 20 and 22)
+# Remove broken cPanel global copies
 rm -rf /home/ehealtha/nodevenv/ehealth-ai/20/lib/node_modules/better-sqlite3
 rm -rf /home/ehealtha/nodevenv/ehealth-ai/22/lib/node_modules/better-sqlite3
 
-# Build for THIS server (links against your glibc)
-npm install better-sqlite3 --build-from-source
+# Build inside backend only (v9 works better on older Linux)
+rm -rf node_modules/better-sqlite3
+npm install better-sqlite3@9.6.0 --build-from-source
 
+find node_modules/better-sqlite3 -name "*.node" -type f
+unset NODE_PATH
 node -e "require('./db/init').initDatabase(); console.log('DB OK');"
 ```
 
