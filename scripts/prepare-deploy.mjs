@@ -20,6 +20,7 @@ const COPY_FILES = [
   'README.md',
   '.env.example',
   'backend/.env.example',
+  'scripts/cpanel-post-deploy.sh',
 ];
 
 function rimraf(dir) {

@@ -114,9 +114,24 @@ app.use((req, res) => {
   res.status(404).end();
 });
 
-app.listen(PORT, HOST, () => {
-  console.log(`eHealth AI API on ${HOST}:${PORT}`);
-  console.log(`Admin panel: http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${PORT}/admin`);
-  if (!process.env.GEMINI_API_KEY) console.warn('WARNING: GEMINI_API_KEY missing');
-  if (!process.env.APP_API_SECRET) console.warn('WARNING: APP_API_SECRET missing');
-});
+const underPassenger =
+  Boolean(process.env.PASSENGER_APP_ENV) ||
+  Boolean(process.env.PASSENGER_SPAWN_WORK_DIR) ||
+  Boolean(process.env.PHUSION_PASSENGER);
+
+function startServer() {
+  app.listen(PORT, HOST, () => {
+    console.log(`eHealth AI API on ${HOST}:${PORT}`);
+    console.log(`Admin panel: http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${PORT}/admin`);
+    if (!process.env.GEMINI_API_KEY) console.warn('WARNING: GEMINI_API_KEY missing');
+    if (!process.env.APP_API_SECRET) console.warn('WARNING: APP_API_SECRET missing');
+  });
+}
+
+module.exports = app;
+
+if (!underPassenger && require.main === module) {
+  startServer();
+} else if (underPassenger) {
+  console.log('eHealth AI API (Passenger)');
+}

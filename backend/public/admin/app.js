@@ -34,14 +34,27 @@ async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${API}${path}`, { ...options, headers });
-  const data = await res.json().catch(() => ({}));
+  let res;
+  try {
+    res = await fetch(`${API}${path}`, { ...options, headers });
+  } catch {
+    throw new Error('Failed to fetch');
+  }
+  const isJson = (res.headers.get('content-type') || '').includes('application/json');
+  const data = isJson ? await res.json().catch(() => ({})) : {};
   if (res.status === 401 && path !== '/login') {
     clearSession();
     showLogin();
     throw new Error('Session expired');
   }
-  if (!res.ok) throw new Error(data?.error?.message || 'Request failed');
+  if (!res.ok) {
+    if (res.status === 404) {
+      throw new Error(
+        'API not found (404). cPanel → Setup Node.js App → RESTART, then test /api/health in the browser.'
+      );
+    }
+    throw new Error(data?.error?.message || `Request failed (${res.status})`);
+  }
   return data;
 }
 
@@ -723,7 +736,7 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     const msg = err.message || 'Login failed';
     errEl.textContent =
       msg === 'Failed to fetch' || msg.includes('NetworkError')
-        ? 'Cannot reach API. In cPanel → Setup Node.js App (root: ehealth-ai, startup: backend/server.js) → Restart. Then test /api/health'
+        ? 'Cannot reach API. cPanel → Setup Node.js App → RESTART (keeps Passenger + Node). Then open /api/health — you should see JSON.'
         : msg;
     errEl.classList.remove('hidden');
   }

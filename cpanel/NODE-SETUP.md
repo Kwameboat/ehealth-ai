@@ -1,53 +1,47 @@
-# Fix admin login — "Failed to fetch"
+# Fix admin login & API 404
 
-The admin page is HTML only. Login calls **`/admin/api/login`**, which needs the **Node.js backend**.
+## Symptoms
 
-LiteSpeed is serving `public_html` (static files). The API is in `~/ehealth-ai/` but Node is not running yet.
+- `/api/health` → LiteSpeed **404 Not Found**
+- Admin login → **Request failed** or **API not found (404)**
 
-## Fix (cPanel — about 5 minutes)
+## Root cause
 
-### 1. Create Node.js app
+The Node backend must run via **Phusion Passenger** (cPanel Node.js app). Each deploy must **keep** the Passenger block in `public_html/.htaccess`. Code lives in `~/ehealth-ai/` (FTP) and is synced to `~/ehealth_ai/` (your cPanel app root).
 
-1. **cPanel** → search **Setup Node.js App**
-2. **Create Application**
-3. Fill in:
+## cPanel setup
+
+### 1. Create / verify Node.js app
 
 | Field | Value |
 |-------|--------|
-| Node.js version | **18** or **20** |
-| Application mode | **Production** |
-| Application root | `ehealth-ai` |
+| Node.js version | 18 or 20 (22 OK) |
+| Application mode | Production |
+| Application root | `ehealth_ai` |
 | Application URL | `ehealthaigh.com` |
 | Application startup file | `backend/server.js` |
 
-4. **Create**
-
 ### 2. Environment variables
-
-In the same Node.js screen, add variables (or create `~/ehealth-ai/backend/.env`):
 
 ```
 NODE_ENV=production
-GEMINI_API_KEY=your_key
-APP_API_SECRET=medassistant_dev_secret_change_in_production
-JWT_SECRET=any_long_random_string
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.0-flash
+APP_API_SECRET=...
+JWT_SECRET=...          (must differ from APP_API_SECRET)
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=YourStrongPassword123
-ALLOWED_ORIGINS=https://ehealthaigh.com,http://ehealthaigh.com
+ADMIN_PASSWORD=...
+ALLOWED_ORIGINS=https://ehealthaigh.com,https://www.ehealthaigh.com,http://ehealthaigh.com
 WEB_DIST_PATH=/home/ehealtha/ehealth-ai/dist
 DATABASE_PATH=/home/ehealtha/ehealth-ai/backend/db/medassistant.db
 ```
 
-Use your real cPanel username instead of `ehealtha` if different.
+Replace `ehealtha` with your cPanel username if different.
 
-### 3. Install & start
+### 3. Install & restart
 
-1. Click **Run NPM Install** (runs in `ehealth-ai`)
-2. Open **Terminal** in cPanel:
-   ```bash
-   cd ~/ehealth-ai/backend && npm install
-   ```
-3. Click **Restart** on the Node.js app
+1. **Run NPM Install**
+2. **RESTART** the app (injects Passenger into `.htaccess`)
 
 ### 4. SSL
 
@@ -55,12 +49,15 @@ Use your real cPanel username instead of `ehealtha` if different.
 
 ### 5. Test
 
-- http://ehealthaigh.com/api/health → should show JSON `{"status":"ok",...}`
-- https://ehealthaigh.com/admin → login **admin** / password from `ADMIN_PASSWORD` (default seed: **admin123** if never set)
+- http://ehealthaigh.com/api/health → JSON
+- http://ehealthaigh.com/admin → login **admin** / your `ADMIN_PASSWORD`
 
-## Default admin (first install only)
+## After every GitHub deploy
 
-- Username: `admin`
-- Password: `admin123` (unless you set `ADMIN_PASSWORD` in `.env` before first DB seed)
+Deploy runs `scripts/cpanel-post-deploy.sh` which:
 
-If you already set `ADMIN_PASSWORD` in `.env` before the app first ran, use that password instead.
+- Syncs `ehealth-ai` → `ehealth_ai`
+- Publishes PWA + admin static files
+- **Merges** `.htaccess` without removing Passenger
+
+If API breaks after deploy: click **RESTART** once in cPanel Node.js app.

@@ -13,16 +13,7 @@ if (!password) {
 const htaccess = fs.readFileSync(path.join(__dirname, '..', 'public_html.htaccess'), 'utf8');
 
 const cmd = `
-find ~/public_html -mindepth 1 -maxdepth 1 ! -name cgi-bin -exec rm -rf {} + 2>/dev/null || true
-cp -r ~/ehealth-ai/dist/* ~/public_html/
-cp ~/ehealth-ai/public/manifest.json ~/public_html/ 2>/dev/null || true
-cp ~/ehealth-ai/public/sw.js ~/public_html/ 2>/dev/null || true
-cp -r ~/ehealth-ai/public/icons ~/public_html/ 2>/dev/null || true
-mkdir -p ~/public_html/admin
-cp -r ~/ehealth-ai/backend/public/admin/* ~/public_html/admin/
-cat > ~/public_html/.htaccess << 'HTEOF'
-${htaccess}
-HTEOF
+cd ~/ehealth-ai && chmod +x scripts/cpanel-post-deploy.sh 2>/dev/null && bash scripts/cpanel-post-deploy.sh
 echo STATIC_OK
 `;
 

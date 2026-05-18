@@ -80,35 +80,9 @@ jobs:
             for n in /opt/cpanel/ea-nodejs*/bin; do [ -x "$n/node" ] && export PATH="$n:$PATH" && break; done
             cd ~/ehealth-ai
             if [ ! -f package.json ]; then echo "No package.json yet"; exit 0; fi
-            if command -v npm >/dev/null 2>&1; then
-              npm install --omit=dev || npm install
-              cd backend && (npm install --omit=dev || npm install)
-              mkdir -p db
-            else
-              echo "npm not in PATH — create Node.js app in cPanel (root: ehealth-ai), then Restart"
-            fi
             echo "Deploy OK $(date -u)" >> DEPLOYED_AT.txt
-            if [ -d dist ]; then
-              find ~/public_html -mindepth 1 -maxdepth 1 ! -name cgi-bin -exec rm -rf {} + 2>/dev/null || true
-              cp -r dist/* ~/public_html/
-              cp -f public/manifest.json ~/public_html/ 2>/dev/null || true
-              cp -f public/sw.js ~/public_html/ 2>/dev/null || true
-              cp -r public/icons ~/public_html/ 2>/dev/null || true
-              cp -f public_html.htaccess ~/public_html/.htaccess 2>/dev/null || cat > ~/public_html/.htaccess << 'HTEOF'
-            <IfModule mod_rewrite.c>
-              RewriteEngine On
-              RewriteBase /
-              RewriteRule ^api(/|$) - [L]
-              RewriteRule ^admin/api(/|$) - [L]
-              RewriteRule ^admin/.+\.(css|js|png|ico|svg|woff2?)$ - [L]
-              RewriteRule ^admin/?$ admin/index.html [L]
-              RewriteCond %{REQUEST_FILENAME} -f [OR]
-              RewriteCond %{REQUEST_FILENAME} -d
-              RewriteRule ^ - [L]
-              RewriteRule ^ index.html [L]
-            </IfModule>
-            HTEOF
-              mkdir -p ~/public_html/admin
-              cp -r backend/public/admin/* ~/public_html/admin/ 2>/dev/null || true
-              echo "Published PWA to public_html"
-            fi
+            chmod +x scripts/cpanel-post-deploy.sh 2>/dev/null || true
+            bash scripts/cpanel-post-deploy.sh || {
+              echo "cpanel-post-deploy.sh missing — run from repo after sync"
+              exit 1
+            }

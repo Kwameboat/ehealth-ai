@@ -1,5 +1,7 @@
 # eHealth AI — public_html (static PWA + admin UI)
-# API routes must NOT be rewritten to index.html (handled by Node.js app)
+# IMPORTANT: CloudLinux "PASSENGER CONFIGURATION" block must stay at the top (added by cPanel Node.js app).
+# Deploy merges our rules below that block — do not replace .htaccess manually without keeping Passenger.
+# API /admin/api are served by Node (Passenger), not LiteSpeed static files.
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
