@@ -4,7 +4,17 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const cors = require('cors');
 const express = require('express');
 const fs = require('fs');
-const { initDatabase } = require('./db/init');
+
+let initDatabase;
+let dbBootError = null;
+try {
+  ({ initDatabase } = require('./db/init'));
+  initDatabase();
+} catch (err) {
+  dbBootError = err;
+  console.error('Database init failed:', err);
+}
+
 const { requireAppAuth } = require('./middleware/appSecret');
 
 const authRoutes = require('./routes/auth');
@@ -13,13 +23,6 @@ const aiRoutes = require('./routes/ai');
 const adminRoutes = require('./routes/admin');
 const paymentRoutes = require('./routes/payments');
 const { paystackWebhookHandler } = require('./routes/payments');
-
-try {
-  initDatabase();
-} catch (err) {
-  console.error('Database init failed:', err);
-  throw err;
-}
 
 const app = express();
 const isProd = process.env.NODE_ENV === 'production';
@@ -53,9 +56,20 @@ app.use(
 );
 
 app.get('/api/health', (req, res) => {
+  if (dbBootError) {
+    return res.status(503).json({
+      status: 'error',
+      service: 'eHealth AI API',
+      db: false,
+      error: dbBootError.message,
+      hint: 'cPanel → Node.js → Run NPM Install → Restart',
+      time: new Date().toISOString(),
+    });
+  }
   res.json({
     status: 'ok',
     service: 'eHealth AI API',
+    db: true,
     time: new Date().toISOString(),
   });
 });
@@ -120,22 +134,16 @@ app.use((req, res) => {
   res.status(404).end();
 });
 
-const underPassenger =
-  Boolean(process.env.PASSENGER_APP_ENV) ||
-  Boolean(process.env.PASSENGER_SPAWN_WORK_DIR) ||
-  typeof global.PhusionPassenger !== 'undefined';
-
 function onListen() {
   const listenPort = Number(process.env.PORT) || PORT;
   console.log(`eHealth AI API on ${HOST}:${listenPort}`);
-  console.log(`Admin panel: http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${listenPort}/admin`);
+  if (dbBootError) console.error('Running without database:', dbBootError.message);
   if (!process.env.GEMINI_API_KEY) console.warn('WARNING: GEMINI_API_KEY missing');
   if (!process.env.APP_API_SECRET) console.warn('WARNING: APP_API_SECRET missing');
 }
 
 module.exports = app;
 
-// Passenger (cPanel): export app only — do NOT call listen() or you get 503
-if (!underPassenger && require.main === module) {
-  app.listen(Number(process.env.PORT) || PORT, HOST, onListen);
-}
+// cPanel Node.js / Passenger expects the app to listen on process.env.PORT
+const listenPort = Number(process.env.PORT) || PORT;
+app.listen(listenPort, HOST, onListen);

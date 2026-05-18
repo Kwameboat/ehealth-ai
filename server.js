@@ -1,2 +1,2 @@
-/** cPanel entry — startup file can be `server.js` at app root */
-require('./backend/server.js');
+/** cPanel startup file — use this as "Application startup file" in Node.js app */
+module.exports = require('./backend/server.js');

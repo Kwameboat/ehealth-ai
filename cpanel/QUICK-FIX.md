@@ -1,64 +1,52 @@
-# One-time production fix (API 404 + admin login)
+# Fix 503 on admin login
 
-## What went wrong
+## Cause
 
-1. **Deploy replaced `.htaccess`** and removed cPanel’s **Passenger** block, so `/api/*` never reached Node (LiteSpeed 404).
-2. **FTP deploys to `ehealth-ai`** but your Node app root is **`ehealth_ai`** — code was out of sync.
+**503** = Node app is not running on the server (Passenger cannot start it).  
+SSL can be fine while the API is still down.
 
-GitHub deploy now runs `scripts/cpanel-post-deploy.sh` to fix both automatically.
+## Fix in cPanel (do in order)
 
-## Do this once in cPanel (2 minutes)
+### 1. Change startup file (important)
 
-### 1. Add missing env var
+**Setup Node.js App** → edit your app:
 
-In **Setup Node.js App** → **Environment variables** → **ADD VARIABLE**:
+| Field | Set to |
+|-------|--------|
+| Application startup file | **`server.js`** (root file, not `backend/server.js`) |
+
+Click **SAVE**.
+
+### 2. Add env vars if missing
 
 | Name | Value |
 |------|--------|
 | `NODE_ENV` | `production` |
+| `ALLOWED_ORIGINS` | `https://ehealthaigh.com,https://www.ehealthaigh.com,http://ehealthaigh.com,http://www.ehealthaigh.com` |
 
-Click **SAVE**.
+### 3. Stop → Install → Start
 
-### 2. Install dependencies on the server
+1. **STOP APP**
+2. **Run NPM Install**
+3. **RESTART**
 
-Click **Run NPM Install** in the Node.js app screen (installs into `ehealth_ai` with the correct Node version).
+### 4. Test API
 
-### 3. Restart Node (required)
+Open: **https://www.ehealthaigh.com/api/health**
 
-Click **RESTART** (not just Save).
+- **Good:** `{"status":"ok","db":true,...}`
+- **DB error JSON:** run **Run NPM Install** again, then **RESTART**
+- **HTML 503 page:** click **RESTART** again; check `~/ehealth_ai/startup-check.log` in File Manager
 
-This applies Passenger + restarts the API. **Required after every deploy** if you see 503 or login errors.
+### 5. Admin login
 
-### 4. Fix SSL (if browser still says “Dangerous”)
+**https://www.ehealthaigh.com/admin** — `admin` / your `ADMIN_PASSWORD` (default `admin123`)
 
-cPanel “SSL Active” can still be **wrong hostname** on the certificate.
-
-**SSL/TLS** → **Manage SSL Sites** → select **ehealthaigh.com** → **Run AutoSSL**.
-
-See `cpanel/SSL-FIX.md` for details. Until fixed, use **http://** (not https).
-
-### 5. Test
-
-| URL | Expected |
-|-----|----------|
-| http://ehealthaigh.com/api/health | JSON: `{"status":"ok",...}` |
-| http://ehealthaigh.com/admin | Styled login |
-| Login `admin` / `admin123` | Dashboard loads |
-
-Use **http://** until AutoSSL finishes if HTTPS still warns.
-
-## Your Node app settings (keep as-is)
+## Keep these settings
 
 | Field | Value |
 |-------|--------|
 | Application root | `ehealth_ai` |
-| Startup file | `server.js` (root — loads `backend/server.js`) |
 | Application URL | `ehealthaigh.com` |
 
-If startup is still `backend/server.js`, that also works after the latest deploy.
-
-Deploy syncs `~/ehealth-ai/` → `~/ehealth_ai/` on every push.
-
-## Security
-
-Rotate **GEMINI_API_KEY** if it was shared in a screenshot. Do not commit `.env` to GitHub.
+Code deploys to `ehealth-ai` and syncs to `ehealth_ai` automatically.

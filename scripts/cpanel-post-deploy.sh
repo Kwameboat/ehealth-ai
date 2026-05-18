@@ -119,7 +119,14 @@ if [ -n "$NPM_BIN" ] && [ -f "$NODE_ROOT/backend/package.json" ]; then
   (cd "$NODE_ROOT/backend" && "$NPM_BIN" install --omit=dev) || (cd "$NODE_ROOT/backend" && "$NPM_BIN" install) || true
   (cd "$NODE_ROOT/backend" && "$NPM_BIN" rebuild better-sqlite3) || echo "WARN: better-sqlite3 rebuild failed"
   echo "Startup check ..."
-  (cd "$NODE_ROOT/backend" && "$NODE_BIN" -e "require('better-sqlite3'); require('./db/init').initDatabase(); console.log('DB OK');") || echo "WARN: startup check failed — use cPanel Run NPM Install + RESTART"
+  (cd "$NODE_ROOT/backend" && "$NODE_BIN" -e "require('better-sqlite3'); require('./db/init').initDatabase(); console.log('DB OK');") \
+    >> "$NODE_ROOT/startup-check.log" 2>&1 \
+    || echo "WARN: DB check failed — see $NODE_ROOT/startup-check.log"
+  (cd "$NODE_ROOT" && timeout 5 "$NODE_BIN" -e "
+    process.env.PORT=3999;
+    const app = require('./backend/server.js');
+    setTimeout(() => { console.log('APP_OK'); process.exit(0); }, 1500);
+  " >> "$NODE_ROOT/startup-check.log" 2>&1) || echo "WARN: app boot check failed — see startup-check.log"
 elif command -v npm >/dev/null 2>&1; then
   (cd "$NODE_ROOT/backend" && npm install --omit=dev) || true
 else
