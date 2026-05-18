@@ -21,6 +21,7 @@ const COPY_FILES = [
   '.env.example',
   'backend/.env.example',
   'scripts/cpanel-post-deploy.sh',
+  'cpanel/install-backend.sh',
 ];
 
 function rimraf(dir) {

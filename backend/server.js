@@ -144,6 +144,7 @@ function onListen() {
 
 module.exports = app;
 
-// cPanel Node.js / Passenger expects the app to listen on process.env.PORT
+// cPanel Passenger sets PORT; bind localhost when proxied
 const listenPort = Number(process.env.PORT) || PORT;
-app.listen(listenPort, HOST, onListen);
+const listenHost = process.env.PORT ? '127.0.0.1' : HOST;
+app.listen(listenPort, listenHost, onListen);
