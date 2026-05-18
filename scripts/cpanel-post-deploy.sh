@@ -108,8 +108,8 @@ mkdir -p "$SRC/backend/db"
 NODE_BIN="$(resolve_node_bin)"
 if [ -n "$NODE_BIN" ] && [ -x "$(dirname "$NODE_BIN")/npm" ]; then
   NPM_BIN="$(dirname "$NODE_BIN")/npm"
-  echo "npm install in $SRC/backend via $NPM_BIN ..."
-  (cd "$SRC/backend" && "$NPM_BIN" install --omit=dev) || (cd "$SRC/backend" && "$NPM_BIN" install) || true
+  echo "npm install --prefix $SRC/backend via $NPM_BIN ..."
+  "$NPM_BIN" install --prefix "$SRC/backend" --omit=dev || "$NPM_BIN" install --prefix "$SRC/backend" || true
   (cd "$SRC/backend" && "$NPM_BIN" rebuild better-sqlite3) || true
   (cd "$SRC/backend" && "$NODE_BIN" -e "require('better-sqlite3'); require('./db/init').initDatabase(); console.log('DB OK');") \
     > "$SRC/startup-check.log" 2>&1 && echo "Startup check OK" || echo "WARN: see $SRC/startup-check.log"
