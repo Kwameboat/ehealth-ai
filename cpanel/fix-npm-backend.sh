@@ -3,7 +3,8 @@
 set -e
 HOME_DIR="${HOME:-/home/ehealtha}"
 APP="$HOME_DIR/ehealth-ai"
-VENV="$HOME_DIR/nodevenv/ehealth-ai/22"
+VENV="$HOME_DIR/nodevenv/ehealth-ai/20"
+[ -f "$VENV/bin/activate" ] || VENV="$HOME_DIR/nodevenv/ehealth-ai/18"
 
 source "$VENV/bin/activate"
 export PATH="$VENV/bin:$PATH"
@@ -11,9 +12,12 @@ export PATH="$VENV/bin:$PATH"
 echo "=== Where is express? ==="
 find "$APP" -maxdepth 3 -path "*/node_modules/express/package.json" 2>/dev/null || echo "express not found yet"
 
-echo "=== Install into backend/ only (--prefix) ==="
-"$VENV/bin/npm" install --prefix "$APP/backend" --omit=dev \
-  express cors dotenv better-sqlite3 bcryptjs jsonwebtoken
+echo "=== Install all backend deps ==="
+unset NODE_PATH
+cd "$APP/backend"
+"$VENV/bin/npm" install --omit=dev
+export npm_config_build_from_source=true
+"$VENV/bin/npm" rebuild better-sqlite3 --build-from-source
 
 if [ ! -f "$APP/backend/node_modules/express/package.json" ]; then
   if [ -f "$APP/node_modules/express/package.json" ]; then

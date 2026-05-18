@@ -8,9 +8,12 @@ rm -rf /home/ehealtha/nodevenv/ehealth-ai/*/lib/node_modules/better-sqlite3 2>/d
 
 cd /home/ehealtha/ehealth-ai/backend
 unset NODE_PATH
+
+# Install ALL backend deps first (installing only better-sqlite3 skips bcryptjs, express, etc.)
+npm install --omit=dev
+
 export npm_config_build_from_source=true
-rm -rf node_modules/better-sqlite3
-npm install better-sqlite3@9.6.0 --build-from-source
+npm rebuild better-sqlite3 --build-from-source
 
 NODE_FILE=$(find node_modules/better-sqlite3 -name better_sqlite3.node -type f | head -1)
 if [ -z "$NODE_FILE" ]; then
