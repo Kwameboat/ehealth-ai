@@ -12,7 +12,12 @@ source /home/ehealtha/nodevenv/ehealth-ai/22/bin/activate
 
 echo "Installing API dependencies..."
 rm -rf node_modules
-npm install --omit=dev
+if [ -f package-lock.json ]; then
+  npm ci --omit=dev || npm install --omit=dev
+else
+  npm install --omit=dev
+fi
+test -d node_modules/express || { echo "ERROR: express not installed"; exit 1; }
 npm rebuild better-sqlite3
 
 echo "Testing modules..."
