@@ -8,6 +8,18 @@ NODE_ROOT="${NODE_APP_ROOT:-$HOME_DIR/ehealth_ai}"
 PUBLIC="${PUBLIC_HTML:-$HOME_DIR/public_html}"
 HT_SRC="$SRC/public_html.htaccess"
 
+# cPanel nodevenv + npm (required for better-sqlite3 on server)
+for v in "$HOME_DIR/nodevenv/ehealth_ai"/*/bin/activate "$HOME_DIR/nodevenv/ehealth-ai"/*/bin/activate; do
+  if [ -f "$v" ]; then
+    # shellcheck disable=SC1090
+    . "$v"
+    break
+  fi
+done
+for n in /opt/cpanel/ea-nodejs*/bin; do
+  [ -x "$n/node" ] && export PATH="$n:$PATH" && break
+done
+
 echo "cpanel-post-deploy: SRC=$SRC NODE_ROOT=$NODE_ROOT"
 
 # cPanel Node app may use ehealth_ai while FTP deploys to ehealth-ai — keep both in sync
@@ -43,11 +55,11 @@ fi
 
 # Resolve Node binary (cPanel nodevenv for ehealth_ai)
 resolve_node_bin() {
-  local bin=""
-  for v in "$HOME_DIR/nodevenv/ehealth_ai"/*/bin/node; do
-    if [ -x "$v" ]; then echo "$v"; return 0; fi
-  done
-  for v in "$HOME_DIR/nodevenv/ehealth-ai"/*/bin/node; do
+  if command -v node >/dev/null 2>&1; then
+    command -v node
+    return 0
+  fi
+  for v in "$HOME_DIR/nodevenv/ehealth_ai"/*/bin/node "$HOME_DIR/nodevenv/ehealth-ai"/*/bin/node; do
     if [ -x "$v" ]; then echo "$v"; return 0; fi
   done
   for v in "$HOME_DIR/nodevenv"/*/bin/activate; do
@@ -68,6 +80,10 @@ merge_htaccess() {
   local passblock=""
   if [ -f "$dest" ] && grep -q 'PASSENGER CONFIGURATION BEGIN' "$dest"; then
     passblock="$(sed -n '/PASSENGER CONFIGURATION BEGIN/,/PASSENGER CONFIGURATION END/p' "$dest")"
+    if ! echo "$passblock" | grep -Fq "$NODE_ROOT"; then
+      echo "Replacing Passenger block (wrong AppRoot)"
+      passblock=""
+    fi
   fi
 
   if [ -z "$passblock" ] && [ -d "$NODE_ROOT/backend" ]; then
@@ -78,7 +94,7 @@ PassengerAppRoot \"$NODE_ROOT\"
 PassengerBaseURI \"/\"
 PassengerNodejs \"$node_bin\"
 PassengerAppType node
-PassengerStartupFile server.js
+PassengerStartupFile backend/server.js
 PassengerAppEnv production
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END"
     echo "Injected Passenger block (app=$NODE_ROOT node=$node_bin)"
@@ -100,16 +116,18 @@ PassengerAppEnv production
 }
 merge_htaccess
 
-# npm in both roots (Passenger uses NODE_ROOT)
-for dir in "$SRC" "$NODE_ROOT"; do
-  if [ -f "$dir/package.json" ] && command -v npm >/dev/null 2>&1; then
-    mkdir -p "$dir/backend/db"
-    (cd "$dir" && npm install --omit=dev 2>/dev/null || npm install) || true
-    if [ -f "$dir/backend/package.json" ]; then
-      (cd "$dir/backend" && npm install --omit=dev 2>/dev/null || npm install) || true
-    fi
+# npm in Node app root (native modules must be built on server)
+if [ -f "$NODE_ROOT/package.json" ] && command -v npm >/dev/null 2>&1; then
+  mkdir -p "$NODE_ROOT/backend/db"
+  echo "npm install in $NODE_ROOT ..."
+  (cd "$NODE_ROOT" && npm install --omit=dev) || (cd "$NODE_ROOT" && npm install) || echo "WARN: root npm install failed"
+  if [ -f "$NODE_ROOT/backend/package.json" ]; then
+    echo "npm install in $NODE_ROOT/backend ..."
+    (cd "$NODE_ROOT/backend" && npm install --omit=dev) || (cd "$NODE_ROOT/backend" && npm install) || echo "WARN: backend npm install failed"
   fi
-done
+else
+  echo "WARN: npm not available — use cPanel Run NPM Install + Restart"
+fi
 
 # Touch Passenger restart (cPanel / Phusion)
 mkdir -p "$PUBLIC/tmp" "$NODE_ROOT/tmp" 2>/dev/null || true
