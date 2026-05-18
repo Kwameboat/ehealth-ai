@@ -720,7 +720,11 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     showApp();
     showPage('dashboard');
   } catch (err) {
-    errEl.textContent = err.message;
+    const msg = err.message || 'Login failed';
+    errEl.textContent =
+      msg === 'Failed to fetch' || msg.includes('NetworkError')
+        ? 'Cannot reach API. In cPanel → Setup Node.js App (root: ehealth-ai, startup: backend/server.js) → Restart. Then test /api/health'
+        : msg;
     errEl.classList.remove('hidden');
   }
 });
