@@ -15,13 +15,14 @@ concurrency:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    env:
-      EXPO_PUBLIC_API_URL: https://ehealthaigh.com
-      EXPO_PUBLIC_APP_API_SECRET: ${{ secrets.APP_API_SECRET }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set build environment
+        run: |
+          echo "EXPO_PUBLIC_API_URL=${{ secrets.PUBLIC_APP_URL != '' && secrets.PUBLIC_APP_URL || 'https://ehealthaigh.com' }}" >> $GITHUB_ENV
+          echo "EXPO_PUBLIC_APP_API_SECRET=${{ secrets.APP_API_SECRET }}" >> $GITHUB_ENV
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -61,3 +62,24 @@ jobs:
             **/backend/.env
             **/backend/db/*.db
             **/backend/db/*.db-*
+
+      - name: Server bootstrap via SSH
+        if: ${{ secrets.SSH_HOST != '' }}
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          script_stop: true
+          script: |
+            mkdir -p ~/ehealth-ai
+            cd ~/ehealth-ai
+            if [ -f package.json ]; then
+              npm install --omit=dev || npm install
+              cd backend && (npm install --omit=dev || npm install)
+              mkdir -p db
+              echo "Deploy OK $(date -u)" >> DEPLOYED_AT.txt
+            else
+              echo "Waiting for FTP upload — package.json not found yet"
+            fi
