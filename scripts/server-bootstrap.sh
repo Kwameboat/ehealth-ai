@@ -5,8 +5,16 @@ cd "$APP_DIR"
 
 echo "==> eHealth AI server bootstrap in $APP_DIR"
 
+# cPanel Node.js paths
+for v in "$HOME"/nodevenv/*/bin/activate; do
+  [ -f "$v" ] && . "$v" && break
+done
+for n in /opt/cpanel/ea-nodejs*/bin; do
+  [ -x "$n/node" ] && export PATH="$n:$PATH" && break
+done
+
 if ! command -v node >/dev/null 2>&1; then
-  echo "Node.js not found. Enable Node.js in cPanel → Setup Node.js App first."
+  echo "Node.js not found. In cPanel → Setup Node.js App → create app (root: ehealth-ai, startup: backend/server.js), then re-run bootstrap."
   exit 1
 fi
 

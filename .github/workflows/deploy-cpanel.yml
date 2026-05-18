@@ -20,9 +20,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set build environment
+        env:
+          PUBLIC_URL: ${{ secrets.PUBLIC_APP_URL }}
+          APP_SECRET: ${{ secrets.APP_API_SECRET }}
         run: |
-          echo "EXPO_PUBLIC_API_URL=${{ secrets.PUBLIC_APP_URL != '' && secrets.PUBLIC_APP_URL || 'https://ehealthaigh.com' }}" >> $GITHUB_ENV
-          echo "EXPO_PUBLIC_APP_API_SECRET=${{ secrets.APP_API_SECRET }}" >> $GITHUB_ENV
+          echo "EXPO_PUBLIC_API_URL=${PUBLIC_URL:-https://ehealthaigh.com}" >> $GITHUB_ENV
+          echo "EXPO_PUBLIC_APP_API_SECRET=${APP_SECRET}" >> $GITHUB_ENV
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -64,7 +67,6 @@ jobs:
             **/backend/db/*.db-*
 
       - name: Server bootstrap via SSH
-        if: ${{ secrets.SSH_HOST != '' }}
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
