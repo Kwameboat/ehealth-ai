@@ -5,11 +5,11 @@
   RewriteEngine On
   RewriteBase /
 
-  # Let Node/Passenger handle API (do not serve SPA for these)
+  # Let Node/Passenger handle API
   RewriteRule ^api(/|$) - [L]
   RewriteRule ^admin/api(/|$) - [L]
 
-  # Admin panel static assets (if served from public_html/admin)
+  # Admin panel (static files + index)
   RewriteRule ^admin/?$ admin/index.html [L]
 
   # PWA static files

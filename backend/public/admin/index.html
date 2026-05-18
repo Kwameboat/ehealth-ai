@@ -7,14 +7,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="/admin/styles.css?v=4" />
+  <style>.hidden{display:none!important}.login-view.hidden,.shell.hidden{display:none!important}</style>
 </head>
 <body>
   <!-- Login -->
   <div id="login-view" class="login-view">
     <div class="login-card">
       <div class="login-brand">
-        <img src="logo.png" alt="eHealth AI" class="login-logo" />
+        <img src="/admin/logo.png" alt="eHealth AI" class="login-logo" />
         <p>Admin — 360° System Control</p>
       </div>
       <form id="login-form">
@@ -30,7 +31,7 @@
   <div id="app-view" class="shell hidden">
     <aside class="sidebar">
       <div class="sidebar-brand">
-        <img src="logo.png" alt="eHealth AI" class="sidebar-logo" />
+        <img src="/admin/logo.png" alt="eHealth AI" class="sidebar-logo" />
         <div>
           <strong>eHealth AI</strong>
           <span class="node-status"><span class="dot pulse"></span> AI NODE: ACTIVE</span>
@@ -126,7 +127,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=3"></script>
-  <script src="settings-ext.js?v=3"></script>
+  <script src="/admin/app.js?v=4"></script>
 </body>
 </html>

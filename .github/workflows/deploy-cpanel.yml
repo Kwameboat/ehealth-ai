@@ -101,6 +101,8 @@ jobs:
               RewriteRule ^api(/|$) - [L]
               RewriteRule ^admin/api(/|$) - [L]
               RewriteRule ^admin/?$ admin/index.html [L]
+              RewriteCond %{REQUEST_URI} ^/admin/
+              RewriteRule ^ - [L]
               RewriteCond %{REQUEST_FILENAME} -f [OR]
               RewriteCond %{REQUEST_FILENAME} -d
               RewriteRule ^ - [L]
