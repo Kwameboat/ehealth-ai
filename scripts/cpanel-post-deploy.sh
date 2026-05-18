@@ -26,6 +26,7 @@ if [ -d "$SRC" ]; then
     cp -a "$SRC/." "$NODE_ROOT/"
   fi
   echo "Synced deploy -> $NODE_ROOT"
+  mkdir -p "$SRC/backend/db" "$NODE_ROOT/backend/db"
 fi
 
 # Publish PWA + admin static files
@@ -77,7 +78,8 @@ PassengerAppRoot \"$NODE_ROOT\"
 PassengerBaseURI \"/\"
 PassengerNodejs \"$node_bin\"
 PassengerAppType node
-PassengerStartupFile backend/server.js
+PassengerStartupFile server.js
+PassengerAppEnv production
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END"
     echo "Injected Passenger block (app=$NODE_ROOT node=$node_bin)"
   fi

@@ -119,19 +119,20 @@ const underPassenger =
   Boolean(process.env.PASSENGER_SPAWN_WORK_DIR) ||
   Boolean(process.env.PHUSION_PASSENGER);
 
-function startServer() {
-  app.listen(PORT, HOST, () => {
-    console.log(`eHealth AI API on ${HOST}:${PORT}`);
-    console.log(`Admin panel: http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${PORT}/admin`);
-    if (!process.env.GEMINI_API_KEY) console.warn('WARNING: GEMINI_API_KEY missing');
-    if (!process.env.APP_API_SECRET) console.warn('WARNING: APP_API_SECRET missing');
-  });
+function onListen() {
+  const listenPort = Number(process.env.PORT) || PORT;
+  console.log(`eHealth AI API on ${HOST}:${listenPort}`);
+  console.log(`Admin panel: http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${listenPort}/admin`);
+  if (!process.env.GEMINI_API_KEY) console.warn('WARNING: GEMINI_API_KEY missing');
+  if (!process.env.APP_API_SECRET) console.warn('WARNING: APP_API_SECRET missing');
 }
 
 module.exports = app;
 
-if (!underPassenger && require.main === module) {
-  startServer();
-} else if (underPassenger) {
-  console.log('eHealth AI API (Passenger)');
+// cPanel Passenger sets PORT; local dev uses PORT or 3001
+const listenPort = Number(process.env.PORT) || PORT;
+if (underPassenger || process.env.PORT) {
+  app.listen(listenPort, HOST, onListen);
+} else if (require.main === module) {
+  app.listen(listenPort, HOST, onListen);
 }

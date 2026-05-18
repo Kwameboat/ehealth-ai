@@ -44,8 +44,10 @@ Use **http://** until AutoSSL finishes if HTTPS still warns.
 | Field | Value |
 |-------|--------|
 | Application root | `ehealth_ai` |
-| Startup file | `backend/server.js` |
+| Startup file | `server.js` (root — loads `backend/server.js`) |
 | Application URL | `ehealthaigh.com` |
+
+If startup is still `backend/server.js`, that also works after the latest deploy.
 
 Deploy syncs `~/ehealth-ai/` → `~/ehealth_ai/` on every push.
 
