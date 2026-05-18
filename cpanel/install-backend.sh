@@ -11,6 +11,8 @@ fi
 source /home/ehealtha/nodevenv/ehealth-ai/22/bin/activate
 
 echo "Installing API dependencies..."
+# Root Expo package-lock.json breaks "npm install" in backend (only 1 package installed)
+rm -f ../package-lock.json 2>/dev/null || true
 rm -rf node_modules
 if [ -f package-lock.json ]; then
   npm ci --omit=dev || npm install --omit=dev

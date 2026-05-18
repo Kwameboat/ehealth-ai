@@ -40,7 +40,8 @@ if [ -f "$SRC/cpanel/package.production.json" ]; then
     cp -f "$SRC/package.json" "$SRC/package.json.expo"
   fi
   cp -f "$SRC/cpanel/package.production.json" "$SRC/package.json"
-  echo "Using slim package.json for cPanel (saved Expo manifest as package.json.expo if needed)"
+  rm -f "$SRC/package-lock.json" 2>/dev/null || true
+  echo "Using slim package.json for cPanel (removed root package-lock.json so backend npm install works)"
 fi
 
 resolve_node_bin() {

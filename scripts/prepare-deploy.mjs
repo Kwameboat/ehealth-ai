@@ -14,7 +14,6 @@ const COPY_FILES = [
   'server.js',
   'public_html.htaccess',
   'package.json',
-  'package-lock.json',
   'app.json',
   'DEPLOY.md',
   'README.md',
