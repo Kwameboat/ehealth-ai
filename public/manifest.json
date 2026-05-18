@@ -1,0 +1,33 @@
+{
+  "id": "/",
+  "short_name": "eHealth AI",
+  "name": "eHealth AI — AI Health Assistance",
+  "description": "AI-powered medical guidance, symptom analysis, and health chat.",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0052D4",
+  "background_color": "#0B1220",
+  "categories": ["health", "medical", "lifestyle"]
+}

@@ -1,0 +1,52 @@
+export const SYMPTOM_CATEGORIES = [
+  { id: 1, name: 'Headache & Migraine', icon: 'head-snowflake', color: '#8B5CF6', screen: 'HeadacheMigraine' },
+  { id: 2, name: 'Fever & Chills', icon: 'thermometer', color: '#EF4444', screen: 'FeverChills' },
+  { id: 3, name: 'Vomiting & Nausea', icon: 'emoticon-sick', color: '#14B8A6', screen: 'VomitingNausea' },
+  { id: 4, name: 'Cough & Cold', icon: 'lungs', color: '#3B82F6', screen: 'CoughCold' },
+  { id: 5, name: 'Allergies', icon: 'flower-pollen', color: '#F59E0B', screen: 'Allergies' },
+  { id: 6, name: 'Skin Issues', icon: 'face-woman-shimmer', color: '#F97316', screen: 'SkinProblems' },
+  { id: 7, name: 'Breathing Problems', icon: 'weather-windy', color: '#06B6D4', screen: 'BreathingProblems' },
+  { id: 8, name: 'Dental Pain', icon: 'tooth', color: '#22C55E', screen: 'DentalPain' },
+  { id: 9, name: 'Chest Pain', icon: 'heart-pulse', color: '#EF4444', screen: 'ChestPain' },
+  { id: 10, name: 'Stomach Pain', icon: 'stomach', color: '#A855F7', screen: 'StomachProblems' },
+  { id: 11, name: 'Diarrhea & Constipation', icon: 'emoticon-poop', color: '#78716C', screen: 'DiarrheaConstipation' },
+  { id: 12, name: 'Joint & Muscle Pain', icon: 'arm-flex', color: '#64748B', screen: 'JointMusclePain' },
+  { id: 13, name: 'Mental Health', icon: 'brain', color: '#6366F1', screen: 'MedicalHealth' },
+  { id: 14, name: 'Eye Problems', icon: 'eye', color: '#10B981', screen: 'EyeProblems' },
+  { id: 15, name: 'General Fatigue', icon: 'battery-alert', color: '#EAB308', screen: 'GeneralFatigue' },
+];
+
+export const QUICK_ACTIONS = [
+  {
+    id: 'cardiac',
+    title: 'Check Cardiac Symptoms',
+    desc: 'Analyze heart rate irregularities or chest discomfort patterns',
+    icon: 'heart-pulse',
+    color: '#3B82F6',
+    screen: 'ChestPain',
+  },
+  {
+    id: 'drug',
+    title: 'Drug Interaction',
+    desc: 'Check compatibility between medications',
+    icon: 'pill',
+    color: '#8B5CF6',
+    screen: 'MedicineRecognition',
+  },
+  {
+    id: 'lab',
+    title: 'Lab Results',
+    desc: 'Upload and understand your lab reports',
+    icon: 'microscope',
+    color: '#06B6D4',
+    chatPrompt: 'I want help understanding my lab results. What should I upload?',
+  },
+  {
+    id: 'voice',
+    title: 'Voice Consultation',
+    desc: 'Describe symptoms naturally via voice interaction',
+    icon: 'microphone',
+    color: '#6366F1',
+    screen: 'MedicalVoiceAgent',
+  },
+];

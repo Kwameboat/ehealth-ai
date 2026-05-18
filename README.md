@@ -1,50 +1,46 @@
-# Welcome to your Expo app 👋
+# eHealth AI
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+AI-powered health assistance app (Expo + React Native) with admin dashboard, points economy, Paystack payments, and PWA support.
 
-## Get started
+**Tagline:** AI Health Assistance — Not a Doctor
 
-1. Install dependencies
+## Stack
 
-   ```bash
-   npm install
-   ```
+- **App:** Expo SDK 53, React Native, expo-router (web + mobile)
+- **API:** Node.js, Express, SQLite (`better-sqlite3`)
+- **AI:** Google Gemini (server-side)
+- **Payments:** Paystack
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Quick start
 
 ```bash
-npm run reset-project
+# Install
+npm install
+cd backend && npm install && cd ..
+
+# Configure (copy examples, add your keys)
+cp .env.example .env
+cp backend/.env.example backend/.env
+
+# Run API
+npm run backend
+
+# Run app (separate terminal)
+npx expo start --web
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+- **App:** http://localhost:8081  
+- **API + Admin:** http://127.0.0.1:3001 — admin at `/admin` (default `admin` / `admin123` — change in production)
 
-## Learn more
+## Production
 
-To learn more about developing your project with Expo, look at the following resources:
+See [DEPLOY.md](./DEPLOY.md) for GitHub → cPanel deployment, PWA install prompt, and smoke tests.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npm run build:web
+npm run smoke-test
+```
 
-## Join the community
+## License
 
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Private — all rights reserved.

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>eHealth AI — Payment</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0a0e17;
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px;
+      text-align: center;
+    }
+    .card {
+      max-width: 400px;
+      background: #151d2e;
+      border: 1px solid rgba(148,163,184,0.15);
+      border-radius: 16px;
+      padding: 32px;
+    }
+    img { width: 120px; margin-bottom: 16px; }
+    h1 { font-size: 1.25rem; margin: 0 0 8px; }
+    p { color: #94a3b8; font-size: 0.9rem; line-height: 1.5; }
+    .ok { color: #22c55e; font-weight: 700; margin-top: 16px; }
+    .err { color: #ef4444; font-weight: 700; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img src="/admin/logo.png" alt="eHealth AI" />
+    <h1>Processing payment…</h1>
+    <p id="msg">Please wait while we confirm your purchase.</p>
+    <p id="status"></p>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const reference = params.get('reference') || params.get('trxref');
+    const token = localStorage.getItem('medassistant_user_token');
+    const appSecret = sessionStorage.getItem('app_api_secret') || '';
+
+    async function run() {
+      if (!reference) {
+        document.getElementById('status').className = 'err';
+        document.getElementById('status').textContent = 'Missing payment reference.';
+        return;
+      }
+      if (!token) {
+        document.getElementById('msg').textContent =
+          'Payment received. Return to the eHealth AI app and tap “Confirm payment”, or sign in on web.';
+        document.getElementById('status').className = 'ok';
+        document.getElementById('status').textContent = 'Reference: ' + reference;
+        return;
+      }
+      try {
+        const headers = {
+          Authorization: 'Bearer ' + token,
+          'Content-Type': 'application/json',
+        };
+        if (appSecret) headers['X-MedAssistant-Key'] = appSecret;
+
+        const r = await fetch('/api/payments/verify/' + encodeURIComponent(reference), { headers });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data?.error?.message || 'Verification failed');
+        document.getElementById('msg').textContent = 'Your points have been added successfully.';
+        document.getElementById('status').className = 'ok';
+        document.getElementById('status').textContent =
+          '+' + data.pointsAdded + ' points · Balance: ' + data.balance;
+      } catch (e) {
+        document.getElementById('status').className = 'err';
+        document.getElementById('status').textContent = e.message;
+      }
+    }
+    run();
+  </script>
+</body>
+</html>

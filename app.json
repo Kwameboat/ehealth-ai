@@ -9,19 +9,37 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Allow this app to use speech recognition.",
+        "NSMicrophoneUsageDescription": "Allow this app to use the microphone."
+      },
+      "bundleIdentifier": "com.yourname.aimedicalagent"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.yourname.aimedicalagent"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "eHealth AI",
+      "shortName": "eHealth AI",
+      "description": "AI Health Assistance — Not a Doctor",
+      "themeColor": "#0052D4",
+      "backgroundColor": "#0B1220",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "/",
+      "scope": "/"
     },
     "plugins": [
       "expo-router",
@@ -33,10 +51,33 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow this app to use the microphone.",
+          "speechRecognitionPermission": "Allow this app to use speech recognition.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-8991036550543596~1691320143",
+          "iosAppId": "ca-app-pub-8991036550543596~8071232230"
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "aa26d057-802c-481b-993b-f892e302bd8e"
+      }
     }
   }
 }
