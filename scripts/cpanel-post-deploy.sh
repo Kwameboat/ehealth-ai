@@ -68,19 +68,36 @@ merge_htaccess() {
   local passblock=""
   if [ -f "$dest" ] && grep -q 'PASSENGER CONFIGURATION BEGIN' "$dest"; then
     passblock="$(sed -n '/PASSENGER CONFIGURATION BEGIN/,/PASSENGER CONFIGURATION END/p' "$dest")"
-    if ! echo "$passblock" | grep -Fq "ehealth"; then
+    if ! echo "$passblock" | grep -Fq "$SRC"; then
+      echo "Replacing Passenger block (stale AppRoot)"
       passblock=""
     fi
   fi
+
+  if [ -z "$passblock" ]; then
+    NODE_BIN="$(resolve_node_bin)"
+    if [ -n "$NODE_BIN" ] && [ -x "$NODE_BIN" ] && [ -f "$SRC/server.js" ]; then
+      passblock="# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+PassengerAppRoot \"$SRC\"
+PassengerBaseURI \"/\"
+PassengerNodejs \"$NODE_BIN\"
+PassengerAppType node
+PassengerStartupFile server.js
+PassengerAppEnv production
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END"
+      echo "Injected Passenger block (nodevenv OK, AppRoot=$SRC)"
+    fi
+  fi
+
   {
     [ -n "$passblock" ] && printf '%s\n\n' "$passblock"
     cat "$HT_SRC"
   } > "$dest.tmp"
   mv "$dest.tmp" "$dest"
   if [ -z "$passblock" ]; then
-    echo "WARNING: No Passenger block — after Node app is fixed, click RESTART in cPanel"
+    echo "CRITICAL: No Passenger — cPanel -> Node.js app -> RESTART (creates nodevenv + .htaccess)"
   else
-    echo "Merged .htaccess (Passenger preserved)"
+    echo "Merged .htaccess (Passenger OK)"
   fi
 }
 merge_htaccess
