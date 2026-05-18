@@ -1,27 +1,11 @@
-# Fix 503 + "Unable to find app venv folder"
+# cPanel Node.js — venv + 503 fix
 
-## Red error in cPanel
+## Error you see
 
-> Unable to find app venv folder by this path: '%(app_venv)s'
+`Unable to find app venv folder: /home/ehealtha/nodevenv/ehealth-ai`
 
-The Node.js app is **broken**. You must **destroy it and create a new one** with root **`ehealth-ai`** (hyphen).
+**Cause:** Root `package.json` tried to install Expo on the server and failed.
 
-**Full steps:** see **`cpanel/FIX-VENV-ERROR.md`**
+**Fix:** Use the slim API `package.json` — see **`cpanel/FIX-VENV-ERROR.md`** (Terminal commands).
 
-### Short version
-
-1. **DESTROY** the current Node.js app (`ehealth_ai`)
-2. **Create Application** with root **`ehealth-ai`**, startup **`server.js`**, URL **ehealthaigh.com**
-3. Re-add env vars (include **`NODE_ENV=production`**)
-4. **Run NPM Install** → must complete without red errors
-5. **RESTART**
-6. Test: https://www.ehealthaigh.com/api/health
-
-### Env paths (use hyphen `ehealth-ai`)
-
-```
-DATABASE_PATH=/home/ehealtha/ehealth-ai/backend/db/medassistant.db
-WEB_DIST_PATH=/home/ehealtha/ehealth-ai/dist
-```
-
-Do **not** use application root `ehealth_ai` (underscore) — that caused the venv error.
+Then: **Run NPM Install** → **RESTART** → test `/api/health`.

@@ -29,6 +29,15 @@ done
 
 echo "cpanel-post-deploy: APP=$SRC"
 
+# cPanel "Run NPM Install" uses root package.json — Expo deps break venv creation on shared hosting
+if [ -f "$SRC/cpanel/package.production.json" ]; then
+  if [ -f "$SRC/package.json" ] && ! grep -q '"ehealth-ai-api"' "$SRC/package.json" 2>/dev/null; then
+    cp -f "$SRC/package.json" "$SRC/package.json.expo"
+  fi
+  cp -f "$SRC/cpanel/package.production.json" "$SRC/package.json"
+  echo "Using slim package.json for cPanel (saved Expo manifest as package.json.expo if needed)"
+fi
+
 resolve_node_bin() {
   for v in "$HOME_DIR/nodevenv/ehealth-ai"/*/bin/node "$HOME_DIR/nodevenv/ehealth_ai"/*/bin/node; do
     if [ -x "$v" ]; then echo "$v"; return 0; fi

@@ -9,7 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(__dirname, '..');
 const out = path.join(root, 'deploy-bundle');
 
-const COPY_DIRS = ['dist', 'public', 'backend', 'assets', 'SRC'];
+const COPY_DIRS = ['dist', 'public', 'backend', 'assets', 'SRC', 'cpanel'];
 const COPY_FILES = [
   'server.js',
   'public_html.htaccess',

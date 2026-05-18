@@ -1,61 +1,59 @@
-# Fix: "Unable to find app venv folder" / %(app_venv)s
+# Fix: Unable to find app venv folder `/home/ehealtha/nodevenv/ehealth-ai`
 
-cPanel cannot find the Node virtual environment for this app. The app registration is **broken**. Repair by **recreating** the Node.js app with the **same folder name as GitHub deploy**.
+## Why it happens
 
-## Step 1 — Destroy the broken app
+cPanel **Run NPM Install** reads the **root** `package.json`. That file lists **Expo / React Native** (hundreds of packages). On shared hosting the install **fails or times out**, so cPanel never creates:
 
-1. **Setup Node.js App**
-2. Open **ehealth_ai** (or ehealthaigh.com)
-3. Click **DESTROY** (top right)
-4. Confirm
+`/home/ehealtha/nodevenv/ehealth-ai/`
 
-## Step 2 — Create a new app
+The API only needs **`backend/package.json`** (small).
 
-Click **Create Application**:
+## Fix A — cPanel Terminal (fastest, do this now)
+
+1. cPanel → **Terminal**
+2. Paste and run:
+
+```bash
+cd /home/ehealtha/ehealth-ai
+cp -f package.json package.json.expo 2>/dev/null || true
+cat > package.json << 'EOF'
+{
+  "name": "ehealth-ai-api",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server.js",
+    "postinstall": "cd backend && npm install --omit=dev"
+  },
+  "engines": { "node": ">=18" }
+}
+EOF
+```
+
+3. **Setup Node.js App** → **STOP APP**
+4. **Run NPM Install** (should succeed and create `nodevenv/ehealth-ai/`)
+5. **RESTART**
+6. Test: https://www.ehealthaigh.com/api/health
+
+## Fix B — Recreate the Node app
+
+If Fix A still shows the red venv error:
+
+1. **DESTROY** the Node.js app
+2. **Create Application**:
+   - Root: **`ehealth-ai`**
+   - Startup: **`server.js`**
+   - URL: `ehealthaigh.com`
+3. Run Fix A Terminal commands **first**, then **Run NPM Install** → **RESTART**
+
+## App settings (keep)
 
 | Field | Value |
 |-------|--------|
-| Node.js version | **22** (or 20) |
-| Application mode | **Production** |
-| Application root | **`ehealth-ai`** ← hyphen, matches FTP deploy |
-| Application URL | `ehealthaigh.com` |
-| Application startup file | **`server.js`** |
+| Application root | `ehealth-ai` |
+| Startup file | `server.js` |
+| `NODE_ENV` | `production` |
+| `DATABASE_PATH` | `/home/ehealtha/ehealth-ai/backend/db/medassistant.db` |
+| `WEB_DIST_PATH` | `/home/ehealtha/ehealth-ai/dist` |
 
-Click **CREATE**.
-
-## Step 3 — Environment variables
-
-Click **ADD VARIABLE** for each:
-
-```
-NODE_ENV=production
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
-APP_API_SECRET=your_secret
-JWT_SECRET=your_different_jwt_secret
-GEMINI_API_KEY=your_key
-GEMINI_MODEL=gemini-2.0-flash
-ALLOWED_ORIGINS=https://ehealthaigh.com,https://www.ehealthaigh.com,http://ehealthaigh.com,http://www.ehealthaigh.com
-DATABASE_PATH=/home/ehealtha/ehealth-ai/backend/db/medassistant.db
-WEB_DIST_PATH=/home/ehealtha/ehealth-ai/dist
-```
-
-Replace `ehealtha` with your cPanel username if different.
-
-Click **SAVE**.
-
-## Step 4 — Install and start
-
-1. **Run NPM Install** (must succeed — creates `nodevenv/ehealth-ai/`)
-2. **RESTART**
-
-## Step 5 — Test
-
-- https://www.ehealthaigh.com/api/health → JSON `{"status":"ok",...}`
-- https://www.ehealthaigh.com/admin → login
-
-## Why this happened
-
-Deploy uploads to **`ehealth-ai`**. The old app used **`ehealth_ai`** (underscore). cPanel created a venv for one name but files lived in the other — the venv path broke.
-
-**Always use application root: `ehealth-ai`** (hyphen).
+GitHub deploy now swaps in the slim `package.json` automatically on each release.
