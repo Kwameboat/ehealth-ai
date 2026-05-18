@@ -151,12 +151,6 @@ function onListen() {
 
 module.exports = app;
 
+// cPanel Node.js: must listen on PORT from the panel (also export for Passenger)
 const listenPort = Number(process.env.PORT) || PORT;
-const underPassenger = Boolean(process.env.PASSENGER_APP_ENV || process.env.PASSENGER_SPAWN_WORK_DIR);
-
-if (underPassenger) {
-  // Phusion Passenger — do not call listen(); export app only
-  console.log('eHealth AI API (Passenger mode)');
-} else {
-  app.listen(listenPort, HOST, onListen);
-}
+app.listen(listenPort, '0.0.0.0', onListen);
