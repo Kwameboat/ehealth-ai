@@ -20,9 +20,14 @@ cd /home/ehealtha/ehealth-ai/backend
 rm -rf /home/ehealtha/nodevenv/ehealth-ai/20/lib/node_modules/better-sqlite3
 rm -rf /home/ehealtha/nodevenv/ehealth-ai/22/lib/node_modules/better-sqlite3
 
-# Install ALL backend dependencies (do NOT run npm install better-sqlite3 alone — skips bcryptjs)
-npm install --omit=dev
+# Parent package-lock.json breaks backend install (only ~39 packages, no express)
+rm -f ../package-lock.json
+rm -rf node_modules package-lock.json
+
+npm install --omit=dev express@4.21.2 cors@2.8.5 dotenv@16.4.7 bcryptjs@2.4.3 jsonwebtoken@9.0.2 better-sqlite3@9.6.0
 npm rebuild better-sqlite3 --build-from-source
+
+ls node_modules/express node_modules/bcryptjs
 
 find node_modules/better-sqlite3 -name "*.node" -type f
 unset NODE_PATH

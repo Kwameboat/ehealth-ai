@@ -31,8 +31,14 @@ rm -rf "$HOME_DIR/nodevenv/ehealth-ai/20/lib/node_modules/better-sqlite3" 2>/dev
 rm -rf "$HOME_DIR/nodevenv/ehealth-ai/22/lib/node_modules/better-sqlite3" 2>/dev/null || true
 
 cd "$BACKEND"
-# install-strategy=nested in backend/.npmrc keeps modules under backend/node_modules
-"$NPM_BIN" install --omit=dev
+
+# Parent Expo lockfile makes "npm install" in backend install almost nothing (39 packages, no express)
+rm -f "$APP/package-lock.json" 2>/dev/null || true
+rm -rf node_modules
+rm -f package-lock.json 2>/dev/null || true
+
+"$NPM_BIN" install --omit=dev \
+  express@4.21.2 cors@2.8.5 dotenv@16.4.7 bcryptjs@2.4.3 jsonwebtoken@9.0.2 better-sqlite3@9.6.0
 
 if [ ! -f node_modules/express/package.json ]; then
   if [ -f "$APP/node_modules/express/package.json" ]; then
