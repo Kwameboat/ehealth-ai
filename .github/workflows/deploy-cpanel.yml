@@ -88,3 +88,20 @@ jobs:
               echo "npm not in PATH — create Node.js app in cPanel (root: ehealth-ai), then Restart"
             fi
             echo "Deploy OK $(date -u)" >> DEPLOYED_AT.txt
+            if [ -d dist ]; then
+              find ~/public_html -mindepth 1 -maxdepth 1 ! -name cgi-bin -exec rm -rf {} + 2>/dev/null || true
+              cp -r dist/* ~/public_html/
+              cp -f public/manifest.json ~/public_html/ 2>/dev/null || true
+              cp -f public/sw.js ~/public_html/ 2>/dev/null || true
+              cp -r public/icons ~/public_html/ 2>/dev/null || true
+              cat > ~/public_html/.htaccess << 'HTEOF'
+            <IfModule mod_rewrite.c>
+              RewriteEngine On
+              RewriteBase /
+              RewriteCond %{REQUEST_FILENAME} !-f
+              RewriteCond %{REQUEST_FILENAME} !-d
+              RewriteRule ^ index.html [L]
+            </IfModule>
+            HTEOF
+              echo "Published PWA to public_html"
+            fi
