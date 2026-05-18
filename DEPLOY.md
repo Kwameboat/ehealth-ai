@@ -1,5 +1,26 @@
 # Deploy eHealth AI (GitHub → cPanel)
 
+## Auto-deploy from GitHub (recommended)
+
+Every push to `main` runs [.github/workflows/deploy-cpanel.yml](.github/workflows/deploy-cpanel.yml).
+
+**Add these secrets** in GitHub → repo → Settings → Secrets and variables → Actions:
+
+| Secret | Example |
+|--------|---------|
+| `FTP_SERVER` | `ftp.ehealthaigh.com` |
+| `FTP_USERNAME` | cPanel user |
+| `FTP_PASSWORD` | cPanel password |
+| `FTP_PORT` | `21` |
+| `FTP_REMOTE_DIR` | `./ehealth-ai/` |
+| `APP_API_SECRET` | same as server `APP_API_SECRET` |
+
+Then complete one-time cPanel Node setup: [cpanel/SETUP.md](cpanel/SETUP.md).
+
+Manual run: **Actions** tab → **Deploy to cPanel** → **Run workflow**.
+
+---
+
 ## Prerequisites
 
 - Node.js 18+ on cPanel (Setup Node.js App)

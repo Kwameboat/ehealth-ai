@@ -1,0 +1,63 @@
+# Deploy eHealth AI to cPanel (SFTP) on push to main
+# Required GitHub Secrets: see DEPLOY.md → "GitHub Actions secrets"
+
+name: Deploy to cPanel
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-cpanel
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_PUBLIC_API_URL: https://ehealthaigh.com
+      EXPO_PUBLIC_APP_API_SECRET: ${{ secrets.APP_API_SECRET }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install backend dependencies
+        run: npm ci --prefix backend
+
+      - name: Build PWA (web export)
+        run: npm run build:web
+
+      - name: Prepare deploy bundle
+        run: node scripts/prepare-deploy.mjs
+
+      - name: Deploy via SFTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          port: ${{ secrets.FTP_PORT || 21 }}
+          protocol: ftp
+          local-dir: ./deploy-bundle/
+          server-dir: ${{ secrets.FTP_REMOTE_DIR || './ehealth-ai/' }}
+          dangerous-clean-slate: false
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            **/.env
+            **/.env.*
+            **/backend/.env
+            **/backend/db/*.db
+            **/backend/db/*.db-*
