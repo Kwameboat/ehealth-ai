@@ -58,13 +58,13 @@ fi
 
 # Resolve Node binary (cPanel nodevenv for ehealth_ai)
 resolve_node_bin() {
+  for v in "$HOME_DIR/nodevenv/ehealth_ai"/*/bin/node "$HOME_DIR/nodevenv/ehealth-ai"/*/bin/node; do
+    if [ -x "$v" ]; then echo "$v"; return 0; fi
+  done
   if command -v node >/dev/null 2>&1; then
     command -v node
     return 0
   fi
-  for v in "$HOME_DIR/nodevenv/ehealth_ai"/*/bin/node "$HOME_DIR/nodevenv/ehealth-ai"/*/bin/node; do
-    if [ -x "$v" ]; then echo "$v"; return 0; fi
-  done
   for v in "$HOME_DIR/nodevenv"/*/bin/activate; do
     # shellcheck disable=SC1090
     . "$v" 2>/dev/null && command -v node && return 0

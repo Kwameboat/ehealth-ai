@@ -19,17 +19,21 @@ In **Setup Node.js App** → **Environment variables** → **ADD VARIABLE**:
 
 Click **SAVE**.
 
-### 2. Restart Node (required)
+### 2. Install dependencies on the server
 
-Click **RESTART** on the Node.js app (not just Save).
+Click **Run NPM Install** in the Node.js app screen (installs into `ehealth_ai` with the correct Node version).
 
-This re-injects the **Passenger** block into `public_html/.htaccess`.
+### 3. Restart Node (required)
 
-### 3. Run AutoSSL
+Click **RESTART** (not just Save).
+
+This applies Passenger + restarts the API. **Required after every deploy** if you see 503 or login errors.
+
+### 4. Run AutoSSL
 
 **SSL/TLS Status** → **Run AutoSSL** for `ehealthaigh.com` (fixes “Dangerous” / broken HTTPS).
 
-### 4. Test
+### 5. Test
 
 | URL | Expected |
 |-----|----------|
