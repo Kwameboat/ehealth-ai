@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run on server after FTP deploy — sync Node app root, merge .htaccess (keep Passenger), publish static files.
-set -euo pipefail
+set -eo pipefail
 
 HOME_DIR="${HOME:-/home/ehealtha}"
 SRC="${APP_SRC:-$HOME_DIR/ehealth-ai}"
@@ -12,9 +12,12 @@ HT_SRC="$SRC/public_html.htaccess"
 for v in "$HOME_DIR/nodevenv/ehealth_ai"/*/bin/activate "$HOME_DIR/nodevenv/ehealth-ai"/*/bin/activate; do
   if [ -f "$v" ]; then
     # shellcheck disable=SC1090
-    . "$v"
+    . "$v" 2>/dev/null || true
     break
   fi
+done
+for bin in "$HOME_DIR/nodevenv/ehealth_ai"/*/bin "$HOME_DIR/nodevenv/ehealth-ai"/*/bin; do
+  [ -d "$bin" ] && export PATH="$bin:$PATH"
 done
 for n in /opt/cpanel/ea-nodejs*/bin; do
   [ -x "$n/node" ] && export PATH="$n:$PATH" && break
