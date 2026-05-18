@@ -84,7 +84,7 @@ merge_htaccess() {
   if [ -f "$dest" ] && grep -q 'PASSENGER CONFIGURATION BEGIN' "$dest"; then
     passblock="$(sed -n '/PASSENGER CONFIGURATION BEGIN/,/PASSENGER CONFIGURATION END/p' "$dest")"
     if ! echo "$passblock" | grep -Fq "$NODE_ROOT"; then
-      echo "Replacing Passenger block (wrong AppRoot)"
+      echo "Removed invalid Passenger block (wrong AppRoot) — RESTART Node.js app in cPanel now"
       passblock=""
     fi
   fi
