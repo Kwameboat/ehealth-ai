@@ -36,13 +36,11 @@ cat > package.json << 'EOF'
   "name": "ehealth-ai-api",
   "private": true,
   "version": "1.0.0",
-  "scripts": {
-    "start": "node server.js",
-    "postinstall": "cd backend && npm install --omit=dev"
-  },
+  "scripts": { "start": "node server.js" },
   "engines": { "node": ">=18" }
 }
 EOF
+ls backend/server.js || echo "ERROR: upload or deploy backend/ folder first"
 ```
 
 Then in Node.js app: **Run NPM Install** → **RESTART**.

@@ -29,6 +29,11 @@ done
 
 echo "cpanel-post-deploy: APP=$SRC"
 
+if [ ! -f "$SRC/backend/server.js" ]; then
+  echo "ERROR: $SRC/backend/ missing — GitHub deploy must upload full app (backend/, server.js, dist/)"
+  exit 1
+fi
+
 # cPanel "Run NPM Install" uses root package.json — Expo deps break venv creation on shared hosting
 if [ -f "$SRC/cpanel/package.production.json" ]; then
   if [ -f "$SRC/package.json" ] && ! grep -q '"ehealth-ai-api"' "$SRC/package.json" 2>/dev/null; then

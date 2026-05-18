@@ -21,19 +21,26 @@ cat > package.json << 'EOF'
   "name": "ehealth-ai-api",
   "private": true,
   "version": "1.0.0",
-  "scripts": {
-    "start": "node server.js",
-    "postinstall": "cd backend && npm install --omit=dev"
-  },
+  "scripts": { "start": "node server.js" },
   "engines": { "node": ">=18" }
 }
 EOF
+ls -la backend/server.js || echo "MISSING backend/ — wait for GitHub deploy or upload backend folder"
 ```
 
-3. **Setup Node.js App** → **STOP APP**
-4. **Run NPM Install** (should succeed and create `nodevenv/ehealth-ai/`)
-5. **RESTART**
-6. Test: https://www.ehealthaigh.com/api/health
+3. **Setup Node.js App** → **Run NPM Install** (no `cd backend` in package.json)
+4. If `backend/` exists, in Terminal:
+
+```bash
+source /home/ehealtha/nodevenv/ehealth-ai/22/bin/activate
+cd /home/ehealtha/ehealth-ai/backend
+npm install --omit=dev
+npm rebuild better-sqlite3
+```
+
+5. **ADD VARIABLE** — re-add all env vars (NODE_ENV, GEMINI_API_KEY, etc.)
+6. **RESTART**
+7. Test: https://www.ehealthaigh.com/api/health
 
 ## Fix B — Recreate the Node app
 
