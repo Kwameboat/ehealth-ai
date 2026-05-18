@@ -73,15 +73,18 @@ jobs:
           username: ${{ secrets.SSH_USERNAME }}
           password: ${{ secrets.SSH_PASSWORD }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          script_stop: true
+          script_stop: false
           script: |
             mkdir -p ~/ehealth-ai
+            for v in ~/nodevenv/*/bin/activate; do [ -f "$v" ] && . "$v" && break; done
+            for n in /opt/cpanel/ea-nodejs*/bin; do [ -x "$n/node" ] && export PATH="$n:$PATH" && break; done
             cd ~/ehealth-ai
-            if [ -f package.json ]; then
+            if [ ! -f package.json ]; then echo "No package.json yet"; exit 0; fi
+            if command -v npm >/dev/null 2>&1; then
               npm install --omit=dev || npm install
               cd backend && (npm install --omit=dev || npm install)
               mkdir -p db
-              echo "Deploy OK $(date -u)" >> DEPLOYED_AT.txt
             else
-              echo "Waiting for FTP upload — package.json not found yet"
+              echo "npm not in PATH — create Node.js app in cPanel (root: ehealth-ai), then Restart"
             fi
+            echo "Deploy OK $(date -u)" >> DEPLOYED_AT.txt
