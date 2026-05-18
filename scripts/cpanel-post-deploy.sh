@@ -40,6 +40,25 @@ if [ -d "$SRC/dist" ]; then
   echo "Published PWA to $PUBLIC"
 fi
 
+# Resolve Node binary (cPanel nodevenv for ehealth_ai)
+resolve_node_bin() {
+  local bin=""
+  for v in "$HOME_DIR/nodevenv/ehealth_ai"/*/bin/node; do
+    if [ -x "$v" ]; then echo "$v"; return 0; fi
+  done
+  for v in "$HOME_DIR/nodevenv/ehealth-ai"/*/bin/node; do
+    if [ -x "$v" ]; then echo "$v"; return 0; fi
+  done
+  for v in "$HOME_DIR/nodevenv"/*/bin/activate; do
+    # shellcheck disable=SC1090
+    . "$v" 2>/dev/null && command -v node && return 0
+  done
+  for n in /opt/cpanel/ea-nodejs*/bin/node; do
+    if [ -x "$n" ]; then echo "$n"; return 0; fi
+  done
+  command -v node 2>/dev/null || echo "node"
+}
+
 # Merge .htaccess: NEVER drop CloudLinux Passenger block (required for /api and /admin/api)
 merge_htaccess() {
   local dest="$PUBLIC/.htaccess"
@@ -48,6 +67,19 @@ merge_htaccess() {
   local passblock=""
   if [ -f "$dest" ] && grep -q 'PASSENGER CONFIGURATION BEGIN' "$dest"; then
     passblock="$(sed -n '/PASSENGER CONFIGURATION BEGIN/,/PASSENGER CONFIGURATION END/p' "$dest")"
+  fi
+
+  if [ -z "$passblock" ] && [ -d "$NODE_ROOT/backend" ]; then
+    local node_bin
+    node_bin="$(resolve_node_bin)"
+    passblock="# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+PassengerAppRoot \"$NODE_ROOT\"
+PassengerBaseURI \"/\"
+PassengerNodejs \"$node_bin\"
+PassengerAppType node
+PassengerStartupFile backend/server.js
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END"
+    echo "Injected Passenger block (app=$NODE_ROOT node=$node_bin)"
   fi
 
   {
@@ -59,9 +91,9 @@ merge_htaccess() {
   mv "$dest.tmp" "$dest"
 
   if [ -n "$passblock" ]; then
-    echo "Merged .htaccess (Passenger block preserved)"
+    echo "Merged .htaccess (Passenger OK)"
   else
-    echo "WARNING: No Passenger block in .htaccess — in cPanel open Setup Node.js App -> RESTART (injects Passenger into public_html)"
+    echo "WARNING: No Passenger block — cPanel -> Setup Node.js App -> RESTART"
   fi
 }
 merge_htaccess
