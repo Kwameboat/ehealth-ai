@@ -22,7 +22,8 @@ import {
 } from 'react-native';
 import { useTheme } from '../Context/ThemeContext';
 
-import { generateContent } from '../services/geminiClient';
+import ClinicalAnalysisView from '../Components/ClinicalAnalysisView';
+import { analyzeSymptomFromImage, analyzeSymptomFromText } from '../services/symptomAnalysis';
 
 const ChestPainScreen = ({ navigation }) => {
   const theme = useTheme();
@@ -111,44 +112,15 @@ const ChestPainScreen = ({ navigation }) => {
   const analyzeTextWithGemini = async (text) => {
     setIsAnalyzing(true);
     setAnalysisResult('');
-    
     try {
-      const prompt = `The user is describing chest pain symptoms: "${text}". 
-      Please provide a detailed analysis of potential causes, severity, 
-      and whether this might be a medical emergency. Include information about 
-      cardiac vs. non-cardiac causes, when to seek immediate medical attention, 
-      and general recommendations. Format your response with clear sections for 
-      Analysis, Potential Causes, Immediate Actions, and When to Seek Emergency Help.
-      Be compassionate but direct about potential seriousness.`;
-      
-      const data = await generateContent({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }]
+      const resultText = await analyzeSymptomFromText({
+        condition: 'Chest Pain',
+        userText: text,
       });
-      if (data.candidates && data.candidates.length > 0) {
-        const resultText = data.candidates[0].content.parts[0].text;
-        setAnalysisResult(resultText);
-        
-        // Try to detect the type of pain
-        const resultLower = resultText.toLowerCase();
-        if (resultLower.includes('sharp') || resultLower.includes('stabbing')) {
-          setPainType('sharp');
-        } else if (resultLower.includes('dull') || resultLower.includes('aching')) {
-          setPainType('dull');
-        } else if (resultLower.includes('burning') || resultLower.includes('acid')) {
-          setPainType('burning');
-        } else if (resultLower.includes('pressure') || resultLower.includes('tight')) {
-          setPainType('pressure');
-        }
-      } else {
-        throw new Error('No response from Gemini API');
-      }
+      setAnalysisResult(resultText);
     } catch (error) {
-      console.error('Gemini API error:', error);
-      Alert.alert("Analysis Error", "Failed to analyze your symptoms. Please try again.");
+      console.error('Clinical analysis error:', error);
+      Alert.alert('Analysis Error', 'Failed to analyze your symptoms. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -158,57 +130,20 @@ const ChestPainScreen = ({ navigation }) => {
   const analyzeImageWithGemini = async (imageUri) => {
     setIsAnalyzing(true);
     setAnalysisResult('');
-    
     try {
-      // Read image as base64
       const base64 = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      
       const mimeType = 'image/jpeg';
-      
-      const prompt = `Analyze this image related to chest pain or discomfort. 
-      Provide a detailed analysis of potential causes, severity, 
-      and whether this might be a medical emergency. Include information about 
-      cardiac vs. non-cardiac causes, when to seek immediate medical attention, 
-      and general recommendations. Format your response with clear sections for 
-      Analysis, Potential Causes, Immediate Actions, and When to Seek Emergency Help.
-      Be compassionate but direct about potential seriousness.`;
-      
-      const data = await generateContent({
-          contents: [{
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: base64
-                }
-              }
-            ]
-          }]
+      const resultText = await analyzeSymptomFromImage({
+        condition: 'Chest Pain',
+        base64,
+        mimeType,
       });
-      if (data.candidates && data.candidates.length > 0) {
-        const resultText = data.candidates[0].content.parts[0].text;
-        setAnalysisResult(resultText);
-        
-        // Try to detect the type of pain
-        const resultLower = resultText.toLowerCase();
-        if (resultLower.includes('sharp') || resultLower.includes('stabbing')) {
-          setPainType('sharp');
-        } else if (resultLower.includes('dull') || resultLower.includes('aching')) {
-          setPainType('dull');
-        } else if (resultLower.includes('burning') || resultLower.includes('acid')) {
-          setPainType('burning');
-        } else if (resultLower.includes('pressure') || resultLower.includes('tight')) {
-          setPainType('pressure');
-        }
-      } else {
-        throw new Error('No response from Gemini API');
-      }
+      setAnalysisResult(resultText);
     } catch (error) {
-      console.error('Gemini API error:', error);
-      Alert.alert("Analysis Error", "Failed to analyze the image. Please try again.");
+      console.error('Clinical analysis error:', error);
+      Alert.alert('Analysis Error', 'Failed to analyze the image. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -266,59 +201,14 @@ const ChestPainScreen = ({ navigation }) => {
   // Format analysis result with sections
   const renderAnalysisResult = () => {
     if (!analysisResult) return null;
-    
-    const sections = analysisResult.split('\n\n');
-    return sections.map((section, index) => {
-      if (section.includes('Analysis:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Analysis</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Analysis:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('Potential Causes:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Potential Causes</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Potential Causes:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('Immediate Actions:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Immediate Actions</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Immediate Actions:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('When to Seek Emergency Help:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>When to Seek Emergency Help</Text>
-            <Text style={styles.resultText}>
-              {section.replace('When to Seek Emergency Help:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      return (
-        <Text key={index} style={styles.resultText}>
-          {section}
-        </Text>
-      );
-    });
+    return (
+      <ClinicalAnalysisView
+        text={analysisResult}
+        sectionStyle={styles.sectionContainer}
+        sectionTitleStyle={styles.sectionTitle}
+        bodyStyle={styles.resultText}
+      />
+    );
   };
 
   return (

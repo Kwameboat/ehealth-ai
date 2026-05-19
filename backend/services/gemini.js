@@ -6,6 +6,11 @@ const {
   MEDICAL_CHAT_GENERATION_CONFIG,
 } = require('./medicalChatPrompt');
 
+const SYMPTOM_GENERATION_CONFIG = {
+  maxOutputTokens: 512,
+  temperature: 0.3,
+};
+
 async function callGemini(contents, model, options = {}) {
   const apiKey = getGeminiApiKey();
   const useModel = normalizeGeminiModel(model || getGeminiModel());
@@ -86,10 +91,18 @@ async function chatCompletion(history, userText, attachment) {
   return reply;
 }
 
+function resolveGenerationConfig(featureKey) {
+  if (featureKey === 'symptom_text' || featureKey === 'symptom_image') {
+    return SYMPTOM_GENERATION_CONFIG;
+  }
+  return null;
+}
+
 module.exports = {
   callGemini,
   chatCompletion,
   buildChatContents,
   resolveChatFeatureKey,
+  resolveGenerationConfig,
   MEDICAL_CHAT_SYSTEM_PROMPT,
 };

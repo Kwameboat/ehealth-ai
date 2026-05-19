@@ -22,7 +22,8 @@ import {
 } from 'react-native';
 import { useTheme } from '../Context/ThemeContext';
 
-import { generateContent } from '../services/geminiClient';
+import ClinicalAnalysisView from '../Components/ClinicalAnalysisView';
+import { analyzeSymptomFromImage, analyzeSymptomFromText } from '../services/symptomAnalysis';
 
 const SkinIssuesScreen = ({ navigation }) => {
   const theme = useTheme();
@@ -120,36 +121,15 @@ const SkinIssuesScreen = ({ navigation }) => {
   const analyzeTextWithGemini = async (text) => {
     setIsAnalyzing(true);
     setAnalysisResult('');
-    
     try {
-      const prompt = `The user is experiencing skin issues with these details:
-      ${text}
-      
-      Please provide a detailed dermatological analysis including:
-      1. Potential diagnosis and causes
-      2. Recommended treatments and medications
-      3. Home care remedies and skincare routines
-      4. Warning signs for when to seek medical help
-      5. Prevention tips and lifestyle recommendations
-      
-      Format your response with clear sections and use medical terminology where appropriate.`;
-      
-      const data = await generateContent({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }]
+      const resultText = await analyzeSymptomFromText({
+        condition: 'Skin Issues',
+        userText: text,
       });
-      if (data.candidates && data.candidates.length > 0) {
-        const resultText = data.candidates[0].content.parts[0].text;
-        setAnalysisResult(resultText);
-      } else {
-        throw new Error('No response from Gemini API');
-      }
+      setAnalysisResult(resultText);
     } catch (error) {
-      console.error('Gemini API error:', error);
-      Alert.alert("Analysis Error", "Failed to analyze your symptoms. Please try again.");
+      console.error('Clinical analysis error:', error);
+      Alert.alert('Analysis Error', 'Failed to analyze your symptoms. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -159,47 +139,20 @@ const SkinIssuesScreen = ({ navigation }) => {
   const analyzeImageWithGemini = async (imageUri) => {
     setIsAnalyzing(true);
     setAnalysisResult('');
-    
     try {
-      // Read image as base64
       const base64 = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      
       const mimeType = 'image/jpeg';
-      
-      const prompt = `Analyze this image of a skin condition. 
-      Provide a detailed dermatological analysis including:
-      1. Potential diagnosis based on visual indicators
-      2. Severity assessment
-      3. Recommended treatments and medications
-      4. When to seek dermatological care
-      5. Any visible signs of infection or allergic reaction
-      
-      Format your response with clear sections.`;
-      
-      const data = await generateContent({
-          contents: [{
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: base64
-                }
-              }
-            ]
-          }]
+      const resultText = await analyzeSymptomFromImage({
+        condition: 'Skin Issues',
+        base64,
+        mimeType,
       });
-      if (data.candidates && data.candidates.length > 0) {
-        const resultText = data.candidates[0].content.parts[0].text;
-        setAnalysisResult(resultText);
-      } else {
-        throw new Error('No response from Gemini API');
-      }
+      setAnalysisResult(resultText);
     } catch (error) {
-      console.error('Gemini API error:', error);
-      Alert.alert("Analysis Error", "Failed to analyze the image. Please try again.");
+      console.error('Clinical analysis error:', error);
+      Alert.alert('Analysis Error', 'Failed to analyze the image. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -257,70 +210,14 @@ const SkinIssuesScreen = ({ navigation }) => {
   // Format analysis result with sections
   const renderAnalysisResult = () => {
     if (!analysisResult) return null;
-    
-    const sections = analysisResult.split('\n\n');
-    return sections.map((section, index) => {
-      if (section.includes('Diagnosis:') || section.includes('Potential Causes:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Diagnosis & Causes</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Diagnosis:', '').replace('Potential Causes:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('Treatment:') || section.includes('Medications:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Treatment & Medications</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Treatment:', '').replace('Medications:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('Home Care:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Home Care & Skincare</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Home Care:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('When to Seek Help:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>When to See a Dermatologist</Text>
-            <Text style={[styles.resultText, styles.warningText]}>
-              {section.replace('When to Seek Help:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('Prevention:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Prevention Tips</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Prevention:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      return (
-        <Text key={index} style={styles.resultText}>
-          {section}
-        </Text>
-      );
-    });
+    return (
+      <ClinicalAnalysisView
+        text={analysisResult}
+        sectionStyle={styles.sectionContainer}
+        sectionTitleStyle={styles.sectionTitle}
+        bodyStyle={styles.resultText}
+      />
+    );
   };
 
   return (

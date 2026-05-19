@@ -22,7 +22,8 @@ import {
 } from 'react-native';
 import { useTheme } from '../Context/ThemeContext';
 
-import { generateContent } from '../services/geminiClient';
+import ClinicalAnalysisView from '../Components/ClinicalAnalysisView';
+import { analyzeSymptomFromImage, analyzeSymptomFromText } from '../services/symptomAnalysis';
 
 const BreathingProblemsScreen = ({ navigation }) => {
   const theme = useTheme();
@@ -133,36 +134,15 @@ const BreathingProblemsScreen = ({ navigation }) => {
   const analyzeTextWithGemini = async (text) => {
     setIsAnalyzing(true);
     setAnalysisResult('');
-    
     try {
-      const prompt = `The user is describing breathing problems: "${text}". 
-      Duration: ${symptomDuration || 'Not specified'}
-      Breathing Pattern: ${breathingPattern || 'Not specified'}
-      Associated Symptoms: ${associatedSymptoms.join(', ') || 'None'}
-      
-      Please provide a detailed analysis of potential respiratory conditions, 
-      symptoms, causes, and recommendations for treatment and medication. 
-      Also, suggest when to consult a doctor. Format your response with 
-      clear sections for Analysis, Recommendations, and When to Seek Help.
-      Pay special attention to potentially serious conditions like asthma, 
-      COPD, pneumonia, or other respiratory emergencies.`;
-      
-      const data = await generateContent({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }]
+      const resultText = await analyzeSymptomFromText({
+        condition: 'Breathing Problems',
+        userText: text,
       });
-      if (data.candidates && data.candidates.length > 0) {
-        const resultText = data.candidates[0].content.parts[0].text;
-        setAnalysisResult(resultText);
-      } else {
-        throw new Error('No response from Gemini API');
-      }
+      setAnalysisResult(resultText);
     } catch (error) {
-      console.error('Gemini API error:', error);
-      Alert.alert("Analysis Error", "Failed to analyze your symptoms. Please try again.");
+      console.error('Clinical analysis error:', error);
+      Alert.alert('Analysis Error', 'Failed to analyze your symptoms. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -172,43 +152,20 @@ const BreathingProblemsScreen = ({ navigation }) => {
   const analyzeImageWithGemini = async (imageUri) => {
     setIsAnalyzing(true);
     setAnalysisResult('');
-    
     try {
-      // Read image as base64
       const base64 = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      
       const mimeType = 'image/jpeg';
-      
-      const prompt = `Analyze this image of a person's respiratory condition. 
-      Provide a detailed analysis of potential breathing problems, symptoms, 
-      causes, and recommendations for treatment and medication. Also, 
-      suggest when to consult a doctor. Format your response with clear 
-      sections for Analysis, Recommendations, and When to Seek Help.`;
-      
-      const data = await generateContent({
-          contents: [{
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: base64
-                }
-              }
-            ]
-          }]
+      const resultText = await analyzeSymptomFromImage({
+        condition: 'Breathing Problems',
+        base64,
+        mimeType,
       });
-      if (data.candidates && data.candidates.length > 0) {
-        const resultText = data.candidates[0].content.parts[0].text;
-        setAnalysisResult(resultText);
-      } else {
-        throw new Error('No response from Gemini API');
-      }
+      setAnalysisResult(resultText);
     } catch (error) {
-      console.error('Gemini API error:', error);
-      Alert.alert("Analysis Error", "Failed to analyze the image. Please try again.");
+      console.error('Clinical analysis error:', error);
+      Alert.alert('Analysis Error', 'Failed to analyze the image. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -266,48 +223,14 @@ const BreathingProblemsScreen = ({ navigation }) => {
   // Format analysis result with sections
   const renderAnalysisResult = () => {
     if (!analysisResult) return null;
-    
-    const sections = analysisResult.split('\n\n');
-    return sections.map((section, index) => {
-      if (section.includes('Analysis:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Analysis</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Analysis:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('Recommendations:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Treatment & Medication</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Recommendations:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('When to Seek Help:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>When to Consult a Doctor</Text>
-            <Text style={styles.resultText}>
-              {section.replace('When to Seek Help:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      return (
-        <Text key={index} style={styles.resultText}>
-          {section}
-        </Text>
-      );
-    });
+    return (
+      <ClinicalAnalysisView
+        text={analysisResult}
+        sectionStyle={styles.sectionContainer}
+        sectionTitleStyle={styles.sectionTitle}
+        bodyStyle={styles.resultText}
+      />
+    );
   };
 
   return (

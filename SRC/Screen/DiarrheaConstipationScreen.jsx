@@ -22,7 +22,8 @@ import {
 } from 'react-native';
 import { useTheme } from '../Context/ThemeContext';
 
-import { generateContent } from '../services/geminiClient';
+import ClinicalAnalysisView from '../Components/ClinicalAnalysisView';
+import { analyzeSymptomFromImage, analyzeSymptomFromText } from '../services/symptomAnalysis';
 
 const DiarrheaConstipationScreen = ({ navigation }) => {
   const theme = useTheme();
@@ -111,38 +112,15 @@ const DiarrheaConstipationScreen = ({ navigation }) => {
   const analyzeTextWithGemini = async (text) => {
     setIsAnalyzing(true);
     setAnalysisResult('');
-    
     try {
-      const prompt = `The user is describing digestive symptoms: "${text}". 
-      Please provide a detailed analysis of potential causes for diarrhea, constipation, 
-      or other digestive issues. Include symptoms, possible causes, dietary recommendations, 
-      home remedies, and when to consult a doctor. Format your response with 
-      clear sections for Analysis, Dietary Recommendations, Home Remedies, and When to Seek Help.
-      Be compassionate and provide practical advice.`;
-      
-      const data = await generateContent({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }]
+      const resultText = await analyzeSymptomFromText({
+        condition: 'Diarrhea & Constipation',
+        userText: text,
       });
-      if (data.candidates && data.candidates.length > 0) {
-        const resultText = data.candidates[0].content.parts[0].text;
-        setAnalysisResult(resultText);
-        
-        // Try to detect if it's diarrhea or constipation
-        if (resultText.toLowerCase().includes('diarrhea')) {
-          setSymptomType('diarrhea');
-        } else if (resultText.toLowerCase().includes('constipation')) {
-          setSymptomType('constipation');
-        }
-      } else {
-        throw new Error('No response from Gemini API');
-      }
+      setAnalysisResult(resultText);
     } catch (error) {
-      console.error('Gemini API error:', error);
-      Alert.alert("Analysis Error", "Failed to analyze your symptoms. Please try again.");
+      console.error('Clinical analysis error:', error);
+      Alert.alert('Analysis Error', 'Failed to analyze your symptoms. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -152,51 +130,20 @@ const DiarrheaConstipationScreen = ({ navigation }) => {
   const analyzeImageWithGemini = async (imageUri) => {
     setIsAnalyzing(true);
     setAnalysisResult('');
-    
     try {
-      // Read image as base64
       const base64 = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      
       const mimeType = 'image/jpeg';
-      
-      const prompt = `Analyze this image related to a person's digestive condition. 
-      Provide a detailed analysis of potential causes for diarrhea, constipation, 
-      or other digestive issues. Include symptoms, possible causes, dietary recommendations, 
-      home remedies, and when to consult a doctor. Format your response with 
-      clear sections for Analysis, Dietary Recommendations, Home Remedies, and When to Seek Help.
-      Be compassionate and provide practical advice.`;
-      
-      const data = await generateContent({
-          contents: [{
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: base64
-                }
-              }
-            ]
-          }]
+      const resultText = await analyzeSymptomFromImage({
+        condition: 'Diarrhea & Constipation',
+        base64,
+        mimeType,
       });
-      if (data.candidates && data.candidates.length > 0) {
-        const resultText = data.candidates[0].content.parts[0].text;
-        setAnalysisResult(resultText);
-        
-        // Try to detect if it's diarrhea or constipation
-        if (resultText.toLowerCase().includes('diarrhea')) {
-          setSymptomType('diarrhea');
-        } else if (resultText.toLowerCase().includes('constipation')) {
-          setSymptomType('constipation');
-        }
-      } else {
-        throw new Error('No response from Gemini API');
-      }
+      setAnalysisResult(resultText);
     } catch (error) {
-      console.error('Gemini API error:', error);
-      Alert.alert("Analysis Error", "Failed to analyze the image. Please try again.");
+      console.error('Clinical analysis error:', error);
+      Alert.alert('Analysis Error', 'Failed to analyze the image. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -254,59 +201,14 @@ const DiarrheaConstipationScreen = ({ navigation }) => {
   // Format analysis result with sections
   const renderAnalysisResult = () => {
     if (!analysisResult) return null;
-    
-    const sections = analysisResult.split('\n\n');
-    return sections.map((section, index) => {
-      if (section.includes('Analysis:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Analysis</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Analysis:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('Dietary Recommendations:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Dietary Recommendations</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Dietary Recommendations:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('Home Remedies:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Home Remedies</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Home Remedies:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('When to Seek Help:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>When to Consult a Doctor</Text>
-            <Text style={styles.resultText}>
-              {section.replace('When to Seek Help:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      return (
-        <Text key={index} style={styles.resultText}>
-          {section}
-        </Text>
-      );
-    });
+    return (
+      <ClinicalAnalysisView
+        text={analysisResult}
+        sectionStyle={styles.sectionContainer}
+        sectionTitleStyle={styles.sectionTitle}
+        bodyStyle={styles.resultText}
+      />
+    );
   };
 
   return (

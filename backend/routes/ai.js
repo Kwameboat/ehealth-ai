@@ -1,7 +1,12 @@
 const express = require('express');
 const { requireUserAuth } = require('../middleware/userAuth');
 const { deductPoints, PointsError } = require('../services/points');
-const { callGemini, chatCompletion, resolveChatFeatureKey } = require('../services/gemini');
+const {
+  callGemini,
+  chatCompletion,
+  resolveChatFeatureKey,
+  resolveGenerationConfig,
+} = require('../services/gemini');
 const { logUsage } = require('../services/points');
 
 const router = express.Router();
@@ -28,7 +33,10 @@ router.post('/gemini/generateContent', async (req, res) => {
     }
 
     const deduction = deductPoints(req.userId, featureKey);
-    const data = await callGemini(contents, model || getGeminiModel());
+    const generationConfig = resolveGenerationConfig(featureKey);
+    const data = await callGemini(contents, model || getGeminiModel(), {
+      ...(generationConfig ? { generationConfig } : {}),
+    });
     res.json({
       ...data,
       points: { charged: deduction.charged, balance: deduction.balance },

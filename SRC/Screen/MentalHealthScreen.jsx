@@ -22,7 +22,8 @@ import {
 } from 'react-native';
 import { useTheme } from '../Context/ThemeContext';
 
-import { generateContent } from '../services/geminiClient';
+import ClinicalAnalysisView from '../Components/ClinicalAnalysisView';
+import { analyzeSymptomFromImage, analyzeSymptomFromText } from '../services/symptomAnalysis';
 
 const MentalHealthScreen = ({ navigation }) => {
   const theme = useTheme();
@@ -157,37 +158,15 @@ const MentalHealthScreen = ({ navigation }) => {
   const analyzeTextWithGemini = async (text) => {
     setIsAnalyzing(true);
     setAnalysisResult('');
-    
     try {
-      const prompt = `The user is describing mental health concerns: "${text}". 
-      Duration: ${symptomDuration || 'Not specified'}
-      Current Mood: ${moodState || 'Not specified'}
-      Severity: ${symptomSeverity || 'Not specified'}
-      Concerns: ${mentalHealthConcerns.join(', ') || 'None'}
-      Coping Mechanisms: ${copingMechanisms.join(', ') || 'None'}
-      
-      Please provide a compassionate, non-judgmental analysis of potential mental health conditions, 
-      symptoms, causes, and recommendations for support and treatment. Also, 
-      suggest when to consult a mental health professional. Format your response with 
-      clear sections for Analysis, Recommendations, and When to Seek Help.
-      Focus on providing supportive, evidence-based information about mental health.`;
-      
-      const data = await generateContent({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }]
+      const resultText = await analyzeSymptomFromText({
+        condition: 'Mental Health',
+        userText: text,
       });
-      if (data.candidates && data.candidates.length > 0) {
-        const resultText = data.candidates[0].content.parts[0].text;
-        setAnalysisResult(resultText);
-      } else {
-        throw new Error('No response from Gemini API');
-      }
+      setAnalysisResult(resultText);
     } catch (error) {
-      console.error('Gemini API error:', error);
-      Alert.alert("Analysis Error", "Failed to analyze your concerns. Please try again.");
+      console.error('Clinical analysis error:', error);
+      Alert.alert('Analysis Error', 'Failed to analyze your symptoms. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -197,43 +176,20 @@ const MentalHealthScreen = ({ navigation }) => {
   const analyzeImageWithGemini = async (imageUri) => {
     setIsAnalyzing(true);
     setAnalysisResult('');
-    
     try {
-      // Read image as base64
       const base64 = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      
       const mimeType = 'image/jpeg';
-      
-      const prompt = `Analyze this image in the context of mental health and emotional well-being. 
-      Provide a compassionate analysis of potential mental health considerations, 
-      and recommendations for support and self-care. Also, 
-      suggest when to consult a mental health professional. Format your response with clear 
-      sections for Analysis, Recommendations, and When to Seek Help.`;
-      
-      const data = await generateContent({
-          contents: [{
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: base64
-                }
-              }
-            ]
-          }]
+      const resultText = await analyzeSymptomFromImage({
+        condition: 'Mental Health',
+        base64,
+        mimeType,
       });
-      if (data.candidates && data.candidates.length > 0) {
-        const resultText = data.candidates[0].content.parts[0].text;
-        setAnalysisResult(resultText);
-      } else {
-        throw new Error('No response from Gemini API');
-      }
+      setAnalysisResult(resultText);
     } catch (error) {
-      console.error('Gemini API error:', error);
-      Alert.alert("Analysis Error", "Failed to analyze the image. Please try again.");
+      console.error('Clinical analysis error:', error);
+      Alert.alert('Analysis Error', 'Failed to analyze the image. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -291,48 +247,14 @@ const MentalHealthScreen = ({ navigation }) => {
   // Format analysis result with sections
   const renderAnalysisResult = () => {
     if (!analysisResult) return null;
-    
-    const sections = analysisResult.split('\n\n');
-    return sections.map((section, index) => {
-      if (section.includes('Analysis:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Analysis</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Analysis:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('Recommendations:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Support & Self-Care</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Recommendations:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('When to Seek Help:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>When to Consult a Professional</Text>
-            <Text style={styles.resultText}>
-              {section.replace('When to Seek Help:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      return (
-        <Text key={index} style={styles.resultText}>
-          {section}
-        </Text>
-      );
-    });
+    return (
+      <ClinicalAnalysisView
+        text={analysisResult}
+        sectionStyle={styles.sectionContainer}
+        sectionTitleStyle={styles.sectionTitle}
+        bodyStyle={styles.resultText}
+      />
+    );
   };
 
   return (

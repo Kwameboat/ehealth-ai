@@ -22,7 +22,8 @@ import {
 } from 'react-native';
 import { useTheme } from '../Context/ThemeContext';
 
-import { generateContent } from '../services/geminiClient';
+import ClinicalAnalysisView from '../Components/ClinicalAnalysisView';
+import { analyzeSymptomFromImage, analyzeSymptomFromText } from '../services/symptomAnalysis';
 
 const AllergiesScreen = ({ navigation }) => {
   const theme = useTheme();
@@ -111,43 +112,15 @@ const AllergiesScreen = ({ navigation }) => {
   const analyzeTextWithGemini = async (text) => {
     setIsAnalyzing(true);
     setAnalysisResult('');
-    
     try {
-      const prompt = `The user is describing allergy symptoms: "${text}". 
-      Please provide a detailed analysis of potential allergy types, triggers, 
-      symptoms, severity, and treatment options. Include recommendations for 
-      avoiding allergens, medications, home remedies, and when to seek emergency care. 
-      Format your response with clear sections for Analysis, Triggers to Avoid, 
-      Treatment Options, Home Remedies, and When to Seek Emergency Help.`;
-      
-      const data = await generateContent({
-          contents: [{
-            parts: [{
-              text: prompt
-            }]
-          }]
+      const resultText = await analyzeSymptomFromText({
+        condition: 'Allergies',
+        userText: text,
       });
-      if (data.candidates && data.candidates.length > 0) {
-        const resultText = data.candidates[0].content.parts[0].text;
-        setAnalysisResult(resultText);
-        
-        // Try to detect the type of allergy
-        const resultLower = resultText.toLowerCase();
-        if (resultLower.includes('food') || resultLower.includes('nut') || resultLower.includes('dairy')) {
-          setAllergyType('food');
-        } else if (resultLower.includes('pollen') || resultLower.includes('seasonal') || resultLower.includes('hay fever')) {
-          setAllergyType('seasonal');
-        } else if (resultLower.includes('skin') || resultLower.includes('rash') || resultLower.includes('hives')) {
-          setAllergyType('skin');
-        } else {
-          setAllergyType('other');
-        }
-      } else {
-        throw new Error('No response from Gemini API');
-      }
+      setAnalysisResult(resultText);
     } catch (error) {
-      console.error('Gemini API error:', error);
-      Alert.alert("Analysis Error", "Failed to analyze your symptoms. Please try again.");
+      console.error('Clinical analysis error:', error);
+      Alert.alert('Analysis Error', 'Failed to analyze your symptoms. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -157,56 +130,20 @@ const AllergiesScreen = ({ navigation }) => {
   const analyzeImageWithGemini = async (imageUri) => {
     setIsAnalyzing(true);
     setAnalysisResult('');
-    
     try {
-      // Read image as base64
       const base64 = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
-      
       const mimeType = 'image/jpeg';
-      
-      const prompt = `Analyze this image of an allergic reaction. 
-      Provide a detailed analysis of potential allergy types, triggers, 
-      symptoms, severity, and treatment options. Include recommendations for 
-      avoiding allergens, medications, home remedies, and when to seek emergency care. 
-      Format your response with clear sections for Analysis, Triggers to Avoid, 
-      Treatment Options, Home Remedies, and When to Seek Emergency Help.`;
-      
-      const data = await generateContent({
-          contents: [{
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: base64
-                }
-              }
-            ]
-          }]
+      const resultText = await analyzeSymptomFromImage({
+        condition: 'Allergies',
+        base64,
+        mimeType,
       });
-      if (data.candidates && data.candidates.length > 0) {
-        const resultText = data.candidates[0].content.parts[0].text;
-        setAnalysisResult(resultText);
-        
-        // Try to detect the type of allergy
-        const resultLower = resultText.toLowerCase();
-        if (resultLower.includes('food') || resultLower.includes('nut') || resultLower.includes('dairy')) {
-          setAllergyType('food');
-        } else if (resultLower.includes('pollen') || resultLower.includes('seasonal') || resultLower.includes('hay fever')) {
-          setAllergyType('seasonal');
-        } else if (resultLower.includes('skin') || resultLower.includes('rash') || resultLower.includes('hives')) {
-          setAllergyType('skin');
-        } else {
-          setAllergyType('other');
-        }
-      } else {
-        throw new Error('No response from Gemini API');
-      }
+      setAnalysisResult(resultText);
     } catch (error) {
-      console.error('Gemini API error:', error);
-      Alert.alert("Analysis Error", "Failed to analyze the image. Please try again.");
+      console.error('Clinical analysis error:', error);
+      Alert.alert('Analysis Error', 'Failed to analyze the image. Please try again.');
     } finally {
       setIsAnalyzing(false);
     }
@@ -264,70 +201,14 @@ const AllergiesScreen = ({ navigation }) => {
   // Format analysis result with sections
   const renderAnalysisResult = () => {
     if (!analysisResult) return null;
-    
-    const sections = analysisResult.split('\n\n');
-    return sections.map((section, index) => {
-      if (section.includes('Analysis:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Analysis</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Analysis:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('Triggers to Avoid:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Triggers to Avoid</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Triggers to Avoid:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('Treatment Options:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Treatment Options</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Treatment Options:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('Home Remedies:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>Home Remedies</Text>
-            <Text style={styles.resultText}>
-              {section.replace('Home Remedies:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      if (section.includes('When to Seek Emergency Help:')) {
-        return (
-          <View key={index} style={styles.sectionContainer}>
-            <Text style={styles.sectionTitle}>When to Seek Emergency Help</Text>
-            <Text style={styles.resultText}>
-              {section.replace('When to Seek Emergency Help:', '').trim()}
-            </Text>
-          </View>
-        );
-      }
-      
-      return (
-        <Text key={index} style={styles.resultText}>
-          {section}
-        </Text>
-      );
-    });
+    return (
+      <ClinicalAnalysisView
+        text={analysisResult}
+        sectionStyle={styles.sectionContainer}
+        sectionTitleStyle={styles.sectionTitle}
+        bodyStyle={styles.resultText}
+      />
+    );
   };
 
   return (
