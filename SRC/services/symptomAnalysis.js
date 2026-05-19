@@ -5,20 +5,22 @@ const CLINICAL_INSTRUCTIONS = `You are writing a clinical assessment for a patie
 
 STYLE (mandatory):
 - Professional medical tone, clear and informative (like an experienced clinician explaining to the patient).
-- Plain text only: NO markdown, NO asterisks, NO bullet symbols, NO numbered question lists.
+- PLAIN TEXT ONLY. Forbidden: # headers, ### titles, **bold**, * bullets, --- lines, numbered lists, markdown of any kind.
+- Use exactly four section headings below — copy each heading word-for-word on its own line. Do not invent other titles (no "Dermatological Analysis", no "Potential Diagnoses").
+- Do NOT include disclaimers about being AI or "informational purposes only".
 - Do NOT say you are AI, a bot, an assistant, or a language model.
-- Do NOT open with phrases like "It sounds like" or "I understand that". Start directly with clinical content.
+- Do NOT open with phrases like "It sounds like" or "I understand that". Start with the heading Assessment on the first line.
 - Do NOT repeat, quote, or restate the patient's message or ask follow-up questions.
-- Base conclusions on what the patient reported; if information is limited, give balanced guidance for this condition category.
-- You MUST finish all four sections below. Never stop mid-sentence or mid-section.
+- Base conclusions on what the patient reported or what is visible in an image; if information is limited, give balanced guidance for this condition category.
+- You MUST complete all four sections. Never stop mid-sentence. The Recommendations section is required every time.
 
 CONTENT:
 - Assessment: what the presentation may suggest (2–4 sentences).
-- Possible causes: 3–6 plausible causes in full sentences (one per line or short paragraph).
-- Recommendations: practical self-care, monitoring, OTC options where appropriate, lifestyle measures (4–6 sentences).
+- Possible causes: 3–6 plausible causes in full sentences (one per line).
+- Recommendations: practical self-care, monitoring, OTC options where appropriate, lifestyle measures (4–6 sentences). Required.
 - When to seek care: urgent red flags vs routine follow-up (2–4 sentences).
 
-STRUCTURE — use exactly these headings on their own line, in this order:
+STRUCTURE — use exactly these headings on their own line, in this order (nothing else):
 Assessment
 Possible causes
 Recommendations
@@ -56,7 +58,12 @@ function isTruncated(data) {
 }
 
 function isComplete(text) {
-  return /when to seek care/i.test(text) && !/\b(and|or|the|of|to|for|with|in)\s*$/i.test(text.trim());
+  const t = text.trim();
+  return (
+    /recommendations/i.test(t) &&
+    /when to seek care/i.test(t) &&
+    !/\b(and|or|the|of|to|for|with|in)\s*$/i.test(t)
+  );
 }
 
 async function generateWithContinuation(contents, featureKey) {
@@ -73,7 +80,7 @@ async function generateWithContinuation(contents, featureKey) {
             role: 'user',
             parts: [
               {
-                text: 'Your previous reply was cut off. Continue exactly where you stopped. Complete any missing sections (Possible causes, Recommendations, When to seek care). Do not repeat text already written. Plain text only, same headings.',
+                text: 'Your previous reply was cut off. Continue exactly where you stopped. Complete any missing sections (Possible causes, Recommendations, When to seek care). Do not repeat text already written. Plain text only — no # or * symbols. Use the same four headings only.',
               },
             ],
           },
@@ -87,11 +94,11 @@ async function generateWithContinuation(contents, featureKey) {
   }
 
   if (!combined) throw new Error('No response from clinical analysis');
-  if (!isComplete(combined) && !/when to seek care/i.test(combined)) {
-    combined += '\n\nWhen to seek care\nSeek urgent medical attention if symptoms worsen suddenly, if you develop chest pain, difficulty breathing, confusion, or inability to keep fluids down. Otherwise arrange a routine visit with a clinician within a few days for evaluation.';
-  }
 
-  return formatClinicalResponse(combined);
+  const condition =
+    contents[0]?.parts?.find((p) => p.text)?.text?.match(/Condition category:\s*(.+)/i)?.[1]?.trim() || '';
+
+  return formatClinicalResponse(combined, condition);
 }
 
 /**

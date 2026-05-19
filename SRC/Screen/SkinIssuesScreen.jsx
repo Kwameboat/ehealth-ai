@@ -385,7 +385,7 @@ const SkinIssuesScreen = ({ navigation }) => {
           <View style={[styles.resultsContainer, { backgroundColor: theme.colors.card }]}>
             <View style={[styles.resultsHeader, { borderBottomColor: theme.colors.border }]}>
               <Text style={[styles.resultsTitle, { color: theme.colors.text }]}>
-                Dermatological Analysis
+                Analysis Results
               </Text>
               <TouchableOpacity onPress={speakAnalysis}>
                 <MaterialIcons 

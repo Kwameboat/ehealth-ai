@@ -1,5 +1,5 @@
 /* Minimal service worker — enables PWA install without aggressive offline caching */
-const CACHE_VERSION = 'medassistant-v4';
+const CACHE_VERSION = 'medassistant-v5';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
