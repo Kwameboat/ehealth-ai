@@ -7,7 +7,7 @@ const {
 } = require('./medicalChatPrompt');
 
 const SYMPTOM_GENERATION_CONFIG = {
-  maxOutputTokens: 1024,
+  maxOutputTokens: 2048,
   temperature: 0.35,
 };
 

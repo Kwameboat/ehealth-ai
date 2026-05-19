@@ -15,7 +15,7 @@ export function formatClinicalResponse(raw) {
     .replace(/\bi'?m an ai\b[^.!\n]*/gi, '')
     .replace(/\blanguage model\b/gi, 'clinical reference')
     .replace(/\bchatbot\b/gi, 'service')
-    .replace(/\bassistant\b/gi, 'clinician')
+    .replace(/\b(as an )?ai (assistant|model)\b/gi, 'clinical service')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
