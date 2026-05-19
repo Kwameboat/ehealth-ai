@@ -21,7 +21,7 @@ import { MED_THEME } from '../constants/appTheme';
 import { useResponsive } from '../hooks/useResponsive';
 import { attachmentToBase64, guessImageMimeType } from '../services/fileToBase64';
 import { sendChatMessage } from '../services/geminiChat';
-import { pickAttachmentWeb } from '../services/pickAttachment';
+import { takeStashedAttachment } from '../services/attachmentBridge';
 import { pickImageFromFiles } from '../services/pickImage';
 import { pickPdfDocument } from '../services/pickPdf';
 
@@ -149,16 +149,15 @@ export default function MedicalChatScreen({ navigation, route }) {
     });
   };
 
-  const showAttachOptions = () => {
-    if (Platform.OS === 'web') {
-      pickAttachmentWeb()
-        .then((result) => {
-          if (result.canceled || !result.asset) return;
-          applyPickedAsset(result.type, result.asset);
-        })
-        .catch(() => Alert.alert('Error', 'Could not select a file.'));
-      return;
+  useEffect(() => {
+    const stashed = takeStashedAttachment();
+    if (stashed) {
+      applyPickedAsset(stashed.type, stashed);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
+  }, []);
+
+  const showAttachOptions = () => {
     Alert.alert('Attach file', 'Share a photo or PDF for analysis', [
       { text: 'Photo library', onPress: () => pickImage(false) },
       { text: 'Take photo', onPress: () => pickImage(true) },
@@ -321,6 +320,7 @@ export default function MedicalChatScreen({ navigation, route }) {
                 value={input}
                 onChangeText={setInput}
                 onSend={() => handleSend()}
+                onFilePicked={(attachment) => applyPickedAsset(attachment.type, attachment)}
                 onAttach={showAttachOptions}
                 onMic={() => navigation.navigate('MedicalVoiceAgent')}
                 isLoading={isLoading}

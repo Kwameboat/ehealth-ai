@@ -13,6 +13,7 @@ import { MED_THEME } from '../constants/appTheme';
 import { QUICK_ACTIONS, SYMPTOM_CATEGORIES } from '../constants/symptomCategories';
 import { useAuth } from '../Context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
+import { stashAttachment } from '../services/attachmentBridge';
 
 const MedicalHomeScreen = ({ navigation }) => {
   const r = useResponsive();
@@ -29,10 +30,19 @@ const MedicalHomeScreen = ({ navigation }) => {
     else setGreeting('GOOD EVENING');
   }, []);
 
-  const goToChat = (initialMessage = '') => {
+  const goToChat = (initialMessage = '', attachment = null) => {
+    if (attachment) {
+      stashAttachment(attachment);
+    }
     navigation.navigate('MedicalChat', {
       initialMessage: initialMessage.trim() || undefined,
+      hasAttachment: !!attachment,
     });
+  };
+
+  const handleHomeFilePicked = (attachment) => {
+    goToChat(homeInput, attachment);
+    setHomeInput('');
   };
 
   const handleHomeSend = () => {
@@ -240,6 +250,7 @@ const MedicalHomeScreen = ({ navigation }) => {
                   value={homeInput}
                   onChangeText={setHomeInput}
                   onSend={handleHomeSend}
+                  onFilePicked={handleHomeFilePicked}
                   onAttach={() => goToChat()}
                   onMic={() => navigation.navigate('MedicalVoiceAgent')}
                 />
