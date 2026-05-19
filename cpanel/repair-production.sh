@@ -1,5 +1,5 @@
 #!/bin/bash
-# One-shot repair — run after deploy or when admin shows 503 / db errors
+# One-shot repair — DB + backend files. NEVER overwrites Passenger .htaccess.
 # Usage: bash ~/ehealth-ai/cpanel/repair-production.sh
 set -u
 
@@ -11,8 +11,7 @@ BASE=https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main
 
 echo "=== eHealth AI production repair ==="
 
-for v in "$HOME_DIR/nodevenv/ehealth-ai/20/bin/activate" \
-         "$HOME_DIR/nodevenv/ehealth-ai/18/bin/activate"; do
+for v in "$HOME_DIR/nodevenv/ehealth-ai"/*/bin/activate; do
   [ -f "$v" ] && . "$v" && break
 done
 if ! command -v node >/dev/null 2>&1; then
@@ -23,9 +22,8 @@ unset NODE_PATH
 
 mkdir -p "$APP/data" "$BACKEND/db"
 chmod 775 "$APP/data" 2>/dev/null || true
-chmod 755 "$BACKEND/db" 2>/dev/null || true
 
-echo "=== Syncing critical files from GitHub ==="
+echo "=== Syncing critical backend files from GitHub ==="
 curl -fsSL -o "$BACKEND/db/driver-sqljs.js" "$BASE/backend/db/driver-sqljs.js"
 curl -fsSL -o "$BACKEND/db/ensureDb.js" "$BASE/backend/db/ensureDb.js"
 curl -fsSL -o "$BACKEND/db/resolveDbPath.js" "$BASE/backend/db/resolveDbPath.js"
@@ -35,9 +33,17 @@ curl -fsSL -o "$APP/server.js" "$BASE/server.js"
 curl -fsSL -o "$BACKEND/db/sql-wasm.wasm" "$BASE/backend/db/sql-wasm.wasm"
 curl -fsSL -o "$BACKEND/services/settings.js" "$BASE/backend/services/settings.js"
 curl -fsSL -o "$BACKEND/services/geminiModels.js" "$BASE/backend/services/geminiModels.js"
-curl -fsSL -o "$BACKEND/routes/auth.js" "$BASE/backend/routes/auth.js"
-curl -fsSL -o "$PUBLIC/.htaccess" "$BASE/public_html.htaccess"
-curl -fsSL -o "$APP/cpanel/repair-production.sh" "$BASE/cpanel/repair-production.sh"
+curl -fsSL -o "$APP/cpanel/merge-htaccess.sh" "$BASE/cpanel/merge-htaccess.sh"
+curl -fsSL -o "$APP/cpanel/fix-api-404.sh" "$BASE/cpanel/fix-api-404.sh"
+chmod +x "$APP/cpanel/merge-htaccess.sh" "$APP/cpanel/fix-api-404.sh" 2>/dev/null || true
+
+# Restore API routing if Passenger block was wiped
+if ! grep -q 'PASSENGER CONFIGURATION BEGIN' "$PUBLIC/.htaccess" 2>/dev/null; then
+  echo "=== Passenger missing — fixing .htaccess ==="
+  bash "$APP/cpanel/fix-api-404.sh" || true
+else
+  bash "$APP/cpanel/merge-htaccess.sh" 2>/dev/null || true
+fi
 
 [ -f "$BACKEND/db/medassistant.db" ] && [ ! -f "$APP/data/medassistant.db" ] && \
   cp -f "$BACKEND/db/medassistant.db" "$APP/data/medassistant.db" 2>/dev/null || true
@@ -55,7 +61,7 @@ if [ ! -d "$BACKEND/node_modules/express" ]; then
   bash "$APP/cpanel/install-backend-deps.sh" || true
 fi
 
-echo "=== Database + model check ==="
+echo "=== Database check ==="
 cd "$BACKEND"
 node -e "
 require('./db/ensureDb').ensureDbReady().then(() => {
@@ -68,10 +74,6 @@ require('./db/ensureDb').ensureDbReady().then(() => {
 "
 
 echo ""
-echo "=== Next steps ==="
-echo "1. cPanel -> Node.js -> Environment:"
-echo "   DATABASE_PATH=$APP/data/medassistant.db"
-echo "   GEMINI_MODEL=gemini-2.5-flash"
-echo "2. RESTART Node.js app"
-echo "3. Test: https://www.ehealthaigh.com/api/health"
-echo "4. Admin: https://www.ehealthaigh.com/admin"
+echo "=== REQUIRED ==="
+echo "cPanel -> Node.js -> RESTART"
+echo "Test: https://www.ehealthaigh.com/api/health (JSON, not 404 HTML)"

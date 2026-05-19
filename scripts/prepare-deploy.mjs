@@ -24,6 +24,8 @@ const COPY_FILES = [
   'cpanel/install-backend-deps.sh',
   'cpanel/bootstrap-server.sh',
   'cpanel/repair-production.sh',
+  'cpanel/merge-htaccess.sh',
+  'cpanel/fix-api-404.sh',
   'cpanel/STABLE-DEPLOY.md',
   'cpanel/backend-production.package.json',
   'cpanel/fix-npm-backend.sh',

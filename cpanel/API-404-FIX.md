@@ -3,9 +3,21 @@
 ## What it means
 
 HTML **404** from LiteSpeed = `/api` is **not** reaching Node.js.  
-Admin login **"API not found (404)"** is the same issue.
+Admin **"API not found (404)"** is the same issue.
 
-## Checklist (5 minutes)
+**Common cause:** `.htaccess` was overwritten without the **Passenger** block (e.g. old `repair-production.sh` used `curl` on `.htaccess`).
+
+## Quick fix (30 seconds)
+
+```bash
+bash ~/ehealth-ai/cpanel/fix-api-404.sh
+```
+
+Then **cPanel → Setup Node.js App → RESTART**.
+
+Open https://www.ehealthaigh.com/api/health — you must see **JSON**, not HTML "404 Not Found".
+
+## Checklist (if quick fix fails)
 
 ### 1. Files exist (Terminal)
 

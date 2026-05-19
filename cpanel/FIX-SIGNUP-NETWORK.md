@@ -11,7 +11,8 @@
 BASE=https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main
 
 curl -fsSL -o ~/ehealth-ai/backend/server.js "$BASE/backend/server.js"
-curl -fsSL -o ~/public_html/.htaccess "$BASE/public_html.htaccess"
+bash ~/ehealth-ai/cpanel/merge-htaccess.sh
+# then cPanel -> Node.js -> RESTART
 
 # Inject runtime config script into PWA (if not already there)
 INDEX=~/public_html/index.html

@@ -5,7 +5,8 @@
 1. **Never** run `npm install` only inside `backend/` without removing parent `package-lock.json`.
 2. **DATABASE_PATH** must be: `/home/ehealtha/ehealth-ai/data/medassistant.db` (not `backend/db/`).
 3. After any code update: **RESTART** Node.js app in cPanel.
-4. Use **`bash ~/ehealth-ai/cpanel/repair-production.sh`** if admin shows 503 or health shows `db:false`.
+4. **`/api/health` shows LiteSpeed 404 HTML** → run **`bash ~/ehealth-ai/cpanel/fix-api-404.sh`** then RESTART Node.
+5. Admin 503 / `db:false` → **`bash ~/ehealth-ai/cpanel/repair-production.sh`** then RESTART Node.
 
 ## cPanel environment (keep these)
 
@@ -41,5 +42,5 @@
 ## Do not
 
 - Delete `~/ehealth-ai/data/medassistant.db` unless you want a fresh database
-- Overwrite `public_html/.htaccess` without keeping the Passenger block
+- Run `curl -o ~/public_html/.htaccess` (removes Passenger → API 404). Use `fix-api-404.sh` instead
 - Change `Application root` away from `ehealth-ai`

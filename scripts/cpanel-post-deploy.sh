@@ -68,45 +68,13 @@ if [ -d "$SRC/dist" ]; then
   echo "Published PWA to $PUBLIC"
 fi
 
-merge_htaccess() {
-  local dest="$PUBLIC/.htaccess"
-  [ -f "$HT_SRC" ] || return 0
-  local passblock=""
-  if [ -f "$dest" ] && grep -q 'PASSENGER CONFIGURATION BEGIN' "$dest"; then
-    passblock="$(sed -n '/PASSENGER CONFIGURATION BEGIN/,/PASSENGER CONFIGURATION END/p' "$dest")"
-    if ! echo "$passblock" | grep -Fq "$SRC"; then
-      echo "Replacing Passenger block (stale AppRoot)"
-      passblock=""
-    fi
-  fi
-
-  if [ -z "$passblock" ]; then
-    NODE_BIN="$(resolve_node_bin)"
-    if [ -n "$NODE_BIN" ] && [ -x "$NODE_BIN" ] && [ -f "$SRC/server.js" ]; then
-      passblock="# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
-PassengerAppRoot \"$SRC\"
-PassengerBaseURI \"/\"
-PassengerNodejs \"$NODE_BIN\"
-PassengerAppType node
-PassengerStartupFile server.js
-PassengerAppEnv production
-# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END"
-      echo "Injected Passenger block (nodevenv OK, AppRoot=$SRC)"
-    fi
-  fi
-
-  {
-    [ -n "$passblock" ] && printf '%s\n\n' "$passblock"
-    cat "$HT_SRC"
-  } > "$dest.tmp"
-  mv "$dest.tmp" "$dest"
-  if [ -z "$passblock" ]; then
-    echo "CRITICAL: No Passenger — cPanel -> Node.js app -> RESTART (creates nodevenv + .htaccess)"
-  else
-    echo "Merged .htaccess (Passenger OK)"
-  fi
-}
-merge_htaccess
+if [ -f "$SRC/cpanel/merge-htaccess.sh" ]; then
+  chmod +x "$SRC/cpanel/merge-htaccess.sh" 2>/dev/null || true
+  APP_SRC="$SRC" PUBLIC_HTML="$PUBLIC" bash "$SRC/cpanel/merge-htaccess.sh" || \
+    echo "WARN: merge-htaccess failed — cPanel Node.js -> RESTART"
+else
+  echo "WARN: cpanel/merge-htaccess.sh missing — RESTART Node app in cPanel"
+fi
 
 # Writable database directory (always use this in cPanel DATABASE_PATH)
 mkdir -p "$SRC/data" "$SRC/backend/db"
