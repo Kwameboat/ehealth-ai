@@ -22,6 +22,7 @@ const COPY_FILES = [
   'scripts/cpanel-post-deploy.sh',
   'cpanel/install-backend.sh',
   'cpanel/install-backend-deps.sh',
+  'cpanel/bootstrap-server.sh',
   'cpanel/backend-production.package.json',
   'cpanel/fix-npm-backend.sh',
   'backend/package-lock.json',
