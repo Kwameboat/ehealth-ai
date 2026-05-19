@@ -10,7 +10,7 @@ loadSettings = async function () {
   try {
     integrations = await api('/integrations');
   } catch {
-    integrations = { paystackConfigured: false, geminiConfigured: false, geminiModel: 'gemini-2.0-flash', paymentCurrency: 'GHS' };
+    integrations = { paystackConfigured: false, geminiConfigured: false, geminiModel: 'gemini-2.5-flash', paymentCurrency: 'GHS' };
   }
   const pointsOn = settings.points_enabled?.value === 'true';
   const bonus = settings.signup_bonus_points?.value || '100';
@@ -29,7 +29,7 @@ loadSettings = async function () {
       <div class="panel"><h3>Google Gemini</h3>
         <p class="muted" style="font-size:0.8rem;margin-bottom:10px">From aistudio.google.com/apikey</p>
         <div class="form-row"><label>API key</label><input type="password" id="gemini-key" placeholder="AIza…" autocomplete="new-password" /></div>
-        <div class="form-row"><label>Model</label><input type="text" id="gemini-model" value="${escapeHtml(integrations.geminiModel || 'gemini-2.0-flash')}" /></div>
+        <div class="form-row"><label>Model</label><input type="text" id="gemini-model" value="${escapeHtml(integrations.geminiModel || 'gemini-2.5-flash')}" /></div>
       </div>
     </div>
     <div class="panel" style="margin-top:16px">

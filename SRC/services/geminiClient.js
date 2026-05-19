@@ -3,8 +3,8 @@ import { getApiAuthHeadersAsync } from './apiAuth';
 import { getApiUrl } from './appConfig';
 import { notifyPointsBalance } from './pointsBridge';
 
-export const GEMINI_MODEL_FLASH = 'gemini-2.0-flash';
-export const GEMINI_MODEL_PRO = 'gemini-pro';
+export const GEMINI_MODEL_FLASH = 'gemini-2.5-flash';
+export const GEMINI_MODEL_PRO = 'gemini-2.5-pro';
 
 function getApiBaseUrl() {
   return getApiUrl();

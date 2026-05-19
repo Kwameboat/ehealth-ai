@@ -231,6 +231,8 @@ async function initDatabase() {
     seedSettings();
     seedAdmin();
     syncEnvSecrets();
+    const { migrateLegacyGeminiModel } = require('../services/settings');
+    migrateLegacyGeminiModel();
     migratePackagesToGhs();
     if (typeof db.setDeferPersist === 'function') {
       db.setDeferPersist(false);

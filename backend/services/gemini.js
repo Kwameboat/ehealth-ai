@@ -1,4 +1,5 @@
 const { getGeminiApiKey, getGeminiModel } = require('./settings');
+const { normalizeGeminiModel } = require('./geminiModels');
 
 const MEDICAL_CHAT_SYSTEM_PROMPT =
   'You are a careful medical health assistant. Provide clear, practical guidance. ' +
@@ -7,7 +8,7 @@ const MEDICAL_CHAT_SYSTEM_PROMPT =
 
 async function callGemini(contents, model) {
   const apiKey = getGeminiApiKey();
-  const useModel = model || getGeminiModel();
+  const useModel = normalizeGeminiModel(model || getGeminiModel());
 
   if (!apiKey) {
     const err = new Error('Gemini API key is not configured. Add it in Admin → Settings & Keys.');

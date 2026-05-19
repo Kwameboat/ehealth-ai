@@ -1,4 +1,5 @@
 const { getDb, now } = require('../db/init');
+const { DEFAULT_GEMINI_MODEL, normalizeGeminiModel } = require('./geminiModels');
 
 const SECRET_KEYS = ['gemini_api_key', 'paystack_secret_key', 'paystack_public_key'];
 
@@ -44,7 +45,8 @@ function getGeminiApiKey() {
 }
 
 function getGeminiModel() {
-  return getSetting('gemini_model') || process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+  const raw = getSetting('gemini_model') || process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
+  return normalizeGeminiModel(raw);
 }
 
 function getPaystackSecretKey() {
@@ -65,6 +67,17 @@ function isPointsEnabled() {
 
 function getSignupBonus() {
   return parseInt(getSetting('signup_bonus_points', '100'), 10) || 0;
+}
+
+function migrateLegacyGeminiModel() {
+  const row = getDb().prepare('SELECT value FROM system_settings WHERE key = ?').get('gemini_model');
+  if (!row?.value) return;
+  const current = row.value.trim().replace(/^models\//, '');
+  const next = normalizeGeminiModel(current);
+  if (next !== current) {
+    setSetting('gemini_model', next);
+    console.log(`Upgraded gemini_model: ${current} -> ${next}`);
+  }
 }
 
 function syncEnvToDatabase() {
@@ -92,5 +105,6 @@ module.exports = {
   isPointsEnabled,
   getSignupBonus,
   syncEnvToDatabase,
+  migrateLegacyGeminiModel,
   SECRET_KEYS,
 };
