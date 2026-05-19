@@ -73,8 +73,18 @@ function createWrapper(SQL, dbPath) {
     }
     try {
       const data = rawDb.export();
-      fs.writeFileSync(tmpFile, Buffer.from(data));
-      fs.renameSync(tmpFile, dbPath);
+      const buf = Buffer.from(data);
+      fs.writeFileSync(tmpFile, buf);
+      try {
+        fs.renameSync(tmpFile, dbPath);
+      } catch (renameErr) {
+        fs.writeFileSync(dbPath, buf);
+        try {
+          fs.unlinkSync(tmpFile);
+        } catch (_) {
+          /* ignore */
+        }
+      }
       lastLoadMtime = fs.statSync(dbPath).mtimeMs;
     } finally {
       try {
