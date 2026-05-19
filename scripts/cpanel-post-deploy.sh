@@ -68,6 +68,15 @@ if [ -d "$SRC/dist" ]; then
     cp -f "$SRC/public/fonts/"*.ttf "$PUBLIC/fonts/" 2>/dev/null || true
     echo "Published icon fonts to $PUBLIC/fonts"
   fi
+  if [ -f "$SRC/public/icon-fonts.css" ]; then
+    cp -f "$SRC/public/icon-fonts.css" "$PUBLIC/icon-fonts.css"
+    INDEX="$PUBLIC/index.html"
+    if [ -f "$INDEX" ] && ! grep -q 'icon-fonts.css' "$INDEX"; then
+      sed -i 's|</head>|<link rel="stylesheet" href="/icon-fonts.css" />\n</head>|' "$INDEX" 2>/dev/null || \
+        sed -i '' 's|</head>|<link rel="stylesheet" href="/icon-fonts.css" />\n</head>|' "$INDEX" 2>/dev/null || true
+      echo "Linked icon-fonts.css in PWA index.html"
+    fi
+  fi
   mkdir -p "$PUBLIC/admin"
   cp -r "$SRC/backend/public/admin/"* "$PUBLIC/admin/" 2>/dev/null || true
   echo "Published PWA to $PUBLIC"

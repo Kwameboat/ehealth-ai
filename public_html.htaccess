@@ -16,6 +16,7 @@
   RewriteRule ^_expo/ - [L]
   RewriteRule ^assets/ - [L]
   RewriteRule ^fonts/ - [L]
+  RewriteRule ^icon-fonts\.css$ - [L]
 
   # Admin static assets (must not fall through to PWA index.html)
   RewriteRule ^admin/.+\.(css|js|png|ico|svg|woff2?)$ - [L]

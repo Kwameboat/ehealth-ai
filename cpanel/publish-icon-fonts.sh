@@ -1,6 +1,5 @@
 #!/bin/bash
-# Publish icon fonts to public_html/fonts (fixes broken dashboard icons on web).
-# Works without git — downloads from GitHub if files are missing locally.
+# Publish icon fonts + CSS so dashboard icons render (no full PWA rebuild required).
 set -u
 
 HOME_DIR="${HOME:-/home/ehealtha}"
@@ -35,54 +34,70 @@ copy_from_dir() {
 
 echo "=== Publish icon fonts -> $PUBLIC/fonts ==="
 
-if copy_from_dir "$APP/public/fonts" || copy_from_dir "$APP/dist/fonts"; then
-  echo "Copied from app public/dist fonts"
-else
-  VEC="$APP/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts"
-  if copy_from_dir "$VEC"; then
-    echo "Copied from node_modules/@expo/vector-icons"
-  else
-    echo "Downloading fonts from GitHub ($BASE)..."
-    ok=0
-    for f in "${FONT_NAMES[@]}"; do
-      if curl -fsSL -o "$PUBLIC/fonts/$f" "$BASE/public/fonts/$f"; then
-        cp -f "$PUBLIC/fonts/$f" "$APP/public/fonts/$f" 2>/dev/null || true
-        ok=$((ok + 1))
-      else
-        echo "WARN: could not fetch $f"
-      fi
-    done
-    if [ "$ok" -lt 3 ]; then
-      echo "ERROR: too few fonts downloaded ($ok). Wait for GitHub deploy or run: npm run build:web"
-      exit 1
+if ! copy_from_dir "$APP/public/fonts"; then
+  if ! copy_from_dir "$APP/dist/fonts"; then
+    VEC="$APP/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts"
+    if ! copy_from_dir "$VEC"; then
+      echo "Downloading fonts from GitHub..."
+      ok=0
+      for f in "${FONT_NAMES[@]}"; do
+        if curl -fsSL -o "$PUBLIC/fonts/$f" "$BASE/public/fonts/$f"; then
+          ok=$((ok + 1))
+        fi
+      done
+      [ "$ok" -ge 3 ] || { echo "ERROR: font download failed"; exit 1; }
     fi
   fi
 fi
 
-if [ -f "$APP/scripts/copy-icon-fonts.mjs" ]; then
-  for v in "$HOME_DIR/nodevenv/ehealth-ai"/*/bin/activate; do
-    [ -f "$v" ] && . "$v" && break
-  done
-  command -v node >/dev/null 2>&1 && node "$APP/scripts/copy-icon-fonts.mjs" 2>/dev/null || true
-  copy_from_dir "$APP/public/fonts" || true
-fi
-
 chmod 644 "$PUBLIC/fonts/"*.ttf 2>/dev/null || true
 
-echo ""
-echo "Installed:"
-ls -la "$PUBLIC/fonts/"*.ttf 2>/dev/null || { echo "No fonts found"; exit 1; }
+echo "=== Install icon-fonts.css ==="
+if [ -f "$APP/public/icon-fonts.css" ]; then
+  cp -f "$APP/public/icon-fonts.css" "$PUBLIC/icon-fonts.css"
+else
+  curl -fsSL -o "$PUBLIC/icon-fonts.css" "$BASE/public/icon-fonts.css" || {
+    echo "ERROR: could not install icon-fonts.css"
+    exit 1
+  }
+fi
+
+INDEX="$PUBLIC/index.html"
+if [ -f "$INDEX" ]; then
+  if ! grep -q 'icon-fonts.css' "$INDEX"; then
+    sed -i 's|</head>|<link rel="stylesheet" href="/icon-fonts.css" />\n</head>|' "$INDEX" 2>/dev/null || \
+      sed -i '' 's|</head>|<link rel="stylesheet" href="/icon-fonts.css" />\n</head>|' "$INDEX" 2>/dev/null || true
+    echo "Linked icon-fonts.css in index.html"
+  else
+    echo "index.html already links icon-fonts.css"
+  fi
+else
+  echo "WARN: $INDEX not found"
+fi
 
 if ! grep -q 'RewriteRule \^fonts/' "$PUBLIC/.htaccess" 2>/dev/null; then
   if [ -f "$APP/cpanel/merge-htaccess.sh" ]; then
     chmod +x "$APP/cpanel/merge-htaccess.sh"
     APP_SRC="$APP" PUBLIC_HTML="$PUBLIC" bash "$APP/cpanel/merge-htaccess.sh" || true
-  elif [ -f "$APP/public_html.htaccess" ]; then
-    curl -fsSL -o "$APP/public_html.htaccess" "$BASE/public_html.htaccess" 2>/dev/null || true
-    APP_SRC="$APP" PUBLIC_HTML="$PUBLIC" bash "$APP/cpanel/merge-htaccess.sh" 2>/dev/null || true
   fi
 fi
 
+# LiteSpeed: correct MIME for .ttf (some hosts serve as text/plain)
+if [ -f "$PUBLIC/.htaccess" ] && ! grep -q 'AddType font/ttf' "$PUBLIC/.htaccess" 2>/dev/null; then
+  {
+    echo ''
+    echo '# Icon fonts (eHealth AI)'
+    echo 'AddType font/ttf .ttf'
+    echo 'AddType application/font-ttf .ttf'
+  } >> "$PUBLIC/.htaccess"
+fi
+
 echo ""
-echo "Done. Hard-refresh the site (Ctrl+Shift+R)."
-echo "Test: https://www.ehealthaigh.com/fonts/MaterialCommunityIcons.ttf"
+echo "Fonts:"
+ls -la "$PUBLIC/fonts/"*.ttf 2>/dev/null
+echo ""
+echo "CSS: $PUBLIC/icon-fonts.css ($(wc -c < "$PUBLIC/icon-fonts.css") bytes)"
+echo ""
+echo "Done — hard refresh: Ctrl+Shift+R"
+echo "Test CSS: https://www.ehealthaigh.com/icon-fonts.css"
+echo "Test font: https://www.ehealthaigh.com/fonts/MaterialCommunityIcons.ttf"

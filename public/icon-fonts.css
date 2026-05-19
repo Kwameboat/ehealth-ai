@@ -1,0 +1,43 @@
+/* eHealth AI — icon fonts for @expo/vector-icons on web (cPanel / PWA) */
+@font-face {
+  font-family: 'material-community';
+  src: url('/fonts/MaterialCommunityIcons.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'ionicons';
+  src: url('/fonts/Ionicons.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'feather';
+  src: url('/fonts/Feather.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'material';
+  src: url('/fonts/MaterialIcons.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'FontAwesome5Free-Solid';
+  src: url('/fonts/FontAwesome5_Solid.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'FontAwesome5Free-Regular';
+  src: url('/fonts/FontAwesome5_Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
