@@ -40,6 +40,8 @@ const MedicalVoiceAssistantScreen = ({ navigation }) => {
   const waveAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scrollRef = useRef(null);
+  const transcriptRef = useRef("");
+  const greetedRef = useRef(false);
 
   // --- Cleanup on unmount ---
   useEffect(() => {
@@ -74,8 +76,10 @@ const MedicalVoiceAssistantScreen = ({ navigation }) => {
     return () => sub.remove();
   }, [isListening, isSpeaking, isLoading]);
 
-  // --- Initial greeting ---
+  // --- Initial greeting (once) ---
   useEffect(() => {
+    if (greetedRef.current) return;
+    greetedRef.current = true;
     const greet =
       "Hello, I'm your medical voice assistant. How can I care for you today?";
     appendAssistant(greet);
@@ -132,16 +136,39 @@ const MedicalVoiceAssistantScreen = ({ navigation }) => {
     }
   }, [conversation, isLoading]);
 
+  const getResultText = (event) => {
+    const results = event?.results || [];
+    const joined = results
+      .map((r) => r?.transcript || "")
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    return joined || results[0]?.transcript || "";
+  };
+
   // --- STT Events ---
   useSpeechRecognitionEvent("start", () => setIsListening(true));
-  useSpeechRecognitionEvent("end", () => setIsListening(false));
+  useSpeechRecognitionEvent("end", () => {
+    setIsListening(false);
+    const finalText = (transcriptRef.current || "").trim();
+    if (finalText) setTranscript(finalText);
+    transcriptRef.current = "";
+  });
   useSpeechRecognitionEvent("result", (e) => {
-    const text = e?.results?.[0]?.transcript || "";
-    setTranscript(text);
+    const text = getResultText(e);
+    if (text) {
+      transcriptRef.current = text;
+      setTranscript(text);
+    }
+    if (e?.isFinal) {
+      stopListening();
+    }
   });
   useSpeechRecognitionEvent("error", (e) => {
     console.warn("STT error:", e?.error, e?.message);
-    Alert.alert("Voice Error", e?.message || "Speech recognition failed.");
+    if (e?.message && e.message !== "aborted") {
+      Alert.alert("Voice Error", e.message || "Speech recognition failed.");
+    }
     stopListening();
   });
 
@@ -181,13 +208,14 @@ const MedicalVoiceAssistantScreen = ({ navigation }) => {
         Alert.alert("Permission Needed", "Microphone access is required.");
         return;
       }
+      Speech.stop();
       setTranscript("");
+      transcriptRef.current = "";
       const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!perm?.granted) {
         Alert.alert("Permission Needed", "Speech recognition permission denied.");
         return;
       }
-      setIsListening(true);
       ExpoSpeechRecognitionModule.start({
         lang: "en-US",
         interimResults: true,
@@ -204,6 +232,8 @@ const MedicalVoiceAssistantScreen = ({ navigation }) => {
       ExpoSpeechRecognitionModule.stop();
     } catch {}
     setIsListening(false);
+    const finalText = (transcriptRef.current || "").trim();
+    if (finalText) setTranscript(finalText);
   };
 
   // --- TTS ---
@@ -448,7 +478,7 @@ const MedicalVoiceAssistantScreen = ({ navigation }) => {
             placeholderTextColor="#666"
             value={transcript}
             onChangeText={setTranscript}
-            editable={!isListening}
+            editable={!isLoading}
             multiline
           />
 
@@ -491,7 +521,7 @@ const MedicalVoiceAssistantScreen = ({ navigation }) => {
             <TouchableOpacity
               style={styles.sendButton}
               onPress={handleSend}
-              disabled={isLoading || isListening}
+              disabled={isLoading}
             >
               <Icon name="send" size={22} color="#fff" />
             </TouchableOpacity>

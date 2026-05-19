@@ -1,6 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -20,10 +19,10 @@ import ResponsiveContainer from '../Components/ResponsiveContainer';
 import { MED_THEME } from '../constants/appTheme';
 import { useResponsive } from '../hooks/useResponsive';
 import { attachmentToBase64, guessImageMimeType } from '../services/fileToBase64';
+import { useChatVoiceInput } from '../hooks/useChatVoiceInput';
+import { pickChatAttachment } from '../services/chatAttachmentPicker';
 import { sendChatMessage } from '../services/geminiChat';
 import { takeStashedAttachment } from '../services/attachmentBridge';
-import { pickImageFromFiles } from '../services/pickImage';
-import { pickPdfDocument } from '../services/pickPdf';
 
 const MAX_PDF_BYTES = 8 * 1024 * 1024;
 
@@ -52,6 +51,10 @@ export default function MedicalChatScreen({ navigation, route }) {
   const [initialSent, setInitialSent] = useState(false);
   const listRef = useRef(null);
 
+  const voice = useChatVoiceInput({
+    onTranscript: (text) => setInput(text),
+  });
+
   useEffect(() => {
     const timer = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
     return () => clearTimeout(timer);
@@ -70,65 +73,12 @@ export default function MedicalChatScreen({ navigation, route }) {
       .filter((m) => m.role === 'user' || m.role === 'assistant')
       .map((m) => ({ role: m.role, text: m.text }));
 
-  const pickImage = async (useCamera) => {
+  const handleAttachPress = async () => {
     try {
-      if (Platform.OS === 'web' && !useCamera) {
-        const result = await pickImageFromFiles();
-        if (result.canceled || !result.assets?.[0]) return;
-        applyPickedAsset('image', result.assets[0]);
-        return;
-      }
-
-      if (useCamera) {
-        const cam = await ImagePicker.requestCameraPermissionsAsync();
-        if (!cam.granted) {
-          Alert.alert('Permission needed', 'Camera access is required.');
-          return;
-        }
-      } else {
-        const lib = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!lib.granted) {
-          Alert.alert('Permission needed', 'Photo library access is required.');
-          return;
-        }
-      }
-
-      const result = useCamera
-        ? await ImagePicker.launchCameraAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            quality: 0.85,
-          })
-        : await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
-            allowsEditing: true,
-            quality: 0.85,
-          });
-
-      if (result.canceled || !result.assets?.[0]) return;
-      const asset = result.assets[0];
-      setPendingAttachment({
-        type: 'image',
-        name: asset.fileName || 'photo.jpg',
-        uri: asset.uri,
-        mimeType: guessImageMimeType(asset.uri),
-      });
+      const picked = await pickChatAttachment();
+      if (picked) applyPickedAsset(picked.type, picked);
     } catch (e) {
-      Alert.alert('Error', 'Could not select an image.');
-    }
-  };
-
-  const pickPdf = async () => {
-    try {
-      const result = await pickPdfDocument();
-      if (result.canceled || !result.assets?.[0]) return;
-      const asset = result.assets[0];
-      if (asset.size && asset.size > MAX_PDF_BYTES) {
-        Alert.alert('File too large', 'Please choose a PDF under 8 MB.');
-        return;
-      }
-      applyPickedAsset('pdf', asset);
-    } catch (e) {
-      Alert.alert('Error', 'Could not select a PDF.');
+      Alert.alert('Error', 'Could not attach file. Please try again.');
     }
   };
 
@@ -157,16 +107,8 @@ export default function MedicalChatScreen({ navigation, route }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
 
-  const showAttachOptions = () => {
-    Alert.alert('Attach file', 'Share a photo or PDF for analysis', [
-      { text: 'Photo library', onPress: () => pickImage(false) },
-      { text: 'Take photo', onPress: () => pickImage(true) },
-      { text: 'PDF document', onPress: pickPdf },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
-
   const handleSend = async (overrideText) => {
+    if (voice.isListening) voice.stop();
     const text = (typeof overrideText === 'string' ? overrideText : input).trim();
     if (!text && !pendingAttachment) {
       Alert.alert('Empty message', 'Type a message or attach a photo/PDF.');
@@ -320,9 +262,9 @@ export default function MedicalChatScreen({ navigation, route }) {
                 value={input}
                 onChangeText={setInput}
                 onSend={() => handleSend()}
-                onFilePicked={(attachment) => applyPickedAsset(attachment.type, attachment)}
-                onAttach={showAttachOptions}
-                onMic={() => navigation.navigate('MedicalVoiceAgent')}
+                onAttach={handleAttachPress}
+                onMic={() => voice.toggle()}
+                isListening={voice.isListening}
                 isLoading={isLoading}
               />
             </View>

@@ -13,7 +13,9 @@ import { MED_THEME } from '../constants/appTheme';
 import { QUICK_ACTIONS, SYMPTOM_CATEGORIES } from '../constants/symptomCategories';
 import { useAuth } from '../Context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
+import { useChatVoiceInput } from '../hooks/useChatVoiceInput';
 import { stashAttachment } from '../services/attachmentBridge';
+import { pickChatAttachment } from '../services/chatAttachmentPicker';
 
 const MedicalHomeScreen = ({ navigation }) => {
   const r = useResponsive();
@@ -22,6 +24,10 @@ const MedicalHomeScreen = ({ navigation }) => {
   const [homeInput, setHomeInput] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState('MedicalHealth');
+
+  const voice = useChatVoiceInput({
+    onTranscript: (text) => setHomeInput(text),
+  });
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -45,7 +51,17 @@ const MedicalHomeScreen = ({ navigation }) => {
     setHomeInput('');
   };
 
+  const handleHomeAttach = async () => {
+    try {
+      const picked = await pickChatAttachment();
+      if (picked) handleHomeFilePicked(picked);
+    } catch (e) {
+      console.error('Attach error:', e);
+    }
+  };
+
   const handleHomeSend = () => {
+    if (voice.isListening) voice.stop();
     if (!homeInput.trim()) {
       goToChat();
       return;
@@ -250,9 +266,9 @@ const MedicalHomeScreen = ({ navigation }) => {
                   value={homeInput}
                   onChangeText={setHomeInput}
                   onSend={handleHomeSend}
-                  onFilePicked={handleHomeFilePicked}
-                  onAttach={() => goToChat()}
-                  onMic={() => navigation.navigate('MedicalVoiceAgent')}
+                  onAttach={handleHomeAttach}
+                  onMic={() => voice.toggle()}
+                  isListening={voice.isListening}
                 />
               </View>
 

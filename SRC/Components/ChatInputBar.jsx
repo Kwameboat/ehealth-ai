@@ -18,15 +18,21 @@ export default function ChatInputBar({
   onAttach,
   onFilePicked,
   onMic,
+  isListening = false,
   placeholder = 'Describe symptoms or ask about medication…',
   isLoading = false,
   showDisclaimer = true,
 }) {
+  const handleAttachPress = () => {
+    if (isLoading) return;
+    if (onAttach) onAttach();
+  };
+
   return (
     <View style={styles.wrap}>
       <View style={styles.bar}>
         <TouchableOpacity
-          onPress={onAttach}
+          onPress={handleAttachPress}
           style={styles.iconBtn}
           disabled={isLoading}
           accessibilityLabel="Attach photo or PDF"
@@ -35,23 +41,32 @@ export default function ChatInputBar({
         </TouchableOpacity>
         <TextInput
           style={styles.input}
-          placeholder={placeholder}
+          placeholder={isListening ? 'Listening…' : placeholder}
           placeholderTextColor={MED_THEME.textDim}
           value={value}
           onChangeText={onChangeText}
           multiline
           maxLength={2000}
-          editable={!isLoading}
+          editable={!isLoading && !isListening}
         />
         {onMic && (
-          <TouchableOpacity onPress={onMic} style={styles.iconBtn} disabled={isLoading}>
-            <Ionicons name="mic-outline" size={22} color={MED_THEME.textMuted} />
+          <TouchableOpacity
+            onPress={onMic}
+            style={[styles.iconBtn, isListening && styles.micActive]}
+            disabled={isLoading}
+            accessibilityLabel={isListening ? 'Stop voice input' : 'Start voice input'}
+          >
+            <Ionicons
+              name={isListening ? 'mic' : 'mic-outline'}
+              size={22}
+              color={isListening ? MED_THEME.danger : MED_THEME.textMuted}
+            />
           </TouchableOpacity>
         )}
         <TouchableOpacity
           onPress={onSend}
-          disabled={isLoading}
-          style={[styles.sendBtn, isLoading && styles.sendDisabled]}
+          disabled={isLoading || isListening}
+          style={[styles.sendBtn, (isLoading || isListening) && styles.sendDisabled]}
         >
           {isLoading ? (
             <ActivityIndicator size="small" color="#fff" />
@@ -94,6 +109,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  micActive: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderRadius: 20,
+  },
   input: {
     flex: 1,
     color: MED_THEME.text,
@@ -101,6 +120,7 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     paddingVertical: 10,
     paddingHorizontal: 4,
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : null),
   },
   sendBtn: {
     width: 44,
