@@ -1,12 +1,12 @@
 const { getGeminiApiKey, getGeminiModel } = require('./settings');
 const { normalizeGeminiModel } = require('./geminiModels');
+const {
+  MEDICAL_CHAT_SYSTEM_PROMPT,
+  MEDICAL_CHAT_MODEL_ACK,
+  MEDICAL_CHAT_GENERATION_CONFIG,
+} = require('./medicalChatPrompt');
 
-const MEDICAL_CHAT_SYSTEM_PROMPT =
-  'You are a careful medical health assistant. Provide clear, practical guidance. ' +
-  'Do not diagnose definitively. Mention when to seek professional care. ' +
-  'When the user shares an image or PDF (lab report, prescription, scan, etc.), analyze it carefully and explain findings in plain language.';
-
-async function callGemini(contents, model) {
+async function callGemini(contents, model, options = {}) {
   const apiKey = getGeminiApiKey();
   const useModel = normalizeGeminiModel(model || getGeminiModel());
 
@@ -20,7 +20,10 @@ async function callGemini(contents, model) {
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents }),
+    body: JSON.stringify({
+      contents,
+      ...(options.generationConfig ? { generationConfig: options.generationConfig } : {}),
+    }),
   });
 
   const data = await response.json();
@@ -53,7 +56,7 @@ function buildChatContents(history, userText, attachment) {
 
   return [
     { role: 'user', parts: [{ text: MEDICAL_CHAT_SYSTEM_PROMPT }] },
-    { role: 'model', parts: [{ text: 'Understood. I will provide careful, clear medical guidance.' }] },
+    { role: 'model', parts: [{ text: MEDICAL_CHAT_MODEL_ACK }] },
     ...recentHistory,
     { role: 'user', parts: userParts },
   ];
@@ -68,7 +71,9 @@ function resolveChatFeatureKey(attachment) {
 
 async function chatCompletion(history, userText, attachment) {
   const contents = buildChatContents(history, userText, attachment);
-  const data = await callGemini(contents);
+  const data = await callGemini(contents, undefined, {
+    generationConfig: MEDICAL_CHAT_GENERATION_CONFIG,
+  });
   const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!reply) throw new Error('No response from the assistant');
   return reply;

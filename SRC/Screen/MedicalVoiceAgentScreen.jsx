@@ -225,8 +225,8 @@ const MedicalVoiceAssistantScreen = ({ navigation }) => {
     setIsLoading(true);
     try {
       // Build safe, concise medical prompt with context
-      const systemPreamble =
-        "You are a careful medical assistant. Give clear, kind, practical guidance in under 3 sentences. Include likely causes or self-care steps and when to seek care. Do not diagnose; add a brief safety note if needed.";
+      const { MEDICAL_CHAT_SYSTEM_PROMPT } = await import('../Config/medicalChatPrompt');
+      const systemPreamble = MEDICAL_CHAT_SYSTEM_PROMPT;
 
       // Convert recent convo (trim to last ~12 turns for token control)
       const recent = conversation.slice(-12).map((m) => ({

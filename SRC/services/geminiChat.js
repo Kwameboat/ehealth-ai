@@ -1,11 +1,7 @@
+import { MEDICAL_CHAT_MODEL_ACK, MEDICAL_CHAT_SYSTEM_PROMPT } from '../Config/medicalChatPrompt';
 import { getApiAuthHeadersAsync } from './apiAuth';
 import { getApiUrl } from './appConfig';
 import { notifyPointsBalance } from './pointsBridge';
-
-const MEDICAL_CHAT_SYSTEM_PROMPT =
-  'You are a careful medical health assistant. Provide clear, practical guidance. ' +
-  'Do not diagnose definitively. Mention when to seek professional care. ' +
-  'When the user shares an image or PDF (lab report, prescription, scan, etc.), analyze it carefully and explain findings in plain language.';
 
 function getApiBase() {
   return getApiUrl();
@@ -69,7 +65,7 @@ export async function sendChatMessage({ history = [], userText = '', attachment 
 
   const contents = [
     { role: 'user', parts: [{ text: MEDICAL_CHAT_SYSTEM_PROMPT }] },
-    { role: 'model', parts: [{ text: 'Understood. I will provide careful, clear medical guidance.' }] },
+    { role: 'model', parts: [{ text: MEDICAL_CHAT_MODEL_ACK }] },
     ...recentHistory,
     { role: 'user', parts: userParts },
   ];
