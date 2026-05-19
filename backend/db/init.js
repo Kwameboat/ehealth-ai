@@ -215,15 +215,28 @@ function migratePackagesToGhs() {
   }
 }
 
+let initInFlight = null;
+
 async function initDatabase() {
-  db = await openDatabase(DB_PATH);
-  initSchema();
-  seedPointRules();
-  seedPointPackages();
-  seedSettings();
-  seedAdmin();
-  syncEnvSecrets();
-  migratePackagesToGhs();
+  if (db) return;
+  if (initInFlight) return initInFlight;
+
+  initInFlight = (async () => {
+    db = await openDatabase(DB_PATH);
+    initSchema();
+    seedPointRules();
+    seedPointPackages();
+    seedSettings();
+    seedAdmin();
+    syncEnvSecrets();
+    migratePackagesToGhs();
+  })();
+
+  try {
+    await initInFlight;
+  } finally {
+    initInFlight = null;
+  }
 }
 
 module.exports = { getDb, initDatabase, uuid, now, DB_PATH };

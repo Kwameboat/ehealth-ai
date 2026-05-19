@@ -1,26 +1,113 @@
 const fs = require('fs');
 const path = require('path');
 
+function sleepMs(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    /* sync wait for short lock retry */
+  }
+}
+
+function findWasmPath() {
+  const candidates = [
+    path.join(__dirname, 'sql-wasm.wasm'),
+    path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+    path.join(__dirname, '..', '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+  ];
+  try {
+    const pkg = require.resolve('sql.js/package.json');
+    candidates.push(path.join(path.dirname(pkg), 'dist', 'sql-wasm.wasm'));
+  } catch (_) {
+    /* sql.js not installed yet */
+  }
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  throw new Error(
+    'sql-wasm.wasm not found. Run: npm install sql.js --prefix backend (or copy wasm to backend/db/)'
+  );
+}
+
 /**
  * better-sqlite3-compatible wrapper around sql.js (no native .node / GLIBC).
  */
-function createWrapper(rawDb, persist) {
+function createWrapper(SQL, dbPath) {
+  let rawDb;
+  let lastLoadMtime = 0;
+
+  function loadFromDisk() {
+    if (fs.existsSync(dbPath)) {
+      rawDb = new SQL.Database(fs.readFileSync(dbPath));
+      lastLoadMtime = fs.statSync(dbPath).mtimeMs;
+    } else {
+      rawDb = new SQL.Database();
+      lastLoadMtime = 0;
+    }
+  }
+
+  function reloadFromDisk() {
+    if (!fs.existsSync(dbPath)) return;
+    const mtime = fs.statSync(dbPath).mtimeMs;
+    if (mtime > lastLoadMtime) {
+      rawDb.close();
+      loadFromDisk();
+    }
+  }
+
+  function persist() {
+    const lockFile = `${dbPath}.lock`;
+    const tmpFile = `${dbPath}.tmp`;
+    let attempts = 0;
+    while (attempts < 20) {
+      try {
+        fs.writeFileSync(lockFile, String(process.pid), { flag: 'wx' });
+        break;
+      } catch (e) {
+        if (e.code !== 'EEXIST') throw e;
+        attempts += 1;
+        sleepMs(25);
+      }
+    }
+    if (attempts >= 20) {
+      throw new Error('Database busy (could not acquire lock). Try again.');
+    }
+    try {
+      const data = rawDb.export();
+      fs.writeFileSync(tmpFile, Buffer.from(data));
+      fs.renameSync(tmpFile, dbPath);
+      lastLoadMtime = fs.statSync(dbPath).mtimeMs;
+    } finally {
+      try {
+        fs.unlinkSync(lockFile);
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  }
+
+  loadFromDisk();
+
   return {
+    reloadFromDisk,
     exec(sql) {
+      reloadFromDisk();
       rawDb.exec(sql);
       persist();
     },
     pragma(statement) {
+      reloadFromDisk();
       rawDb.run(`PRAGMA ${statement}`);
     },
     prepare(sql) {
       return {
         run(...params) {
+          reloadFromDisk();
           rawDb.run(sql, params);
           persist();
           return { changes: rawDb.getRowsModified() };
         },
         get(...params) {
+          reloadFromDisk();
           const stmt = rawDb.prepare(sql);
           try {
             if (params.length) stmt.bind(params);
@@ -31,6 +118,7 @@ function createWrapper(rawDb, persist) {
           }
         },
         all(...params) {
+          reloadFromDisk();
           const stmt = rawDb.prepare(sql);
           try {
             if (params.length) stmt.bind(params);
@@ -45,6 +133,7 @@ function createWrapper(rawDb, persist) {
     },
     transaction(fn) {
       return () => {
+        reloadFromDisk();
         rawDb.run('BEGIN');
         try {
           const result = fn();
@@ -66,8 +155,7 @@ function createWrapper(rawDb, persist) {
 
 async function openDatabase(dbPath) {
   const initSqlJs = require('sql.js');
-  const sqlJsRoot = path.dirname(require.resolve('sql.js/package.json'));
-  const wasmPath = path.join(sqlJsRoot, 'dist', 'sql-wasm.wasm');
+  const wasmPath = findWasmPath();
 
   const SQL = await initSqlJs({
     locateFile: () => wasmPath,
@@ -76,19 +164,7 @@ async function openDatabase(dbPath) {
   const dir = path.dirname(dbPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-  let rawDb;
-  if (fs.existsSync(dbPath)) {
-    rawDb = new SQL.Database(fs.readFileSync(dbPath));
-  } else {
-    rawDb = new SQL.Database();
-  }
-
-  const persist = () => {
-    const data = rawDb.export();
-    fs.writeFileSync(dbPath, Buffer.from(data));
-  };
-
-  return createWrapper(rawDb, persist);
+  return createWrapper(SQL, dbPath);
 }
 
-module.exports = { openDatabase };
+module.exports = { openDatabase, findWasmPath };

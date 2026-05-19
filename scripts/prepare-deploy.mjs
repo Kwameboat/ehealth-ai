@@ -56,6 +56,14 @@ if (fs.existsSync(backendNm)) {
   copyDir(backendNm, path.join(out, 'backend', 'node_modules'));
 }
 
+const wasmSrc = path.join(root, 'backend', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
+const wasmDest = path.join(out, 'backend', 'db', 'sql-wasm.wasm');
+if (fs.existsSync(wasmSrc)) {
+  fs.mkdirSync(path.dirname(wasmDest), { recursive: true });
+  fs.copyFileSync(wasmSrc, wasmDest);
+  console.log('Copied sql-wasm.wasm to backend/db/');
+}
+
 for (const file of COPY_FILES) {
   const src = path.join(root, file);
   if (fs.existsSync(src)) {

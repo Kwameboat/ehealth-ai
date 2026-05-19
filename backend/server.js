@@ -20,11 +20,17 @@ let dbBootError = null;
 let dbInitPromise = null;
 
 function ensureDbInit() {
+  if (dbBootError) dbBootError = null;
   if (!dbInitPromise) {
-    dbInitPromise = initDatabase().catch((err) => {
-      dbBootError = err;
-      throw err;
-    });
+    dbInitPromise = initDatabase()
+      .then(() => {
+        dbBootError = null;
+      })
+      .catch((err) => {
+        dbBootError = err;
+        dbInitPromise = null;
+        throw err;
+      });
   }
   return dbInitPromise;
 }
@@ -163,6 +169,14 @@ if (webDistPath && fs.existsSync(webDistPath)) {
     res.sendFile(indexHtml, (err) => (err ? next() : undefined));
   });
 }
+
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  console.error('Unhandled error:', req.method, req.path, err);
+  res.status(500).json({
+    error: { message: 'Server error', detail: isProd ? undefined : err.message },
+  });
+});
 
 app.use((req, res) => {
   res.status(404).end();
