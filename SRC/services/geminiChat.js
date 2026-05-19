@@ -1,7 +1,8 @@
 import {
   MEDICAL_CHAT_MODEL_ACK,
   MEDICAL_CHAT_SYSTEM_PROMPT,
-  TRIAGE_RECOMMENDATION_DIRECTIVE,
+  isLikelyTruncatedText,
+  resolveTriageDirective,
   shouldGiveRecommendations,
 } from '../Config/medicalChatPrompt';
 import { getApiAuthHeadersAsync } from './apiAuth';
@@ -63,8 +64,9 @@ export async function sendChatMessage({ history = [], userText = '', attachment 
     userParts.push({ text: 'Please analyze the attached file and summarize any medical information.' });
   }
 
-  if (shouldGiveRecommendations(history)) {
-    userParts.push({ text: TRIAGE_RECOMMENDATION_DIRECTIVE });
+  const triageDirective = resolveTriageDirective(history, userText);
+  if (triageDirective) {
+    userParts.push({ text: triageDirective });
   }
 
   const recentHistory = history.slice(-14).map((msg) => ({
@@ -79,8 +81,41 @@ export async function sendChatMessage({ history = [], userText = '', attachment 
     { role: 'user', parts: userParts },
   ];
 
-  const data = await generateContent({ contents });
-  const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  const recommending = shouldGiveRecommendations(history);
+  let data = await generateContent({ contents });
+  let reply =
+    data?.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('').trim() || '';
+
+  const isTruncated = () => {
+    const reason = data?.candidates?.[0]?.finishReason;
+    return reason === 'MAX_TOKENS' || reason === 'LENGTH';
+  };
+
+  for (
+    let attempt = 0;
+    attempt < 2 && recommending && reply && (isTruncated() || isLikelyTruncatedText(reply));
+    attempt += 1
+  ) {
+    const contData = await generateContent({
+      contents: [
+        ...contents,
+        { role: 'model', parts: [{ text: reply }] },
+        {
+          role: 'user',
+          parts: [
+            {
+              text: 'Continue exactly where you were cut off. Complete your recommendations. Do not repeat the opening.',
+            },
+          ],
+        },
+      ],
+    });
+    const more =
+      contData?.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('').trim() || '';
+    if (more) reply = `${reply} ${more}`.replace(/\s+/g, ' ').trim();
+    data = contData;
+  }
+
   if (!reply) {
     throw new Error('No response from the assistant');
   }

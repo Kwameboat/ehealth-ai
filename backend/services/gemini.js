@@ -5,8 +5,9 @@ const {
   MEDICAL_CHAT_MODEL_ACK,
   MEDICAL_CHAT_GENERATION_CONFIG,
   MEDICAL_CHAT_RECOMMENDATION_CONFIG,
-  TRIAGE_RECOMMENDATION_DIRECTIVE,
   shouldGiveRecommendations,
+  resolveTriageDirective,
+  isLikelyTruncatedText,
 } = require('./medicalChatPrompt');
 
 const SYMPTOM_GENERATION_CONFIG = {
@@ -51,6 +52,16 @@ function normalizeBase64(data) {
   return trimmed.includes(',') ? trimmed.split(',').pop() : trimmed;
 }
 
+function getChatRawText(data) {
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  return parts.map((p) => p.text || '').join('').trim();
+}
+
+function isChatTruncated(data) {
+  const reason = data?.candidates?.[0]?.finishReason;
+  return reason === 'MAX_TOKENS' || reason === 'LENGTH';
+}
+
 function buildChatContents(history, userText, attachment) {
   const userParts = [];
   const b64 = normalizeBase64(attachment?.base64);
@@ -65,8 +76,9 @@ function buildChatContents(history, userText, attachment) {
     userParts.push({ text: 'Please analyze the attached file and summarize any medical information.' });
   }
 
-  if (shouldGiveRecommendations(history)) {
-    userParts.push({ text: TRIAGE_RECOMMENDATION_DIRECTIVE });
+  const triageDirective = resolveTriageDirective(history, userText);
+  if (triageDirective) {
+    userParts.push({ text: triageDirective });
   }
 
   const recentHistory = history.slice(-14).map((msg) => ({
@@ -90,12 +102,42 @@ function resolveChatFeatureKey(attachment) {
 }
 
 async function chatCompletion(history, userText, attachment) {
+  const recommending = shouldGiveRecommendations(history);
   const contents = buildChatContents(history, userText, attachment);
-  const generationConfig = shouldGiveRecommendations(history)
+  const generationConfig = recommending
     ? MEDICAL_CHAT_RECOMMENDATION_CONFIG
     : MEDICAL_CHAT_GENERATION_CONFIG;
-  const data = await callGemini(contents, undefined, { generationConfig });
-  const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  let data = await callGemini(contents, undefined, { generationConfig });
+  let reply = getChatRawText(data);
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const needsMore =
+      recommending && reply && (isChatTruncated(data) || isLikelyTruncatedText(reply));
+    if (!needsMore) break;
+
+    const contData = await callGemini(
+      [
+        ...contents,
+        { role: 'model', parts: [{ text: reply }] },
+        {
+          role: 'user',
+          parts: [
+            {
+              text: 'Continue exactly where you were cut off. Complete your recommendations. Do not repeat the opening.',
+            },
+          ],
+        },
+      ],
+      undefined,
+      { generationConfig: MEDICAL_CHAT_RECOMMENDATION_CONFIG }
+    );
+    const more = getChatRawText(contData);
+    if (more) reply = `${reply} ${more}`.replace(/\s+/g, ' ').trim();
+    data = contData;
+    if (!isChatTruncated(contData) && !isLikelyTruncatedText(reply)) break;
+  }
+
   if (!reply) throw new Error('No response from the assistant');
   return reply;
 }
