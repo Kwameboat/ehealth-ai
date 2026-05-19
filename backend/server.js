@@ -77,7 +77,7 @@ app.get('/api/health', async (req, res) => {
       error: err.message,
       wasm: diag.wasmPath,
       dbPath: diag.dbPath,
-      hint: 'Upload backend/db/sql-wasm.wasm, rm db/*.lock, RESTART Node app',
+      hint: 'Set DATABASE_PATH to ~/ehealth-ai/data/medassistant.db, chmod 775 ~/ehealth-ai/data, RESTART',
       time: new Date().toISOString(),
     });
   }
@@ -107,7 +107,7 @@ app.use(async (req, res, next) => {
         detail: err.message,
         wasm: diag.wasmPath,
         dbPath: diag.dbPath,
-        hint: 'Ensure backend/db/sql-wasm.wasm exists, then: rm -f ~/ehealth-ai/backend/db/*.lock && RESTART',
+        hint: 'Use DATABASE_PATH=/home/ehealtha/ehealth-ai/data/medassistant.db and chmod 775 ~/ehealth-ai/data',
       },
     });
   }

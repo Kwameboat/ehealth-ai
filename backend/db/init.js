@@ -3,8 +3,9 @@ const fs = require('fs');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const { openDatabase } = require('./driver-sqljs');
+const { resolveDatabasePath } = require('./resolveDbPath');
 
-const DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, 'medassistant.db');
+const DB_PATH = resolveDatabasePath();
 
 let db;
 
@@ -223,6 +224,7 @@ async function initDatabase() {
 
   initInFlight = (async () => {
     db = await openDatabase(DB_PATH);
+    if (typeof db.setDeferPersist === 'function') db.setDeferPersist(true);
     initSchema();
     seedPointRules();
     seedPointPackages();
@@ -230,6 +232,10 @@ async function initDatabase() {
     seedAdmin();
     syncEnvSecrets();
     migratePackagesToGhs();
+    if (typeof db.setDeferPersist === 'function') {
+      db.setDeferPersist(false);
+      db.flush();
+    }
   })();
 
   try {

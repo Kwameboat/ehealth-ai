@@ -8,11 +8,16 @@ APP=/home/ehealtha/ehealth-ai
 BACKEND=$APP/backend
 BASE=https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main
 
-echo "=== Clear stale DB locks ==="
+echo "=== Writable data directory ==="
+mkdir -p "$APP/data"
+chmod 775 "$APP/data" 2>/dev/null || true
+[ -f "$BACKEND/db/medassistant.db" ] && cp -f "$BACKEND/db/medassistant.db" "$APP/data/medassistant.db" 2>/dev/null || true
+chmod 664 "$APP/data/medassistant.db" 2>/dev/null || true
 rm -f "$BACKEND/db/"*.lock "$BACKEND/db/"*.tmp 2>/dev/null || true
 
 echo "=== Download sql.js backend files ==="
 mkdir -p "$BACKEND/db"
+curl -fsSL -o "$BACKEND/db/resolveDbPath.js" "$BASE/backend/db/resolveDbPath.js"
 curl -fsSL -o "$BACKEND/db/driver-sqljs.js" "$BASE/backend/db/driver-sqljs.js"
 curl -fsSL -o "$BACKEND/db/ensureDb.js" "$BASE/backend/db/ensureDb.js"
 curl -fsSL -o "$BACKEND/db/init.js" "$BASE/backend/db/init.js"

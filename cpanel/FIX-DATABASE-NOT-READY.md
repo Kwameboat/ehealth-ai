@@ -1,39 +1,46 @@
-# Fix "Database not ready" in admin
+# Fix health check: `UNKNOWN: unknown error, write`
 
-## Cause
+WASM is OK. The app **cannot write** to `backend/db/medassistant.db` (FTP/cPanel often makes that folder read-only).
 
-Missing **`backend/db/sql-wasm.wasm`** on the server (Terminal `DB OK` works if sql.js is in venv, but Passenger cannot find WASM).
-
-## Fix (Terminal) — copy entire block
+## Fix (Terminal)
 
 ```bash
 source /home/ehealtha/nodevenv/ehealth-ai/20/bin/activate
 unset NODE_PATH
+APP=/home/ehealtha/ehealth-ai
+BACKEND=$APP/backend
 BASE=https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main
-BACKEND=/home/ehealtha/ehealth-ai/backend
 
-rm -f "$BACKEND/db/"*.lock "$BACKEND/db/"*.tmp
-mkdir -p "$BACKEND/db"
-chmod 755 "$BACKEND/db"
+mkdir -p "$APP/data"
+chmod 775 "$APP/data"
 
-curl -fsSL -o "$BACKEND/db/sql-wasm.wasm" "$BASE/backend/db/sql-wasm.wasm"
+# Move existing DB if any
+[ -f "$BACKEND/db/medassistant.db" ] && cp -f "$BACKEND/db/medassistant.db" "$APP/data/medassistant.db"
+chmod 664 "$APP/data/medassistant.db" 2>/dev/null || true
+
+curl -fsSL -o "$BACKEND/db/resolveDbPath.js" "$BASE/backend/db/resolveDbPath.js"
 curl -fsSL -o "$BACKEND/db/driver-sqljs.js" "$BASE/backend/db/driver-sqljs.js"
 curl -fsSL -o "$BACKEND/db/ensureDb.js" "$BASE/backend/db/ensureDb.js"
 curl -fsSL -o "$BACKEND/db/init.js" "$BASE/backend/db/init.js"
 curl -fsSL -o "$BACKEND/server.js" "$BASE/backend/server.js"
-curl -fsSL -o "$BACKEND/public/admin/app.js" "$BASE/backend/public/admin/app.js"
-cp -f "$BACKEND/public/admin/app.js" ~/public_html/admin/app.js
+curl -fsSL -o "$BACKEND/db/sql-wasm.wasm" "$BASE/backend/db/sql-wasm.wasm"
 
-ls -la "$BACKEND/db/sql-wasm.wasm"
-cd "$BACKEND" && node -e "require('./db/ensureDb').ensureDbReady().then(() => console.log('DB OK')).catch(e => { console.error(e); process.exit(1); })"
+cd "$BACKEND"
+node -e "const p=require('./db/init').DB_PATH; console.log('Using', p); require('./db/ensureDb').ensureDbReady().then(()=>console.log('DB OK')).catch(e=>{console.error(e);process.exit(1)})"
 ```
 
-Must show **`sql-wasm.wasm`** (~650 KB) and **`DB OK`**.
+## cPanel environment variable
 
-Then **cPanel → Node.js → RESTART** and hard-refresh admin (Ctrl+Shift+R).
+Change **DATABASE_PATH** to:
+
+```
+/home/ehealtha/ehealth-ai/data/medassistant.db
+```
+
+Save → **RESTART** Node.js app.
 
 ## Verify
 
-Open: https://www.ehealthaigh.com/api/health → `"db":true`
+https://www.ehealthaigh.com/api/health → `"db":true`
 
-If `"db":false`, read the `error` and `wasm` fields in the JSON.
+Admin dashboard should load data (0 users is OK on a new DB).
