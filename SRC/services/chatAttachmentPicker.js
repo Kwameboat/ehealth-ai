@@ -1,9 +1,10 @@
-import { Alert, Platform } from 'react-native';
+/**
+ * Chat attach — same approach as prefilled symptom screens (expo-image-picker + document picker).
+ */
+import { Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { pickPdfDocument } from './pickPdf';
-import { pickWebAttachmentMenu, openWebFileInput } from './webFilePicker';
 import { guessImageMimeType } from './fileToBase64';
-import { isMobileWebUserAgent } from '../utils/deviceUtils';
 
 const MAX_BYTES = 8 * 1024 * 1024;
 
@@ -14,33 +15,30 @@ function assetFromImageResult(result) {
     type: 'image',
     name: asset.fileName || 'photo.jpg',
     uri: asset.uri,
-    mimeType: asset.mimeType || guessImageMimeType(asset.uri),
+    mimeType: asset.mimeType || guessImageMimeType(asset.uri || asset.fileName),
     size: asset.size,
   };
 }
 
-async function pickFromLibrary() {
-  const lib = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!lib.granted) {
-    Alert.alert('Permission needed', 'Photo library access is required.');
-    return null;
-  }
+/** Gallery — matches symptom screen pickImage(). */
+async function pickFromGallery() {
+  await ImagePicker.requestMediaLibraryPermissionsAsync();
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
     allowsEditing: true,
+    aspect: [4, 3],
     quality: 0.85,
   });
   return assetFromImageResult(result);
 }
 
+/** Camera — matches symptom screen takePhoto(). */
 async function pickFromCamera() {
-  const cam = await ImagePicker.requestCameraPermissionsAsync();
-  if (!cam.granted) {
-    Alert.alert('Permission needed', 'Camera access is required.');
-    return null;
-  }
+  await ImagePicker.requestCameraPermissionsAsync();
   const result = await ImagePicker.launchCameraAsync({
     mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    allowsEditing: true,
+    aspect: [4, 3],
     quality: 0.85,
   });
   return assetFromImageResult(result);
@@ -64,34 +62,17 @@ async function pickPdf() {
   };
 }
 
-function pickNativeAttachment() {
+/**
+ * Show Gallery / Camera / PDF menu (same pattern as symptom category screens).
+ * @returns {Promise<object|null>}
+ */
+export function pickChatAttachment() {
   return new Promise((resolve) => {
-    Alert.alert('Attach file', 'Share a photo or PDF', [
-      { text: 'Photo library', onPress: () => pickFromLibrary().then(resolve) },
-      { text: 'Take photo', onPress: () => pickFromCamera().then(resolve) },
+    Alert.alert('Attach file', 'Upload a photo or PDF for analysis', [
+      { text: 'Gallery', onPress: () => pickFromGallery().then(resolve) },
+      { text: 'Camera', onPress: () => pickFromCamera().then(resolve) },
       { text: 'PDF document', onPress: () => pickPdf().then(resolve) },
       { text: 'Cancel', style: 'cancel', onPress: () => resolve(null) },
     ]);
   });
-}
-
-async function pickWebAttachment() {
-  if (isMobileWebUserAgent()) {
-    return pickWebAttachmentMenu();
-  }
-  return openWebFileInput({
-    accept: 'image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.pdf',
-  });
-}
-
-/**
- * Open photo/PDF picker (native app + mobile/desktop web).
- * @returns {Promise<object|null>}
- */
-export async function pickChatAttachment() {
-  if (Platform.OS === 'web') {
-    const picked = await pickWebAttachment();
-    return picked;
-  }
-  return pickNativeAttachment();
 }

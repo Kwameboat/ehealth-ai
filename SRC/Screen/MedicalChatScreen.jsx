@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
@@ -54,6 +55,11 @@ export default function MedicalChatScreen({ navigation, route }) {
   const voice = useChatVoiceInput({
     onTranscript: (text) => setInput(text),
   });
+
+  useEffect(() => {
+    ImagePicker.requestCameraPermissionsAsync();
+    ImagePicker.requestMediaLibraryPermissionsAsync();
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
@@ -263,7 +269,6 @@ export default function MedicalChatScreen({ navigation, route }) {
                 onChangeText={setInput}
                 onSend={() => handleSend()}
                 onAttach={handleAttachPress}
-                onFilePicked={(attachment) => applyPickedAsset(attachment.type, attachment)}
                 onMic={() => voice.toggle()}
                 isListening={voice.isListening}
                 isLoading={isLoading}

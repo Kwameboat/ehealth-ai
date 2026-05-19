@@ -1,5 +1,6 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -24,9 +25,13 @@ const MedicalHomeScreen = ({ navigation }) => {
   const [homeInput, setHomeInput] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState('MedicalHealth');
+  const [chatFocusMode, setChatFocusMode] = useState(false);
 
   const voice = useChatVoiceInput({
-    onTranscript: (text) => setHomeInput(text),
+    onTranscript: (text) => {
+      setHomeInput(text);
+      if (text?.trim()) setChatFocusMode(true);
+    },
   });
 
   useEffect(() => {
@@ -34,6 +39,8 @@ const MedicalHomeScreen = ({ navigation }) => {
     if (hour < 12) setGreeting('GOOD MORNING');
     else if (hour < 18) setGreeting('GOOD AFTERNOON');
     else setGreeting('GOOD EVENING');
+    ImagePicker.requestCameraPermissionsAsync();
+    ImagePicker.requestMediaLibraryPermissionsAsync();
   }, []);
 
   const goToChat = (initialMessage = '', attachment = null) => {
@@ -47,6 +54,7 @@ const MedicalHomeScreen = ({ navigation }) => {
   };
 
   const handleHomeFilePicked = (attachment) => {
+    setChatFocusMode(true);
     goToChat(homeInput, attachment);
     setHomeInput('');
   };
@@ -66,6 +74,7 @@ const MedicalHomeScreen = ({ navigation }) => {
       goToChat();
       return;
     }
+    setChatFocusMode(true);
     goToChat(homeInput);
     setHomeInput('');
   };
@@ -197,67 +206,90 @@ const MedicalHomeScreen = ({ navigation }) => {
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={[
                   styles.scrollContent,
+                  chatFocusMode && styles.scrollContentCompact,
                   { paddingHorizontal: r.horizontalPadding },
                 ]}
                 keyboardShouldPersistTaps="handled"
               >
-                <Text style={styles.greetingLabel}>{greeting},</Text>
-                <Text
-                  style={[
-                    styles.heroTitle,
-                    { fontSize: r.heroTitleSize, lineHeight: r.heroLineHeight },
-                  ]}
-                >
-                  How can I assist with your health today?
-                </Text>
-                <Text style={[styles.heroSub, { fontSize: r.heroSubSize }]}>
-                  Describe your symptoms or ask a medical question. Our AI partner is here to
-                  analyze and guide your health journey.
-                </Text>
-
-                {r.useQuickGrid ? (
-                  <View style={styles.quickGrid}>
-                    {QUICK_ACTIONS.map((action) => (
-                      <QuickCard
-                        key={action.id}
-                        action={action}
-                        cardWidth={r.quickCardWidth}
-                      />
-                    ))}
+                {chatFocusMode && r.showBottomNav ? (
+                  <View style={styles.focusChatHeader}>
+                    <Text style={styles.focusChatTitle}>Health Chat</Text>
+                    <TouchableOpacity
+                      onPress={() => setChatFocusMode(false)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={styles.showSymptomsLink}>Show symptoms</Text>
+                    </TouchableOpacity>
                   </View>
                 ) : (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.quickRow}
-                  >
-                    {QUICK_ACTIONS.map((action) => (
-                      <QuickCard
-                        key={action.id}
-                        action={action}
-                        cardWidth={r.quickCardWidth}
-                      />
-                    ))}
-                  </ScrollView>
-                )}
+                  <>
+                    <Text style={styles.greetingLabel}>{greeting},</Text>
+                    <Text
+                      style={[
+                        styles.heroTitle,
+                        { fontSize: r.heroTitleSize, lineHeight: r.heroLineHeight },
+                      ]}
+                    >
+                      How can I assist with your health today?
+                    </Text>
+                    <Text style={[styles.heroSub, { fontSize: r.heroSubSize }]}>
+                      Describe your symptoms or ask a medical question. Our AI partner is here to
+                      analyze and guide your health journey.
+                    </Text>
 
-                {r.showBottomNav && (
-                  <View style={styles.mobileTools}>
-                    <TouchableOpacity
-                      style={styles.toolBtn}
-                      onPress={() => navigation.navigate('Emergency')}
-                    >
-                      <MaterialCommunityIcons name="ambulance" size={20} color={MED_THEME.danger} />
-                      <Text style={styles.toolBtnText}>Emergency</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.toolBtn}
-                      onPress={() => setMenuOpen(true)}
-                    >
-                      <MaterialCommunityIcons name="view-grid" size={20} color={MED_THEME.primary} />
-                      <Text style={styles.toolBtnText}>All Symptoms</Text>
-                    </TouchableOpacity>
-                  </View>
+                    {r.useQuickGrid ? (
+                      <View style={styles.quickGrid}>
+                        {QUICK_ACTIONS.map((action) => (
+                          <QuickCard
+                            key={action.id}
+                            action={action}
+                            cardWidth={r.quickCardWidth}
+                          />
+                        ))}
+                      </View>
+                    ) : (
+                      <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.quickRow}
+                      >
+                        {QUICK_ACTIONS.map((action) => (
+                          <QuickCard
+                            key={action.id}
+                            action={action}
+                            cardWidth={r.quickCardWidth}
+                          />
+                        ))}
+                      </ScrollView>
+                    )}
+
+                    {r.showBottomNav && (
+                      <View style={styles.mobileTools}>
+                        <TouchableOpacity
+                          style={styles.toolBtn}
+                          onPress={() => navigation.navigate('Emergency')}
+                        >
+                          <MaterialCommunityIcons
+                            name="ambulance"
+                            size={20}
+                            color={MED_THEME.danger}
+                          />
+                          <Text style={styles.toolBtnText}>Emergency</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.toolBtn}
+                          onPress={() => setMenuOpen(true)}
+                        >
+                          <MaterialCommunityIcons
+                            name="view-grid"
+                            size={20}
+                            color={MED_THEME.primary}
+                          />
+                          <Text style={styles.toolBtnText}>All Symptoms</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </>
                 )}
               </ScrollView>
 
@@ -267,7 +299,6 @@ const MedicalHomeScreen = ({ navigation }) => {
                   onChangeText={setHomeInput}
                   onSend={handleHomeSend}
                   onAttach={handleHomeAttach}
-                  onFilePicked={handleHomeFilePicked}
                   onMic={() => voice.toggle()}
                   isListening={voice.isListening}
                 />
@@ -423,6 +454,27 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 16,
     flexGrow: 1,
+  },
+  scrollContentCompact: {
+    flexGrow: 0,
+    paddingBottom: 8,
+  },
+  focusChatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  focusChatTitle: {
+    color: MED_THEME.text,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  showSymptomsLink: {
+    color: MED_THEME.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   greetingLabel: {
     color: MED_THEME.primary,

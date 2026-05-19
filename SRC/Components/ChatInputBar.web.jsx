@@ -1,99 +1,43 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
-import React, { useRef } from 'react';
+import React from 'react';
 import {
   ActivityIndicator,
-  Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { unstable_createElement as createElement } from 'react-native-web';
 import { MED_THEME } from '../constants/appTheme';
-import { isMobileWebUserAgent } from '../utils/deviceUtils';
 
+/** Web uses same attach handler as native (expo-image-picker via pickChatAttachment). */
 export default function ChatInputBar({
   value,
   onChangeText,
   onSend,
   onAttach,
-  onFilePicked,
   onMic,
   isListening = false,
   placeholder = 'Describe symptoms or ask about medication…',
   isLoading = false,
   showDisclaimer = true,
 }) {
-  const fileInputRef = useRef(null);
-  const setFileInputRef = (el) => {
-    fileInputRef.current = el;
-  };
-
-  const handleNativeFileChange = (event) => {
-    const file = event?.target?.files?.[0];
-    if (event?.target) event.target.value = '';
-    if (!file || !onFilePicked) return;
-    const isPdf =
-      file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-    if (file.size > 8 * 1024 * 1024) {
-      window.alert('File is too large. Please use a file under 8 MB.');
-      return;
-    }
-    onFilePicked({
-      type: isPdf ? 'pdf' : 'image',
-      name: file.name || (isPdf ? 'document.pdf' : 'photo.jpg'),
-      uri: URL.createObjectURL(file),
-      file,
-      mimeType: file.type || (isPdf ? 'application/pdf' : 'image/jpeg'),
-      size: file.size,
-    });
-  };
-
   const handleAttachPress = () => {
     if (isLoading) return;
-    if (Platform.OS === 'web' && !isMobileWebUserAgent() && fileInputRef.current) {
-      fileInputRef.current.click();
-      return;
-    }
     if (onAttach) onAttach();
   };
 
   return (
     <View style={styles.wrap}>
       <View style={styles.bar}>
-        <View style={styles.attachWrap}>
-          {Platform.OS === 'web' && !isMobileWebUserAgent()
-            ? createElement('input', {
-                ref: setFileInputRef,
-                type: 'file',
-                accept:
-                  'image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.pdf',
-                disabled: isLoading,
-                onChange: handleNativeFileChange,
-                'aria-label': 'Attach photo or PDF',
-                style: {
-                  position: 'absolute',
-                  left: 0,
-                  top: 0,
-                  width: '100%',
-                  height: '100%',
-                  opacity: 0,
-                  cursor: isLoading ? 'not-allowed' : 'pointer',
-                  zIndex: 2,
-                  fontSize: 16,
-                },
-              })
-            : null}
-          <TouchableOpacity
-            onPress={handleAttachPress}
-            style={styles.iconBtn}
-            disabled={isLoading}
-            accessibilityLabel="Attach photo or PDF"
-          >
-            <Feather name="plus" size={22} color={MED_THEME.textMuted} />
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          onPress={handleAttachPress}
+          style={styles.iconBtn}
+          disabled={isLoading}
+          accessibilityLabel="Attach photo or PDF"
+        >
+          <Feather name="plus" size={22} color={MED_THEME.textMuted} />
+        </TouchableOpacity>
 
         <TextInput
           style={styles.input}
@@ -158,11 +102,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 6,
     gap: 4,
-  },
-  attachWrap: {
-    width: 40,
-    height: 40,
-    position: 'relative',
   },
   iconBtn: {
     width: 40,

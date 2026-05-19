@@ -316,6 +316,7 @@ const MedicalVoiceAssistantScreen = ({ navigation }) => {
   ];
   const onQuickTap = async (t) => {
     appendUser(t);
+    setTranscript("");
     await sendToGemini(t);
   };
 
@@ -388,24 +389,25 @@ const MedicalVoiceAssistantScreen = ({ navigation }) => {
           </View>
         </LinearGradient>
 
-        {/* Quick topics */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.quickRow}
-        >
-          {quickTopics.map((t, idx) => (
-            <TouchableOpacity
-              key={idx}
-              style={styles.chip}
-              onPress={() => onQuickTap(t)}
-              disabled={isLoading || isListening}
-            >
-              <Icon name="flash" size={16} color="#fff" />
-              <Text style={styles.chipText}>{t}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {conversation.filter((m) => m.role === "user").length === 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.quickRow}
+          >
+            {quickTopics.map((t, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={styles.chip}
+                onPress={() => onQuickTap(t)}
+                disabled={isLoading || isListening}
+              >
+                <Icon name="flash" size={16} color="#fff" />
+                <Text style={styles.chipText}>{t}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
         {/* Conversation */}
         <ScrollView
