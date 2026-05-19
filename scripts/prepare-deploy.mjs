@@ -22,6 +22,7 @@ const COPY_FILES = [
   'scripts/cpanel-post-deploy.sh',
   'cpanel/install-backend.sh',
   'cpanel/install-backend-deps.sh',
+  'cpanel/backend-production.package.json',
   'cpanel/fix-npm-backend.sh',
   'backend/package-lock.json',
 ];
@@ -46,6 +47,14 @@ rimraf(out);
 fs.mkdirSync(out, { recursive: true });
 
 for (const dir of COPY_DIRS) copyDir(path.join(root, dir), path.join(out, dir));
+
+// Ship backend/node_modules from CI (pure JS + linux sqlite binary); server rebuilds sqlite if needed
+const backendNm = path.join(root, 'backend', 'node_modules');
+if (fs.existsSync(backendNm)) {
+  console.log('Including backend/node_modules in deploy bundle');
+  copyDir(backendNm, path.join(out, 'backend', 'node_modules'));
+}
+
 for (const file of COPY_FILES) {
   const src = path.join(root, file);
   if (fs.existsSync(src)) {

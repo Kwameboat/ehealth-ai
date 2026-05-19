@@ -109,12 +109,14 @@ NODE_BIN="$(resolve_node_bin)"
 if [ -n "$NODE_BIN" ] && [ -x "$(dirname "$NODE_BIN")/npm" ]; then
   NPM_BIN="$(dirname "$NODE_BIN")/npm"
   rm -f "$SRC/package-lock.json" 2>/dev/null || true
-  echo "npm install --prefix $SRC/backend via $NPM_BIN ..."
-  (cd "$SRC/backend" && rm -rf node_modules package-lock.json 2>/dev/null; \
-    "$NPM_BIN" install --omit=dev \
-      express@4.21.2 cors@2.8.5 dotenv@16.4.7 bcryptjs@2.4.3 jsonwebtoken@9.0.2 better-sqlite3@9.6.0) \
-    || "$NPM_BIN" install --prefix "$SRC/backend" --omit=dev || true
-  (cd "$SRC/backend" && npm_config_build_from_source=true "$NPM_BIN" rebuild better-sqlite3 --build-from-source) || true
+  if [ ! -f "$SRC/backend/node_modules/express/package.json" ]; then
+    echo "backend/node_modules missing — running isolated install script ..."
+    chmod +x "$SRC/cpanel/install-backend-deps.sh" 2>/dev/null || true
+    bash "$SRC/cpanel/install-backend-deps.sh" || true
+  else
+    echo "backend/node_modules present from deploy — rebuild sqlite only ..."
+    (cd "$SRC/backend" && npm_config_build_from_source=true "$NPM_BIN" rebuild better-sqlite3 --build-from-source) || true
+  fi
   (cd "$SRC/backend" && "$NODE_BIN" -e "require('better-sqlite3'); require('./db/init').initDatabase(); console.log('DB OK');") \
     > "$SRC/startup-check.log" 2>&1 && echo "Startup check OK" || echo "WARN: see $SRC/startup-check.log"
 elif [ -f "$SRC/package.json" ] && command -v npm >/dev/null 2>&1; then

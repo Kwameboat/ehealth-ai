@@ -1,16 +1,27 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-const bcrypt = require('bcryptjs');
 
-// Must load from backend/node_modules — never nodevenv (wrong/missing native .node binary)
-const sqlitePkg = path.join(__dirname, '..', 'node_modules', 'better-sqlite3');
-if (!fs.existsSync(path.join(sqlitePkg, 'package.json'))) {
-  throw new Error(
-    'Missing backend/node_modules/better-sqlite3. In Terminal: cd ~/ehealth-ai/backend && npm install better-sqlite3 --build-from-source'
-  );
+const backendRoot = path.join(__dirname, '..');
+const modulePaths = [
+  path.join(backendRoot, 'node_modules'),
+  path.join(backendRoot, '..', 'node_modules'),
+];
+
+function requireFromBackend(name) {
+  return require(require.resolve(name, { paths: modulePaths }));
 }
-const Database = require(sqlitePkg);
+
+const bcrypt = requireFromBackend('bcryptjs');
+
+// Must load from backend/node_modules — never nodevenv (wrong glibc / missing .node)
+let Database;
+const sqlitePkg = path.join(backendRoot, 'node_modules', 'better-sqlite3');
+if (fs.existsSync(path.join(sqlitePkg, 'package.json'))) {
+  Database = require(sqlitePkg);
+} else {
+  Database = requireFromBackend('better-sqlite3');
+}
 
 const DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, 'medassistant.db');
 
