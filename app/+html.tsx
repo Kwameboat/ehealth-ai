@@ -1,6 +1,52 @@
 import { ScrollViewStyleReset } from 'expo-router/html';
 import type { PropsWithChildren } from 'react';
 
+/** Matches @expo/vector-icons font family names — served from /fonts/ (see scripts/copy-icon-fonts.mjs) */
+const iconFontFaces = `
+@font-face {
+  font-family: 'material-community';
+  src: url('/fonts/MaterialCommunityIcons.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'ionicons';
+  src: url('/fonts/Ionicons.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'feather';
+  src: url('/fonts/Feather.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'material';
+  src: url('/fonts/MaterialIcons.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'FontAwesome5Free-Solid';
+  src: url('/fonts/FontAwesome5_Solid.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: 'FontAwesome5Free-Regular';
+  src: url('/fonts/FontAwesome5_Regular.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+`;
+
 const swRegister = `
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () {
@@ -30,6 +76,9 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" href="/favicon.png" />
         <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+        <link rel="preload" href="/fonts/MaterialCommunityIcons.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/Ionicons.ttf" as="font" type="font/ttf" crossOrigin="anonymous" />
+        <style dangerouslySetInnerHTML={{ __html: iconFontFaces }} />
         <ScrollViewStyleReset />
         <script dangerouslySetInnerHTML={{ __html: swRegister }} />
       </head>

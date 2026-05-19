@@ -26,6 +26,8 @@ const COPY_FILES = [
   'cpanel/repair-production.sh',
   'cpanel/merge-htaccess.sh',
   'cpanel/fix-api-404.sh',
+  'cpanel/publish-icon-fonts.sh',
+  'scripts/copy-icon-fonts.mjs',
   'cpanel/STABLE-DEPLOY.md',
   'cpanel/backend-production.package.json',
   'cpanel/fix-npm-backend.sh',

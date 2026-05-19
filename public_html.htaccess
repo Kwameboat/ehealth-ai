@@ -12,6 +12,11 @@
   RewriteRule ^admin/api(/|$) - [L]
   RewriteRule ^app-config\.js$ - [L]
 
+  # PWA bundles + icon fonts (must not fall through to index.html)
+  RewriteRule ^_expo/ - [L]
+  RewriteRule ^assets/ - [L]
+  RewriteRule ^fonts/ - [L]
+
   # Admin static assets (must not fall through to PWA index.html)
   RewriteRule ^admin/.+\.(css|js|png|ico|svg|woff2?)$ - [L]
 

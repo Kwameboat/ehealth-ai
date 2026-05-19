@@ -63,6 +63,11 @@ if [ -d "$SRC/dist" ]; then
   cp -f "$SRC/public/manifest.json" "$PUBLIC/" 2>/dev/null || true
   cp -f "$SRC/public/sw.js" "$PUBLIC/" 2>/dev/null || true
   cp -r "$SRC/public/icons" "$PUBLIC/" 2>/dev/null || true
+  if [ -d "$SRC/public/fonts" ]; then
+    mkdir -p "$PUBLIC/fonts"
+    cp -f "$SRC/public/fonts/"*.ttf "$PUBLIC/fonts/" 2>/dev/null || true
+    echo "Published icon fonts to $PUBLIC/fonts"
+  fi
   mkdir -p "$PUBLIC/admin"
   cp -r "$SRC/backend/public/admin/"* "$PUBLIC/admin/" 2>/dev/null || true
   echo "Published PWA to $PUBLIC"
