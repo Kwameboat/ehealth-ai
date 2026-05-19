@@ -1,4 +1,9 @@
-import { MEDICAL_CHAT_MODEL_ACK, MEDICAL_CHAT_SYSTEM_PROMPT } from '../Config/medicalChatPrompt';
+import {
+  MEDICAL_CHAT_MODEL_ACK,
+  MEDICAL_CHAT_SYSTEM_PROMPT,
+  TRIAGE_RECOMMENDATION_DIRECTIVE,
+  shouldGiveRecommendations,
+} from '../Config/medicalChatPrompt';
 import { getApiAuthHeadersAsync } from './apiAuth';
 import { getApiUrl } from './appConfig';
 import { notifyPointsBalance } from './pointsBridge';
@@ -56,6 +61,10 @@ export async function sendChatMessage({ history = [], userText = '', attachment 
   if (trimmedText) userParts.push({ text: trimmedText });
   if (userParts.length === 0) {
     userParts.push({ text: 'Please analyze the attached file and summarize any medical information.' });
+  }
+
+  if (shouldGiveRecommendations(history)) {
+    userParts.push({ text: TRIAGE_RECOMMENDATION_DIRECTIVE });
   }
 
   const recentHistory = history.slice(-14).map((msg) => ({

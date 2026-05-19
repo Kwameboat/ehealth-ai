@@ -43,7 +43,7 @@ export default function MedicalChatScreen({ navigation, route }) {
   const [messages, setMessages] = useState([
     createMessage(
       'assistant',
-      "Hello — I'm your health assistant. Tell me what's bothering you and I'll ask a few short questions, one at a time. For emergencies, use Emergency or call your local emergency number."
+      "Hello — I'm your health assistant. Tell me what's bothering you. I'll ask up to 5 short follow-up questions, then share recommendations. For emergencies, use Emergency or call your local emergency number."
     ),
   ]);
   const [input, setInput] = useState(initialMessage || '');

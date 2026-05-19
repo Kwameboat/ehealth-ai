@@ -4,6 +4,9 @@ const {
   MEDICAL_CHAT_SYSTEM_PROMPT,
   MEDICAL_CHAT_MODEL_ACK,
   MEDICAL_CHAT_GENERATION_CONFIG,
+  MEDICAL_CHAT_RECOMMENDATION_CONFIG,
+  TRIAGE_RECOMMENDATION_DIRECTIVE,
+  shouldGiveRecommendations,
 } = require('./medicalChatPrompt');
 
 const SYMPTOM_GENERATION_CONFIG = {
@@ -62,6 +65,10 @@ function buildChatContents(history, userText, attachment) {
     userParts.push({ text: 'Please analyze the attached file and summarize any medical information.' });
   }
 
+  if (shouldGiveRecommendations(history)) {
+    userParts.push({ text: TRIAGE_RECOMMENDATION_DIRECTIVE });
+  }
+
   const recentHistory = history.slice(-14).map((msg) => ({
     role: msg.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: msg.text || '(shared an attachment)' }],
@@ -84,9 +91,10 @@ function resolveChatFeatureKey(attachment) {
 
 async function chatCompletion(history, userText, attachment) {
   const contents = buildChatContents(history, userText, attachment);
-  const data = await callGemini(contents, undefined, {
-    generationConfig: MEDICAL_CHAT_GENERATION_CONFIG,
-  });
+  const generationConfig = shouldGiveRecommendations(history)
+    ? MEDICAL_CHAT_RECOMMENDATION_CONFIG
+    : MEDICAL_CHAT_GENERATION_CONFIG;
+  const data = await callGemini(contents, undefined, { generationConfig });
   const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!reply) throw new Error('No response from the assistant');
   return reply;
