@@ -23,14 +23,29 @@ const {
 
 const router = express.Router();
 
-router.post('/login', (req, res) => {
-  const { username, password } = req.body || {};
-  const admin = getDb().prepare('SELECT * FROM admins WHERE username = ?').get((username || '').trim());
-  if (!admin || !bcrypt.compareSync(password || '', admin.password_hash)) {
-    return res.status(401).json({ error: { message: 'Invalid credentials' } });
+router.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+    const admin = getDb()
+      .prepare('SELECT * FROM admins WHERE username = ?')
+      .get((username || '').trim());
+    if (!admin?.password_hash) {
+      return res.status(401).json({ error: { message: 'Invalid credentials' } });
+    }
+    if (!bcrypt.compareSync(password || '', admin.password_hash)) {
+      return res.status(401).json({ error: { message: 'Invalid credentials' } });
+    }
+    const token = signAdminToken(admin);
+    res.json({ token, admin: { id: admin.id, username: admin.username } });
+  } catch (err) {
+    console.error('Admin login error:', err);
+    res.status(500).json({
+      error: {
+        message: 'Login failed on server',
+        detail: process.env.NODE_ENV === 'production' ? undefined : err.message,
+      },
+    });
   }
-  const token = signAdminToken(admin);
-  res.json({ token, admin: { id: admin.id, username: admin.username } });
 });
 
 router.use(requireAdminAuth);

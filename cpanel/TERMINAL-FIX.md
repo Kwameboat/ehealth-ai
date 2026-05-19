@@ -43,3 +43,18 @@ node -e "require('./db/init').initDatabase().then(() => console.log('DB OK')).ca
 ```
 
 Then **cPanel → Node.js → RESTART** → https://www.ehealthaigh.com/api/health → `"db":true`
+
+## Admin login 500
+
+1. In cPanel Node.js app env vars, set **`JWT_SECRET`** to a long random string (not empty).
+2. Update server files and reset admin password:
+
+```bash
+BASE=https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main
+curl -fsSL -o /home/ehealtha/ehealth-ai/backend/server.js "$BASE/backend/server.js"
+curl -fsSL -o /home/ehealtha/ehealth-ai/backend/middleware/userAuth.js "$BASE/backend/middleware/userAuth.js"
+curl -fsSL -o /home/ehealtha/ehealth-ai/backend/routes/admin.js "$BASE/backend/routes/admin.js"
+ADMIN_PASSWORD='admin123' bash /home/ehealtha/ehealth-ai/cpanel/reset-admin-password.sh
+```
+
+3. **RESTART** Node.js → login at `/admin` with `admin` / `admin123` (change password after).

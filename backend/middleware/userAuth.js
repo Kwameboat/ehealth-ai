@@ -1,6 +1,14 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || process.env.APP_API_SECRET || 'change-me-in-production';
+function pickSecret(...values) {
+  for (const v of values) {
+    const s = v != null ? String(v).trim() : '';
+    if (s) return s;
+  }
+  return 'change-me-in-production';
+}
+
+const JWT_SECRET = pickSecret(process.env.JWT_SECRET, process.env.APP_API_SECRET);
 const JWT_EXPIRES = process.env.JWT_EXPIRES || '30d';
 
 function signUserToken(user) {

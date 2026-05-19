@@ -15,8 +15,21 @@ const cors = require('cors');
 const express = require('express');
 const fs = require('fs');
 
-const { initDatabase } = require('./db/init');
+const { initDatabase, getDb } = require('./db/init');
 let dbBootError = null;
+let dbInitPromise = null;
+
+function ensureDbInit() {
+  if (!dbInitPromise) {
+    dbInitPromise = initDatabase().catch((err) => {
+      dbBootError = err;
+      throw err;
+    });
+  }
+  return dbInitPromise;
+}
+
+ensureDbInit();
 
 const { requireAppAuth } = require('./middleware/appSecret');
 
@@ -58,23 +71,26 @@ app.use(
   })
 );
 
-app.get('/api/health', (req, res) => {
-  if (dbBootError) {
-    return res.status(503).json({
+app.get('/api/health', async (req, res) => {
+  try {
+    await ensureDbInit();
+    getDb().prepare('SELECT 1 AS ok').get();
+    res.json({
+      status: 'ok',
+      service: 'eHealth AI API',
+      db: true,
+      time: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.status(503).json({
       status: 'error',
       service: 'eHealth AI API',
       db: false,
-      error: dbBootError.message,
-      hint: 'cPanel → Node.js → Run NPM Install → Restart',
+      error: err.message,
+      hint: 'cPanel → Node.js → RESTART; set JWT_SECRET in app env vars',
       time: new Date().toISOString(),
     });
   }
-  res.json({
-    status: 'ok',
-    service: 'eHealth AI API',
-    db: true,
-    time: new Date().toISOString(),
-  });
 });
 app.post(
   '/api/payments/webhook',
@@ -83,6 +99,21 @@ app.post(
 );
 
 app.use(express.json({ limit: '20mb' }));
+
+app.use(async (req, res, next) => {
+  if (!req.path.startsWith('/api') && !req.path.startsWith('/admin/api')) {
+    return next();
+  }
+  if (req.path === '/api/health') return next();
+  try {
+    await ensureDbInit();
+    next();
+  } catch (err) {
+    res.status(503).json({
+      error: { message: 'Database not ready', detail: err.message },
+    });
+  }
+});
 
 app.use('/admin', express.static(path.join(__dirname, 'public', 'admin')));
 app.use('/payment', express.static(path.join(__dirname, 'public', 'payment')));
@@ -152,11 +183,14 @@ const listenPort = Number(process.env.PORT) || PORT;
 
 (async () => {
   try {
-    await initDatabase();
+    await ensureDbInit();
     console.log('Database ready (sql.js)');
   } catch (err) {
-    dbBootError = err;
     console.error('Database init failed:', err);
   }
-  app.listen(listenPort, '0.0.0.0', onListen);
+  if (!process.env.PASSENGER_APP_ENV) {
+    app.listen(listenPort, '0.0.0.0', onListen);
+  } else {
+    onListen();
+  }
 })();
