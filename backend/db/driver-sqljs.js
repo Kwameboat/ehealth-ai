@@ -1,10 +1,19 @@
 const fs = require('fs');
 const path = require('path');
 
-function sleepMs(ms) {
-  const end = Date.now() + ms;
-  while (Date.now() < end) {
-    /* sync wait for short lock retry */
+const STALE_LOCK_MS = 60 * 1000;
+
+function clearStaleLock(lockFile) {
+  if (!fs.existsSync(lockFile)) return;
+  try {
+    const age = Date.now() - fs.statSync(lockFile).mtimeMs;
+    if (age > STALE_LOCK_MS) fs.unlinkSync(lockFile);
+  } catch (_) {
+    try {
+      fs.unlinkSync(lockFile);
+    } catch (_) {
+      /* ignore */
+    }
   }
 }
 
@@ -18,66 +27,54 @@ function findWasmPath() {
     const pkg = require.resolve('sql.js/package.json');
     candidates.push(path.join(path.dirname(pkg), 'dist', 'sql-wasm.wasm'));
   } catch (_) {
-    /* sql.js not installed yet */
+    /* not installed */
   }
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
   throw new Error(
-    'sql-wasm.wasm not found. Run: npm install sql.js --prefix backend (or copy wasm to backend/db/)'
+    'sql-wasm.wasm not found — copy to backend/db/sql-wasm.wasm or npm install sql.js'
   );
 }
 
-/**
- * better-sqlite3-compatible wrapper around sql.js (no native .node / GLIBC).
- */
 function createWrapper(SQL, dbPath) {
   let rawDb;
-  let lastLoadMtime = 0;
+  const lockFile = `${dbPath}.lock`;
+  const tmpFile = `${dbPath}.tmp`;
 
   function loadFromDisk() {
     if (fs.existsSync(dbPath)) {
       rawDb = new SQL.Database(fs.readFileSync(dbPath));
-      lastLoadMtime = fs.statSync(dbPath).mtimeMs;
     } else {
       rawDb = new SQL.Database();
-      lastLoadMtime = 0;
-    }
-  }
-
-  function reloadFromDisk() {
-    if (!fs.existsSync(dbPath)) return;
-    const mtime = fs.statSync(dbPath).mtimeMs;
-    if (mtime > lastLoadMtime) {
-      rawDb.close();
-      loadFromDisk();
     }
   }
 
   function persist() {
-    const lockFile = `${dbPath}.lock`;
-    const tmpFile = `${dbPath}.tmp`;
-    let attempts = 0;
-    while (attempts < 20) {
-      try {
-        fs.writeFileSync(lockFile, String(process.pid), { flag: 'wx' });
-        break;
-      } catch (e) {
-        if (e.code !== 'EEXIST') throw e;
-        attempts += 1;
-        sleepMs(25);
+    clearStaleLock(lockFile);
+    let locked = false;
+    try {
+      fs.writeFileSync(lockFile, String(process.pid), { flag: 'wx' });
+      locked = true;
+    } catch (e) {
+      if (e.code === 'EEXIST') {
+        clearStaleLock(lockFile);
+        try {
+          fs.writeFileSync(lockFile, String(process.pid), { flag: 'wx' });
+          locked = true;
+        } catch (_) {
+          /* write without lock if another worker holds it briefly */
+        }
+      } else {
+        throw e;
       }
     }
-    if (attempts >= 20) {
-      throw new Error('Database busy (could not acquire lock). Try again.');
-    }
     try {
-      const data = rawDb.export();
-      const buf = Buffer.from(data);
+      const buf = Buffer.from(rawDb.export());
       fs.writeFileSync(tmpFile, buf);
       try {
         fs.renameSync(tmpFile, dbPath);
-      } catch (renameErr) {
+      } catch (_) {
         fs.writeFileSync(dbPath, buf);
         try {
           fs.unlinkSync(tmpFile);
@@ -85,39 +82,36 @@ function createWrapper(SQL, dbPath) {
           /* ignore */
         }
       }
-      lastLoadMtime = fs.statSync(dbPath).mtimeMs;
     } finally {
-      try {
-        fs.unlinkSync(lockFile);
-      } catch (_) {
-        /* ignore */
+      if (locked) {
+        try {
+          fs.unlinkSync(lockFile);
+        } catch (_) {
+          /* ignore */
+        }
       }
     }
   }
 
+  clearStaleLock(lockFile);
   loadFromDisk();
 
   return {
-    reloadFromDisk,
     exec(sql) {
-      reloadFromDisk();
       rawDb.exec(sql);
       persist();
     },
     pragma(statement) {
-      reloadFromDisk();
       rawDb.run(`PRAGMA ${statement}`);
     },
     prepare(sql) {
       return {
         run(...params) {
-          reloadFromDisk();
           rawDb.run(sql, params);
           persist();
           return { changes: rawDb.getRowsModified() };
         },
         get(...params) {
-          reloadFromDisk();
           const stmt = rawDb.prepare(sql);
           try {
             if (params.length) stmt.bind(params);
@@ -128,7 +122,6 @@ function createWrapper(SQL, dbPath) {
           }
         },
         all(...params) {
-          reloadFromDisk();
           const stmt = rawDb.prepare(sql);
           try {
             if (params.length) stmt.bind(params);
@@ -143,7 +136,6 @@ function createWrapper(SQL, dbPath) {
     },
     transaction(fn) {
       return () => {
-        reloadFromDisk();
         rawDb.run('BEGIN');
         try {
           const result = fn();
@@ -166,10 +158,7 @@ function createWrapper(SQL, dbPath) {
 async function openDatabase(dbPath) {
   const initSqlJs = require('sql.js');
   const wasmPath = findWasmPath();
-
-  const SQL = await initSqlJs({
-    locateFile: () => wasmPath,
-  });
+  const SQL = await initSqlJs({ locateFile: () => wasmPath });
 
   const dir = path.dirname(dbPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });

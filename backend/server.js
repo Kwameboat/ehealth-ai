@@ -113,10 +113,16 @@ app.use(async (req, res, next) => {
   if (req.path === '/api/health') return next();
   try {
     await ensureDbInit();
+    getDb();
     next();
   } catch (err) {
+    console.error('DB middleware:', req.method, req.path, err.message);
     res.status(503).json({
-      error: { message: 'Database not ready', detail: err.message },
+      error: {
+        message: 'Database not ready',
+        detail: err.message,
+        hint: 'Terminal: rm -f ~/ehealth-ai/backend/db/*.lock && RESTART Node app',
+      },
     });
   }
 });

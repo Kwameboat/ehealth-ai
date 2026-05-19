@@ -106,6 +106,28 @@ function escapeHtml(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 }
 
+function showPageError(el, err, retry) {
+  const msg = escapeHtml(err.message || 'Request failed');
+  const hint =
+    msg.includes('Database not ready') || msg.includes('503')
+      ? '<p class="muted">Terminal: <code>rm -f ~/ehealth-ai/backend/db/*.lock</code> then cPanel → Node.js → RESTART.</p>'
+      : '<p class="muted">cPanel → Node.js → RESTART, then check <a href="/api/health" target="_blank">/api/health</a>.</p>';
+  el.innerHTML = `<motion class="panel"><p class="error-msg">${msg}</p>${hint}<button type="button" class="btn btn-primary btn-sm page-retry">Retry</button></div>`.replace(
+    '<motion class',
+    '<div class'
+  );
+  el.querySelector('.page-retry')?.addEventListener('click', retry);
+}
+
+async function runPage(el, loadingText, fn, retry) {
+  el.innerHTML = `<p class="muted">${loadingText}</p>`;
+  try {
+    await fn();
+  } catch (err) {
+    showPageError(el, err, retry || (() => runPage(el, loadingText, fn, retry)));
+  }
+}
+
 function formatDate(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString();
@@ -151,7 +173,7 @@ function buildBarChart(topFeatures, usageToday) {
 
 async function loadDashboard() {
   const el = document.getElementById('page-dashboard');
-  el.innerHTML = '<p class="muted">Loading clinical data…</p>';
+  await runPage(el, 'Loading clinical data…', async () => {
   const { stats, recentUsage, topFeatures } = await api('/dashboard');
   const accuracy = stats.users > 0 ? Math.min(99.9, 95 + stats.activeUsers / Math.max(stats.users, 1) * 4).toFixed(1) : '99.8';
   const growth = stats.users > 0 ? `+${Math.min(12, Math.round((stats.activeUsers / stats.users) * 10))}%` : '+0%';
@@ -226,6 +248,7 @@ async function loadDashboard() {
   el.querySelector('[data-goto="analytics"]')?.addEventListener('click', () => showPage('analytics'));
   el.querySelectorAll('[data-goto-users]').forEach((b) => b.addEventListener('click', () => showPage('users')));
   el.querySelectorAll('[data-goto-analytics]').forEach((b) => b.addEventListener('click', () => showPage('analytics')));
+  }, loadDashboard);
 }
 
 function renderEvents(recentUsage, stats) {
@@ -276,7 +299,7 @@ function renderEvents(recentUsage, stats) {
 
 async function loadAnalytics() {
   const el = document.getElementById('page-analytics');
-  el.innerHTML = '<p class="muted">Loading analytics…</p>';
+  await runPage(el, 'Loading analytics…', async () => {
   const [{ transactions }, { usage }, dash] = await Promise.all([
     api('/transactions?limit=80'),
     api('/usage?limit=80'),
@@ -323,13 +346,13 @@ async function loadAnalytics() {
     </div>`;
 
   document.querySelectorAll('[data-goto-users]').forEach((b) => b.addEventListener('click', () => showPage('users')));
+  }, loadAnalytics);
 }
 
 async function loadUsers() {
   const el = document.getElementById('page-users');
   const search = (document.getElementById('global-search')?.value || el.dataset.search || '').trim();
-  el.innerHTML = '<p class="muted">Loading patient records…</p>';
-
+  await runPage(el, 'Loading patient records…', async () => {
   const q = search ? `?search=${encodeURIComponent(search)}` : '';
   const { users } = await api(`/users${q}`);
   cachedUsers = users;
@@ -380,6 +403,7 @@ async function loadUsers() {
   if (selectedUserId && users.find((u) => u.id === selectedUserId)) {
     selectUser(selectedUserId);
   }
+  }, loadUsers);
 }
 
 function renderUserRow(u) {
@@ -497,7 +521,7 @@ const PRIORITY_MAP = {
 
 async function loadPointRules() {
   const el = document.getElementById('page-points');
-  el.innerHTML = '<p class="muted">Loading AI modules…</p>';
+  await runPage(el, 'Loading AI modules…', async () => {
   const { rules } = await api('/point-rules');
   const systemPrompt = `You are MedAssistant Clinical AI.
 Provide supportive, non-alarmist medical guidance.
@@ -537,6 +561,7 @@ Points are deducted per feature as configured by the administrator.`;
     btn.onclick = () => editRule(btn.dataset.editRule, rule);
   });
   el.querySelector('[data-goto-settings]')?.addEventListener('click', () => showPage('settings'));
+  }, loadPointRules);
 }
 
 function renderCategoryCard(r) {
@@ -587,6 +612,7 @@ function editRule(id, rule) {
 
 async function loadSystem() {
   const el = document.getElementById('page-system');
+  await runPage(el, 'Loading system status…', async () => {
   const s = await api('/system-status');
   el.innerHTML = `
     <div class="page-intro"><div><h2>System Status</h2><p>Infrastructure and integration health</p></div></div>
@@ -611,6 +637,7 @@ async function loadSystem() {
       <p class="muted">Configure <code>backend/.env</code> — GEMINI_API_KEY, APP_API_SECRET, PAYSTACK_SECRET_KEY, JWT_SECRET</p>
       <p class="muted" style="margin-top:8px">Paystack: ${s.paystackConfigured ? 'Connected' : 'Not configured'}</p>
     </div>`;
+  }, loadSystem);
 }
 
 async function loadPackages() {
@@ -671,7 +698,7 @@ async function fetchIntegrationsSafe() {
 async function loadSettings() {
   const el = document.getElementById('page-settings');
   if (!el) return;
-  el.innerHTML = '<p class="muted">Loading…</p>';
+  await runPage(el, 'Loading settings…', async () => {
   const settingsRes = await api('/settings');
   const settings = settingsRes.settings || settingsRes;
   const integrations = await fetchIntegrationsSafe();
@@ -714,6 +741,7 @@ async function loadSettings() {
     alert('Settings deployed successfully');
     loadSettings();
   };
+  }, loadSettings);
 }
 
 // Event wiring
