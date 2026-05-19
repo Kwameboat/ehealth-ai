@@ -1,6 +1,14 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { MED_THEME } from '../constants/appTheme';
 
 export default function ChatInputBar({
@@ -16,7 +24,13 @@ export default function ChatInputBar({
   return (
     <View style={styles.wrap}>
       <View style={styles.bar}>
-        <TouchableOpacity onPress={onAttach} style={styles.iconBtn} disabled={isLoading}>
+        <TouchableOpacity
+          onPress={onAttach}
+          style={styles.iconBtn}
+          disabled={isLoading}
+          accessibilityLabel="Attach photo or PDF"
+          {...(Platform.OS === 'web' ? { onClick: (e) => e?.stopPropagation?.() } : {})}
+        >
           <Feather name="plus" size={22} color={MED_THEME.textMuted} />
         </TouchableOpacity>
         <TextInput

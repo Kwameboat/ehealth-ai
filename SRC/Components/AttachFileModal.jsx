@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
-import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MED_THEME } from '../constants/appTheme';
 
 /**
@@ -17,8 +17,8 @@ export default function AttachFileModal({ visible, onClose, onPickPhoto, onPickP
           <TouchableOpacity
             style={styles.row}
             onPress={() => {
-              onClose();
               onPickPhoto(false);
+              onClose();
             }}
           >
             <MaterialCommunityIcons name="image-outline" size={22} color={MED_THEME.primary} />
@@ -29,8 +29,8 @@ export default function AttachFileModal({ visible, onClose, onPickPhoto, onPickP
             <TouchableOpacity
               style={styles.row}
               onPress={() => {
-                onClose();
                 onPickPhoto(true);
+                onClose();
               }}
             >
               <MaterialCommunityIcons name="camera-outline" size={22} color={MED_THEME.primary} />
@@ -41,8 +41,8 @@ export default function AttachFileModal({ visible, onClose, onPickPhoto, onPickP
           <TouchableOpacity
             style={styles.row}
             onPress={() => {
-              onClose();
               onPickPdf();
+              onClose();
             }}
           >
             <MaterialCommunityIcons name="file-pdf-box" size={22} color={MED_THEME.primary} />
@@ -63,6 +63,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
+    ...(Platform.OS === 'web'
+      ? { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 99999 }
+      : {}),
   },
   sheet: {
     backgroundColor: MED_THEME.bgElevated,

@@ -19,9 +19,9 @@ import ChatInputBar from '../Components/ChatInputBar';
 import ResponsiveContainer from '../Components/ResponsiveContainer';
 import { MED_THEME } from '../constants/appTheme';
 import { useResponsive } from '../hooks/useResponsive';
-import AttachFileModal from '../Components/AttachFileModal';
 import { attachmentToBase64, guessImageMimeType } from '../services/fileToBase64';
 import { sendChatMessage } from '../services/geminiChat';
+import { pickAttachmentWeb } from '../services/pickAttachment';
 import { pickImageFromFiles } from '../services/pickImage';
 import { pickPdfDocument } from '../services/pickPdf';
 
@@ -50,7 +50,6 @@ export default function MedicalChatScreen({ navigation, route }) {
   const [pendingAttachment, setPendingAttachment] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [initialSent, setInitialSent] = useState(false);
-  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const listRef = useRef(null);
 
   useEffect(() => {
@@ -76,14 +75,7 @@ export default function MedicalChatScreen({ navigation, route }) {
       if (Platform.OS === 'web' && !useCamera) {
         const result = await pickImageFromFiles();
         if (result.canceled || !result.assets?.[0]) return;
-        const asset = result.assets[0];
-        setPendingAttachment({
-          type: 'image',
-          name: asset.name || 'photo.jpg',
-          uri: asset.uri,
-          file: asset.file,
-          mimeType: asset.mimeType || guessImageMimeType(asset.name),
-        });
+        applyPickedAsset('image', result.assets[0]);
         return;
       }
 
@@ -134,21 +126,37 @@ export default function MedicalChatScreen({ navigation, route }) {
         Alert.alert('File too large', 'Please choose a PDF under 8 MB.');
         return;
       }
-      setPendingAttachment({
-        type: 'pdf',
-        name: asset.name || 'document.pdf',
-        uri: asset.uri,
-        file: asset.file,
-        mimeType: asset.mimeType || 'application/pdf',
-      });
+      applyPickedAsset('pdf', asset);
     } catch (e) {
       Alert.alert('Error', 'Could not select a PDF.');
     }
   };
 
+  const applyPickedAsset = (type, asset) => {
+    if (!asset) return;
+    if (asset.size && asset.size > MAX_PDF_BYTES) {
+      Alert.alert('File too large', 'Please choose a file under 8 MB.');
+      return;
+    }
+    setPendingAttachment({
+      type,
+      name: asset.name,
+      uri: asset.uri,
+      file: asset.file,
+      mimeType:
+        asset.mimeType ||
+        (type === 'pdf' ? 'application/pdf' : guessImageMimeType(asset.name)),
+    });
+  };
+
   const showAttachOptions = () => {
     if (Platform.OS === 'web') {
-      setAttachMenuOpen(true);
+      pickAttachmentWeb()
+        .then((result) => {
+          if (result.canceled || !result.asset) return;
+          applyPickedAsset(result.type, result.asset);
+        })
+        .catch(() => Alert.alert('Error', 'Could not select a file.'));
       return;
     }
     Alert.alert('Attach file', 'Share a photo or PDF for analysis', [
@@ -330,13 +338,6 @@ export default function MedicalChatScreen({ navigation, route }) {
           </ResponsiveContainer>
         </KeyboardAvoidingView>
 
-        <AttachFileModal
-          visible={attachMenuOpen}
-          onClose={() => setAttachMenuOpen(false)}
-          onPickPhoto={pickImage}
-          onPickPdf={pickPdf}
-          showCamera={Platform.OS !== 'web'}
-        />
       </SafeAreaView>
     </View>
   );
