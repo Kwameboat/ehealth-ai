@@ -28,6 +28,7 @@ async function callGemini(contents, model, options = {}) {
     body: JSON.stringify({
       contents,
       ...(options.generationConfig ? { generationConfig: options.generationConfig } : {}),
+      ...(options.systemInstruction ? { systemInstruction: options.systemInstruction } : {}),
     }),
   });
 

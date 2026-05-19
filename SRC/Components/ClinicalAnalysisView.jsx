@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text, View } from 'react-native';
-import { stripMarkdown } from '../utils/formatClinicalResponse';
+import { formatClinicalResponse, stripMarkdown } from '../utils/formatClinicalResponse';
 
 const HEADINGS = [
   { match: /^Assessment$/i, title: 'Assessment' },
@@ -46,10 +46,10 @@ function parseSections(text) {
 /**
  * Renders plain-text clinical output (Assessment / Possible causes / Recommendations / When to seek care).
  */
-export default function ClinicalAnalysisView({ text, sectionTitleStyle, bodyStyle, sectionStyle }) {
+export default function ClinicalAnalysisView({ text, condition, sectionTitleStyle, bodyStyle, sectionStyle }) {
   if (!text) return null;
 
-  const sections = parseSections(stripMarkdown(text));
+  const sections = parseSections(formatClinicalResponse(text, condition || ''));
 
   return sections.map((section, index) => {
     const body = section.body.join('\n').trim();

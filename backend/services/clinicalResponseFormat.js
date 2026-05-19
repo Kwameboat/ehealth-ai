@@ -1,13 +1,6 @@
 /**
- * Plain clinical text for symptom screens (no markdown / AI phrasing).
+ * Server-side clinical text formatter (keep in sync with SRC/utils/formatClinicalResponse.js).
  */
-
-const STANDARD_HEADINGS = [
-  'Assessment',
-  'Possible causes',
-  'Recommendations',
-  'When to seek care',
-];
 
 const HEADING_ALIASES = [
   [/^#{0,6}\s*(?:\d+[.)]\s*)?Dermatological Analysis[^\n]*/gim, 'Assessment'],
@@ -30,20 +23,18 @@ const HEADING_ALIASES = [
 
 const DEFAULT_RECOMMENDATIONS = {
   skin:
-    'Keep the affected area clean and dry. Avoid scratching, harsh soaps, and new skin products until evaluated. Use fragrance-free moisturizer; for itch, a cool compress or OTC antihistamine may help if appropriate for you. Photograph changes daily to track progression. See a clinician if the rash spreads, blisters, or does not improve within a few days.',
+    'Keep the affected area clean and dry. Avoid scratching, harsh soaps, and new skin products until evaluated. Use fragrance-free moisturizer; for itch, a cool compress or OTC antihistamine may help if appropriate for you. See a clinician if the rash spreads or does not improve within a few days.',
   headache:
     'Rest in a quiet, dark room and stay hydrated. Avoid known triggers such as skipped meals, poor sleep, and stress. OTC pain relief may help if safe for you and used as directed on the label. Keep a brief headache diary (timing, location, severity, triggers).',
   default:
-    'Rest as needed, stay hydrated, and monitor symptoms. Avoid triggers you can identify. Use over-the-counter options only as directed on the label and if they are safe for your health conditions and medications. Keep a brief symptom diary (timing, severity, what helped). Follow up with a clinician if symptoms persist or worsen.',
+    'Rest as needed, stay hydrated, and monitor symptoms. Avoid triggers you can identify. Use over-the-counter options only as directed and if safe for your health conditions and medications. Follow up with a clinician if symptoms persist or worsen.',
 };
 
 const DEFAULT_WHEN_TO_SEEK =
-  'Seek urgent medical attention if you develop difficulty breathing, chest pain, confusion, high fever, rapidly spreading rash, severe pain, pus, spreading redness, or signs of dehydration. Otherwise arrange a routine visit with a clinician if symptoms are not improving within a few days or are interfering with daily activities.';
+  'Seek urgent medical attention if you develop difficulty breathing, chest pain, confusion, high fever, the worst headache of your life, sudden weakness, vision changes, or signs of stroke. Otherwise arrange a routine visit if symptoms are not improving within a few days or are interfering with daily activities.';
 
-/** Remove markdown and list markers from visible text. */
-export function stripMarkdown(raw) {
+function stripMarkdown(raw) {
   if (!raw || typeof raw !== 'string') return '';
-
   return raw
     .replace(/\r\n/g, '\n')
     .replace(/^#{1,6}\s*/gm, '')
@@ -79,14 +70,12 @@ function dropAiPhrases(text) {
     .replace(/\blanguage model\b/gi, 'clinical reference')
     .replace(/\bchatbot\b/gi, 'service')
     .replace(/\b(as an )?ai (assistant|model)\b/gi, 'clinical service')
-    .replace(/^(?:please note|disclaimer|important)[:\s]*this (?:analysis|information)[^.]*\.\s*/gim, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
 function hasSection(text, name) {
-  const re = new RegExp(`^${name}\\s*$`, 'im');
-  return re.test(text);
+  return new RegExp(`^${name}\\s*$`, 'im').test(text);
 }
 
 function defaultRecommendations(condition = '') {
@@ -100,11 +89,9 @@ function defaultRecommendations(condition = '') {
   return DEFAULT_RECOMMENDATIONS.default;
 }
 
-/** Ensure all four clinical sections exist. */
-export function ensureClinicalSections(text, condition = '') {
+function ensureClinicalSections(text, condition = '') {
   let out = (text || '').trim();
   if (!out) return out;
-
   if (!hasSection(out, 'Recommendations')) {
     out += `\n\nRecommendations\n${defaultRecommendations(condition)}`;
   }
@@ -114,12 +101,8 @@ export function ensureClinicalSections(text, condition = '') {
   return out;
 }
 
-/**
- * Full pipeline: strip markdown, normalize headings, drop AI tone, ensure sections.
- */
-export function formatClinicalResponse(raw, condition = '') {
+function formatClinicalResponse(raw, condition = '') {
   if (!raw || typeof raw !== 'string') return '';
-
   let text = stripMarkdown(raw);
   text = normalizeHeadings(text);
   text = dropAiPhrases(text);
@@ -128,4 +111,44 @@ export function formatClinicalResponse(raw, condition = '') {
   return text.trim();
 }
 
-export { STANDARD_HEADINGS };
+function extractConditionFromContents(contents) {
+  if (!Array.isArray(contents)) return '';
+  for (const item of contents) {
+    for (const part of item.parts || []) {
+      const m = (part.text || '').match(/Condition category:\s*(.+)/i);
+      if (m) return m[1].trim();
+    }
+  }
+  return '';
+}
+
+function formatSymptomGeminiResponse(data, contents) {
+  const candidate = data?.candidates?.[0];
+  if (!candidate?.content?.parts?.length) return data;
+  const raw = candidate.content.parts.map((p) => p.text || '').join('');
+  const condition = extractConditionFromContents(contents);
+  const formatted = formatClinicalResponse(raw, condition);
+  return {
+    ...data,
+    candidates: [
+      {
+        ...candidate,
+        content: {
+          ...candidate.content,
+          parts: [{ text: formatted }],
+        },
+      },
+    ],
+  };
+}
+
+function isSymptomFeature(featureKey) {
+  return featureKey === 'symptom_text' || featureKey === 'symptom_image';
+}
+
+module.exports = {
+  formatClinicalResponse,
+  formatSymptomGeminiResponse,
+  extractConditionFromContents,
+  isSymptomFeature,
+};

@@ -7,6 +7,11 @@ const {
   resolveChatFeatureKey,
   resolveGenerationConfig,
 } = require('../services/gemini');
+const {
+  formatSymptomGeminiResponse,
+  isSymptomFeature,
+} = require('../services/clinicalResponseFormat');
+const { SYMPTOM_SYSTEM_INSTRUCTION } = require('../services/symptomClinicalPrompt');
 const { logUsage } = require('../services/points');
 
 const router = express.Router();
@@ -34,11 +39,14 @@ router.post('/gemini/generateContent', async (req, res) => {
 
     const deduction = deductPoints(req.userId, featureKey);
     const generationConfig = resolveGenerationConfig(featureKey);
+    const symptom = isSymptomFeature(featureKey);
     const data = await callGemini(contents, model || getGeminiModel(), {
       ...(generationConfig ? { generationConfig } : {}),
+      ...(symptom ? { systemInstruction: SYMPTOM_SYSTEM_INSTRUCTION } : {}),
     });
+    const formatted = symptom ? formatSymptomGeminiResponse(data, contents) : data;
     res.json({
-      ...data,
+      ...formatted,
       points: { charged: deduction.charged, balance: deduction.balance },
     });
   } catch (e) {
