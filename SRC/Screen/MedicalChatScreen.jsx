@@ -19,8 +19,10 @@ import ChatInputBar from '../Components/ChatInputBar';
 import ResponsiveContainer from '../Components/ResponsiveContainer';
 import { MED_THEME } from '../constants/appTheme';
 import { useResponsive } from '../hooks/useResponsive';
-import { fileUriToBase64, guessImageMimeType } from '../services/fileToBase64';
+import AttachFileModal from '../Components/AttachFileModal';
+import { attachmentToBase64, guessImageMimeType } from '../services/fileToBase64';
 import { sendChatMessage } from '../services/geminiChat';
+import { pickImageFromFiles } from '../services/pickImage';
 import { pickPdfDocument } from '../services/pickPdf';
 
 const MAX_PDF_BYTES = 8 * 1024 * 1024;
@@ -48,6 +50,7 @@ export default function MedicalChatScreen({ navigation, route }) {
   const [pendingAttachment, setPendingAttachment] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [initialSent, setInitialSent] = useState(false);
+  const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const listRef = useRef(null);
 
   useEffect(() => {
@@ -70,6 +73,20 @@ export default function MedicalChatScreen({ navigation, route }) {
 
   const pickImage = async (useCamera) => {
     try {
+      if (Platform.OS === 'web' && !useCamera) {
+        const result = await pickImageFromFiles();
+        if (result.canceled || !result.assets?.[0]) return;
+        const asset = result.assets[0];
+        setPendingAttachment({
+          type: 'image',
+          name: asset.name || 'photo.jpg',
+          uri: asset.uri,
+          file: asset.file,
+          mimeType: asset.mimeType || guessImageMimeType(asset.name),
+        });
+        return;
+      }
+
       if (useCamera) {
         const cam = await ImagePicker.requestCameraPermissionsAsync();
         if (!cam.granted) {
@@ -121,7 +138,8 @@ export default function MedicalChatScreen({ navigation, route }) {
         type: 'pdf',
         name: asset.name || 'document.pdf',
         uri: asset.uri,
-        mimeType: 'application/pdf',
+        file: asset.file,
+        mimeType: asset.mimeType || 'application/pdf',
       });
     } catch (e) {
       Alert.alert('Error', 'Could not select a PDF.');
@@ -129,19 +147,16 @@ export default function MedicalChatScreen({ navigation, route }) {
   };
 
   const showAttachOptions = () => {
-    const options = Platform.OS === 'web'
-      ? [
-          { text: 'Photo', onPress: () => pickImage(false) },
-          { text: 'PDF', onPress: pickPdf },
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      : [
-          { text: 'Photo library', onPress: () => pickImage(false) },
-          { text: 'Take photo', onPress: () => pickImage(true) },
-          { text: 'PDF document', onPress: pickPdf },
-          { text: 'Cancel', style: 'cancel' },
-        ];
-    Alert.alert('Attach file', 'Share a photo or PDF for analysis', options);
+    if (Platform.OS === 'web') {
+      setAttachMenuOpen(true);
+      return;
+    }
+    Alert.alert('Attach file', 'Share a photo or PDF for analysis', [
+      { text: 'Photo library', onPress: () => pickImage(false) },
+      { text: 'Take photo', onPress: () => pickImage(true) },
+      { text: 'PDF document', onPress: pickPdf },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   const handleSend = async (overrideText) => {
@@ -176,7 +191,7 @@ export default function MedicalChatScreen({ navigation, route }) {
     try {
       let apiAttachment = null;
       if (attachmentToSend) {
-        const base64 = await fileUriToBase64(attachmentToSend.uri);
+        const base64 = await attachmentToBase64(attachmentToSend);
         apiAttachment = { mimeType: attachmentToSend.mimeType, base64 };
       }
 
@@ -314,6 +329,14 @@ export default function MedicalChatScreen({ navigation, route }) {
             )}
           </ResponsiveContainer>
         </KeyboardAvoidingView>
+
+        <AttachFileModal
+          visible={attachMenuOpen}
+          onClose={() => setAttachMenuOpen(false)}
+          onPickPhoto={pickImage}
+          onPickPdf={pickPdf}
+          showCamera={Platform.OS !== 'web'}
+        />
       </SafeAreaView>
     </View>
   );

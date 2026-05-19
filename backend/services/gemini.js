@@ -36,11 +36,18 @@ async function callGemini(contents, model, options = {}) {
   return data;
 }
 
+function normalizeBase64(data) {
+  if (!data || typeof data !== 'string') return '';
+  const trimmed = data.replace(/\s/g, '');
+  return trimmed.includes(',') ? trimmed.split(',').pop() : trimmed;
+}
+
 function buildChatContents(history, userText, attachment) {
   const userParts = [];
-  if (attachment?.base64 && attachment?.mimeType) {
+  const b64 = normalizeBase64(attachment?.base64);
+  if (b64 && attachment?.mimeType) {
     userParts.push({
-      inline_data: { mime_type: attachment.mimeType, data: attachment.base64 },
+      inline_data: { mime_type: attachment.mimeType, data: b64 },
     });
   }
   const trimmed = (userText || '').trim();

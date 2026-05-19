@@ -1,43 +1,37 @@
 /**
- * Web PDF picker (avoids expo-document-picker Metro issues on web).
- * @returns {Promise<{ canceled: boolean, assets?: Array<{ uri: string, name: string, size?: number, mimeType: string }> }>}
+ * Web image picker (reliable on PWA; expo-image-picker is inconsistent on web).
  */
-export function pickPdfDocument() {
+export function pickImageFromFiles() {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'application/pdf,.pdf';
+    input.accept = 'image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp';
     input.style.display = 'none';
     document.body.appendChild(input);
 
-    const cleanup = () => {
+    const finish = (result) => {
       input.remove();
+      resolve(result);
     };
 
     input.onchange = () => {
       const file = input.files?.[0];
-      cleanup();
       if (!file) {
-        resolve({ canceled: true });
+        finish({ canceled: true });
         return;
       }
-      resolve({
+      finish({
         canceled: false,
         assets: [
           {
             uri: URL.createObjectURL(file),
             file,
-            name: file.name,
+            name: file.name || 'photo.jpg',
+            mimeType: file.type || 'image/jpeg',
             size: file.size,
-            mimeType: file.type || 'application/pdf',
           },
         ],
       });
-    };
-
-    input.oncancel = () => {
-      cleanup();
-      resolve({ canceled: true });
     };
 
     input.click();
