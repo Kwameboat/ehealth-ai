@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 const HEADINGS = [
   { match: /^Assessment$/im, title: 'Assessment' },
   { match: /^Analysis$/im, title: 'Assessment' },
+  { match: /^Possible causes$/im, title: 'Possible causes' },
   { match: /^Recommendations$/im, title: 'Recommendations' },
   { match: /^When to seek care$/im, title: 'When to seek care' },
   { match: /^When to Seek Help$/im, title: 'When to seek care' },

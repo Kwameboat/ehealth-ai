@@ -7,8 +7,8 @@ const {
 } = require('./medicalChatPrompt');
 
 const SYMPTOM_GENERATION_CONFIG = {
-  maxOutputTokens: 512,
-  temperature: 0.3,
+  maxOutputTokens: 1024,
+  temperature: 0.35,
 };
 
 async function callGemini(contents, model, options = {}) {
