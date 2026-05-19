@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { initDatabase, getDb, DB_PATH } = require('./init');
+const { initDatabase, getDb, resetDatabase, DB_PATH } = require('./init');
 const { findWasmPath } = require('./driver-sqljs');
 
 let ready = false;
@@ -8,39 +8,69 @@ let initPromise = null;
 let lastError = null;
 
 function clearDbArtifacts() {
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) return;
-  for (const name of fs.readdirSync(dir)) {
-    if (name.endsWith('.lock') || name.endsWith('.tmp')) {
-      try {
-        fs.unlinkSync(path.join(dir, name));
-      } catch (_) {
-        /* ignore */
+  const dirs = new Set([
+    path.dirname(DB_PATH),
+    path.join(__dirname, '..', 'db'),
+    path.join(__dirname, '..', '..', 'data'),
+  ]);
+  for (const dir of dirs) {
+    if (!fs.existsSync(dir)) continue;
+    for (const name of fs.readdirSync(dir)) {
+      if (name.endsWith('.lock') || name.endsWith('.tmp')) {
+        try {
+          fs.unlinkSync(path.join(dir, name));
+        } catch (_) {
+          /* ignore */
+        }
       }
     }
   }
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function ensureDbReady() {
   if (ready) {
-    getDb();
-    return;
+    try {
+      getDb();
+      return;
+    } catch (_) {
+      ready = false;
+      initPromise = null;
+    }
   }
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
-    clearDbArtifacts();
-    const wasm = findWasmPath();
-    await initDatabase();
-    getDb().prepare('SELECT 1 AS ok').get();
-    ready = true;
-    lastError = null;
-    console.log(`Database ready: ${DB_PATH} (wasm: ${wasm})`);
+    let lastErr;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        clearDbArtifacts();
+        resetDatabase();
+        findWasmPath();
+        await initDatabase();
+        const { migrateLegacyGeminiModel } = require('../services/settings');
+        migrateLegacyGeminiModel();
+        getDb().prepare('SELECT 1 AS ok').get();
+        ready = true;
+        lastError = null;
+        console.log(`Database ready: ${DB_PATH}`);
+        return;
+      } catch (err) {
+        lastErr = err;
+        ready = false;
+        resetDatabase();
+        console.error(`Database init attempt ${attempt}/3:`, err.message);
+        if (attempt < 3) await sleep(150 * attempt);
+      }
+    }
+    throw lastErr;
   })().catch((err) => {
     ready = false;
     lastError = err;
     initPromise = null;
-    console.error('Database init failed:', err.message);
     throw err;
   });
 
@@ -59,6 +89,15 @@ function getDbStatus() {
       }
     })(),
     dbExists: fs.existsSync(DB_PATH),
+    dbWritable: (() => {
+      try {
+        const dir = path.dirname(DB_PATH);
+        fs.accessSync(dir, fs.constants.W_OK);
+        return true;
+      } catch {
+        return false;
+      }
+    })(),
     lastError: lastError ? lastError.message : null,
   };
 }

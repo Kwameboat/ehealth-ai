@@ -218,6 +218,11 @@ function migratePackagesToGhs() {
 
 let initInFlight = null;
 
+function resetDatabase() {
+  db = null;
+  initInFlight = null;
+}
+
 async function initDatabase() {
   if (db) return;
   if (initInFlight) return initInFlight;
@@ -247,4 +252,4 @@ async function initDatabase() {
   }
 }
 
-module.exports = { getDb, initDatabase, uuid, now, DB_PATH };
+module.exports = { getDb, initDatabase, resetDatabase, uuid, now, DB_PATH };

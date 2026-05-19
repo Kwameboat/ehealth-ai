@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run on server after FTP deploy — publish static files, keep Passenger htaccess, npm in ehealth-ai.
-set -eo pipefail
+set -u
 
 HOME_DIR="${HOME:-/home/ehealtha}"
 SRC="${APP_SRC:-$HOME_DIR/ehealth-ai}"
@@ -108,8 +108,18 @@ PassengerAppEnv production
 }
 merge_htaccess
 
+# Writable database directory (always use this in cPanel DATABASE_PATH)
+mkdir -p "$SRC/data" "$SRC/backend/db"
+chmod 775 "$SRC/data" 2>/dev/null || true
+if [ -f "$SRC/backend/db/sql-wasm.wasm" ]; then
+  cp -f "$SRC/backend/db/sql-wasm.wasm" "$SRC/backend/db/sql-wasm.wasm" 2>/dev/null || true
+fi
+if [ -f "$SRC/backend/db/medassistant.db" ] && [ ! -f "$SRC/data/medassistant.db" ]; then
+  cp -f "$SRC/backend/db/medassistant.db" "$SRC/data/medassistant.db" 2>/dev/null || true
+fi
+rm -f "$SRC/data/"*.lock "$SRC/data/"*.tmp "$SRC/backend/db/"*.lock 2>/dev/null || true
+
 # npm in deploy folder (only if nodevenv exists or npm in PATH)
-mkdir -p "$SRC/backend/db"
 NODE_BIN="$(resolve_node_bin)"
 if [ -n "$NODE_BIN" ] && [ -x "$(dirname "$NODE_BIN")/npm" ]; then
   NPM_BIN="$(dirname "$NODE_BIN")/npm"
@@ -119,7 +129,7 @@ if [ -n "$NODE_BIN" ] && [ -x "$(dirname "$NODE_BIN")/npm" ]; then
     chmod +x "$SRC/cpanel/install-backend-deps.sh" 2>/dev/null || true
     bash "$SRC/cpanel/install-backend-deps.sh" || true
   fi
-  (cd "$SRC/backend" && "$NODE_BIN" -e "require('./db/init').initDatabase().then(() => console.log('DB OK')).catch(e => { console.error(e); process.exit(1); })") \
+  (cd "$SRC/backend" && "$NODE_BIN" -e "require('./db/ensureDb').ensureDbReady().then(()=>{const s=require('./services/settings');s.migrateLegacyGeminiModel();console.log('DB OK',require('./db/init').DB_PATH);}).catch(e=>{console.error(e);process.exit(1);})") \
     > "$SRC/startup-check.log" 2>&1 && echo "Startup check OK" || echo "WARN: see $SRC/startup-check.log"
 elif [ -f "$SRC/package.json" ] && command -v npm >/dev/null 2>&1; then
   (cd "$SRC" && npm install --omit=dev) || true

@@ -37,6 +37,10 @@ yarn-error.*
 backend/.env
 backend/db/*.db
 backend/db/*.db-*
+data/*.db
+data/*.db-*
+data/*.lock
+data/*.tmp
 
 # typescript
 *.tsbuildinfo

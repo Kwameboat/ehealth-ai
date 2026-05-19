@@ -2,31 +2,41 @@ const fs = require('fs');
 const path = require('path');
 
 /**
- * Pick a database path the Node process can write (cPanel often makes backend/db read-only).
+ * Canonical writable DB location on cPanel (backend/db/ is often read-only after FTP).
  */
-function resolveDatabasePath() {
+function getDefaultDataPath() {
   const appRoot = path.join(__dirname, '..', '..');
-  const dataPath = path.join(appRoot, 'data', 'medassistant.db');
-  const legacyDbDir = path.join(__dirname, 'medassistant.db');
+  return path.join(appRoot, 'data', 'medassistant.db');
+}
 
-  const candidates = [];
-  if (process.env.DATABASE_PATH) candidates.push(path.resolve(process.env.DATABASE_PATH));
-  candidates.push(dataPath, legacyDbDir);
+function resolveDatabasePath() {
+  const dataPath = getDefaultDataPath();
+  const legacyPaths = [
+    process.env.DATABASE_PATH ? path.resolve(process.env.DATABASE_PATH) : null,
+    path.join(__dirname, 'medassistant.db'),
+  ].filter(Boolean);
 
-  for (const dbPath of candidates) {
-    if (isDirWritable(path.dirname(dbPath))) {
-      migrateLegacyIfNeeded(dbPath, [legacyDbDir, path.join(__dirname, 'medassistant.db')]);
-      if (dbPath !== process.env.DATABASE_PATH && process.env.DATABASE_PATH) {
-        console.warn(
-          `DATABASE_PATH not writable (${process.env.DATABASE_PATH}), using ${dbPath}`
-        );
-      }
+  const dataDir = path.dirname(dataPath);
+  if (isDirWritable(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+    migrateLegacyIfNeeded(dataPath, legacyPaths);
+    const envPath = process.env.DATABASE_PATH ? path.resolve(process.env.DATABASE_PATH) : null;
+    if (envPath && envPath !== dataPath && !envPath.replace(/\\/g, '/').includes('/data/')) {
+      console.warn(
+        `[db] Using ${dataPath} — set cPanel DATABASE_PATH to this path (was ${envPath})`
+      );
+    }
+    return dataPath;
+  }
+
+  for (const dbPath of legacyPaths) {
+    if (dbPath && isDirWritable(path.dirname(dbPath))) {
+      console.warn(`[db] Using legacy path ${dbPath} — prefer ${dataPath}`);
       return dbPath;
     }
   }
 
-  const fallbackDir = path.dirname(dataPath);
-  fs.mkdirSync(fallbackDir, { recursive: true });
+  fs.mkdirSync(dataDir, { recursive: true });
   return dataPath;
 }
 
@@ -34,7 +44,7 @@ function isDirWritable(dir) {
   try {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.accessSync(dir, fs.constants.W_OK);
-    const test = path.join(dir, `.writetest-${process.pid}`);
+    const test = path.join(dir, `.writetest-${process.pid}-${Date.now()}`);
     fs.writeFileSync(test, 'ok');
     fs.unlinkSync(test);
     return true;
@@ -52,13 +62,13 @@ function migrateLegacyIfNeeded(targetPath, legacyPaths) {
     if (legacy && legacy !== targetPath && fs.existsSync(legacy)) {
       try {
         fs.copyFileSync(legacy, targetPath);
-        console.log(`Migrated database: ${legacy} -> ${targetPath}`);
+        console.log(`[db] Migrated ${legacy} -> ${targetPath}`);
         return;
       } catch (err) {
-        console.warn(`Could not migrate ${legacy}:`, err.message);
+        console.warn(`[db] Could not migrate ${legacy}:`, err.message);
       }
     }
   }
 }
 
-module.exports = { resolveDatabasePath };
+module.exports = { resolveDatabasePath, getDefaultDataPath };
