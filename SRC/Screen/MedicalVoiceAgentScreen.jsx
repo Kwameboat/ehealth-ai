@@ -154,6 +154,9 @@ const MedicalVoiceAssistantScreen = ({ navigation }) => {
     if (finalText) setTranscript(finalText);
     transcriptRef.current = "";
   });
+  useSpeechRecognitionEvent("speechend", () => {
+    stopListening();
+  });
   useSpeechRecognitionEvent("result", (e) => {
     const text = getResultText(e);
     if (text) {
@@ -219,7 +222,8 @@ const MedicalVoiceAssistantScreen = ({ navigation }) => {
       ExpoSpeechRecognitionModule.start({
         lang: "en-US",
         interimResults: true,
-        continuous: false,
+        continuous: Platform.OS === "android",
+        iosVoiceProcessingEnabled: Platform.OS === "ios",
       });
     } catch (e) {
       console.error("Start STT error:", e);

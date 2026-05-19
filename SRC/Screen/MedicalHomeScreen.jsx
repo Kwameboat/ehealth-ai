@@ -267,6 +267,7 @@ const MedicalHomeScreen = ({ navigation }) => {
                   onChangeText={setHomeInput}
                   onSend={handleHomeSend}
                   onAttach={handleHomeAttach}
+                  onFilePicked={handleHomeFilePicked}
                   onMic={() => voice.toggle()}
                   isListening={voice.isListening}
                 />

@@ -1,8 +1,9 @@
 import { Alert, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { pickAttachmentWeb } from './pickAttachment.web';
 import { pickPdfDocument } from './pickPdf';
+import { pickWebAttachmentMenu, openWebFileInput } from './webFilePicker';
 import { guessImageMimeType } from './fileToBase64';
+import { isMobileWebUserAgent } from '../utils/deviceUtils';
 
 const MAX_BYTES = 8 * 1024 * 1024;
 
@@ -74,26 +75,23 @@ function pickNativeAttachment() {
   });
 }
 
+async function pickWebAttachment() {
+  if (isMobileWebUserAgent()) {
+    return pickWebAttachmentMenu();
+  }
+  return openWebFileInput({
+    accept: 'image/jpeg,image/png,image/webp,image/gif,application/pdf,.jpg,.jpeg,.png,.webp,.pdf',
+  });
+}
+
 /**
- * Open photo/PDF picker (works on native app and mobile web PWA).
+ * Open photo/PDF picker (native app + mobile/desktop web).
  * @returns {Promise<object|null>}
  */
 export async function pickChatAttachment() {
   if (Platform.OS === 'web') {
-    const result = await pickAttachmentWeb();
-    if (result.canceled || !result.asset) return null;
-    if (result.asset.size > MAX_BYTES) {
-      Alert.alert('File too large', 'Please use a file under 8 MB.');
-      return null;
-    }
-    return {
-      type: result.type,
-      name: result.asset.name,
-      uri: result.asset.uri,
-      file: result.asset.file,
-      mimeType: result.asset.mimeType,
-      size: result.asset.size,
-    };
+    const picked = await pickWebAttachment();
+    return picked;
   }
   return pickNativeAttachment();
 }

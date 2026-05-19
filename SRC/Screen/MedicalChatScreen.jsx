@@ -263,6 +263,7 @@ export default function MedicalChatScreen({ navigation, route }) {
                 onChangeText={setInput}
                 onSend={() => handleSend()}
                 onAttach={handleAttachPress}
+                onFilePicked={(attachment) => applyPickedAsset(attachment.type, attachment)}
                 onMic={() => voice.toggle()}
                 isListening={voice.isListening}
                 isLoading={isLoading}
