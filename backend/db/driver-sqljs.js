@@ -1,23 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const STALE_LOCK_MS = 60 * 1000;
-
-function clearStaleLock(lockFile) {
-  if (!fs.existsSync(lockFile)) return;
-  try {
-    const age = Date.now() - fs.statSync(lockFile).mtimeMs;
-    if (age > STALE_LOCK_MS) fs.unlinkSync(lockFile);
-  } catch (_) {
-    try {
-      fs.unlinkSync(lockFile);
-    } catch (_) {
-      /* ignore */
-    }
-  }
-}
-
 function findWasmPath() {
+  if (process.env.SQLJS_WASM_PATH && fs.existsSync(process.env.SQLJS_WASM_PATH)) {
+    return process.env.SQLJS_WASM_PATH;
+  }
   const candidates = [
     path.join(__dirname, 'sql-wasm.wasm'),
     path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
@@ -27,20 +14,18 @@ function findWasmPath() {
     const pkg = require.resolve('sql.js/package.json');
     candidates.push(path.join(path.dirname(pkg), 'dist', 'sql-wasm.wasm'));
   } catch (_) {
-    /* not installed */
+    /* sql.js not on module path */
   }
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
   throw new Error(
-    'sql-wasm.wasm not found — copy to backend/db/sql-wasm.wasm or npm install sql.js'
+    'sql-wasm.wasm missing. Upload backend/db/sql-wasm.wasm or run: cp node_modules/sql.js/dist/sql-wasm.wasm backend/db/'
   );
 }
 
 function createWrapper(SQL, dbPath) {
   let rawDb;
-  const lockFile = `${dbPath}.lock`;
-  const tmpFile = `${dbPath}.tmp`;
 
   function loadFromDisk() {
     if (fs.existsSync(dbPath)) {
@@ -51,49 +36,21 @@ function createWrapper(SQL, dbPath) {
   }
 
   function persist() {
-    clearStaleLock(lockFile);
-    let locked = false;
+    const buf = Buffer.from(rawDb.export());
+    const tmp = `${dbPath}.tmp`;
+    fs.writeFileSync(tmp, buf);
     try {
-      fs.writeFileSync(lockFile, String(process.pid), { flag: 'wx' });
-      locked = true;
-    } catch (e) {
-      if (e.code === 'EEXIST') {
-        clearStaleLock(lockFile);
-        try {
-          fs.writeFileSync(lockFile, String(process.pid), { flag: 'wx' });
-          locked = true;
-        } catch (_) {
-          /* write without lock if another worker holds it briefly */
-        }
-      } else {
-        throw e;
-      }
-    }
-    try {
-      const buf = Buffer.from(rawDb.export());
-      fs.writeFileSync(tmpFile, buf);
+      fs.renameSync(tmp, dbPath);
+    } catch (_) {
+      fs.writeFileSync(dbPath, buf);
       try {
-        fs.renameSync(tmpFile, dbPath);
+        fs.unlinkSync(tmp);
       } catch (_) {
-        fs.writeFileSync(dbPath, buf);
-        try {
-          fs.unlinkSync(tmpFile);
-        } catch (_) {
-          /* ignore */
-        }
-      }
-    } finally {
-      if (locked) {
-        try {
-          fs.unlinkSync(lockFile);
-        } catch (_) {
-          /* ignore */
-        }
+        /* ignore */
       }
     }
   }
 
-  clearStaleLock(lockFile);
   loadFromDisk();
 
   return {
@@ -162,6 +119,12 @@ async function openDatabase(dbPath) {
 
   const dir = path.dirname(dbPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  try {
+    fs.accessSync(dir, fs.constants.W_OK);
+  } catch {
+    throw new Error(`Database directory not writable: ${dir}`);
+  }
 
   return createWrapper(SQL, dbPath);
 }

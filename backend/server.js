@@ -15,27 +15,8 @@ const cors = require('cors');
 const express = require('express');
 const fs = require('fs');
 
-const { initDatabase, getDb } = require('./db/init');
-let dbBootError = null;
-let dbInitPromise = null;
-
-function ensureDbInit() {
-  if (dbBootError) dbBootError = null;
-  if (!dbInitPromise) {
-    dbInitPromise = initDatabase()
-      .then(() => {
-        dbBootError = null;
-      })
-      .catch((err) => {
-        dbBootError = err;
-        dbInitPromise = null;
-        throw err;
-      });
-  }
-  return dbInitPromise;
-}
-
-ensureDbInit();
+const { getDb } = require('./db/init');
+const { ensureDbReady, getDbStatus } = require('./db/ensureDb');
 
 const { requireAppAuth } = require('./middleware/appSecret');
 
@@ -79,7 +60,7 @@ app.use(
 
 app.get('/api/health', async (req, res) => {
   try {
-    await ensureDbInit();
+    await ensureDbReady();
     getDb().prepare('SELECT 1 AS ok').get();
     res.json({
       status: 'ok',
@@ -88,12 +69,15 @@ app.get('/api/health', async (req, res) => {
       time: new Date().toISOString(),
     });
   } catch (err) {
+    const diag = getDbStatus();
     res.status(503).json({
       status: 'error',
       service: 'eHealth AI API',
       db: false,
       error: err.message,
-      hint: 'cPanel → Node.js → RESTART; set JWT_SECRET in app env vars',
+      wasm: diag.wasmPath,
+      dbPath: diag.dbPath,
+      hint: 'Upload backend/db/sql-wasm.wasm, rm db/*.lock, RESTART Node app',
       time: new Date().toISOString(),
     });
   }
@@ -112,16 +96,18 @@ app.use(async (req, res, next) => {
   }
   if (req.path === '/api/health') return next();
   try {
-    await ensureDbInit();
-    getDb();
+    await ensureDbReady();
     next();
   } catch (err) {
-    console.error('DB middleware:', req.method, req.path, err.message);
+    const diag = getDbStatus();
+    console.error('DB middleware:', req.method, req.path, err.message, diag);
     res.status(503).json({
       error: {
         message: 'Database not ready',
         detail: err.message,
-        hint: 'Terminal: rm -f ~/ehealth-ai/backend/db/*.lock && RESTART Node app',
+        wasm: diag.wasmPath,
+        dbPath: diag.dbPath,
+        hint: 'Ensure backend/db/sql-wasm.wasm exists, then: rm -f ~/ehealth-ai/backend/db/*.lock && RESTART',
       },
     });
   }
@@ -191,7 +177,7 @@ app.use((req, res) => {
 function onListen() {
   const listenPort = Number(process.env.PORT) || PORT;
   console.log(`eHealth AI API on ${HOST}:${listenPort}`);
-  if (dbBootError) console.error('Running without database:', dbBootError.message);
+  ensureDbReady().catch((err) => console.error('Startup DB init:', err.message));
   if (!process.env.GEMINI_API_KEY) console.warn('WARNING: GEMINI_API_KEY missing');
   if (!process.env.APP_API_SECRET) console.warn('WARNING: APP_API_SECRET missing');
 }
@@ -202,12 +188,6 @@ module.exports = app;
 const listenPort = Number(process.env.PORT) || PORT;
 
 (async () => {
-  try {
-    await ensureDbInit();
-    console.log('Database ready (sql.js)');
-  } catch (err) {
-    console.error('Database init failed:', err);
-  }
   if (!process.env.PASSENGER_APP_ENV) {
     app.listen(listenPort, '0.0.0.0', onListen);
   } else {

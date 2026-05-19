@@ -53,7 +53,9 @@ async function api(path, options = {}) {
         'API not found (404). cPanel → Setup Node.js App → RESTART, then test /api/health in the browser.'
       );
     }
-    throw new Error(data?.error?.message || `Request failed (${res.status})`);
+    const detail = data?.error?.detail || data?.error?.wasm;
+    const base = data?.error?.message || `Request failed (${res.status})`;
+    throw new Error(detail ? `${base}: ${detail}` : base);
   }
   return data;
 }

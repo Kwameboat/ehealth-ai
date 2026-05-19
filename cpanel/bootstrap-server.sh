@@ -14,9 +14,13 @@ rm -f "$BACKEND/db/"*.lock "$BACKEND/db/"*.tmp 2>/dev/null || true
 echo "=== Download sql.js backend files ==="
 mkdir -p "$BACKEND/db"
 curl -fsSL -o "$BACKEND/db/driver-sqljs.js" "$BASE/backend/db/driver-sqljs.js"
+curl -fsSL -o "$BACKEND/db/ensureDb.js" "$BASE/backend/db/ensureDb.js"
 curl -fsSL -o "$BACKEND/db/init.js" "$BASE/backend/db/init.js"
 curl -fsSL -o "$BACKEND/server.js" "$BASE/backend/server.js"
 curl -fsSL -o "$BACKEND/public/admin/app.js" "$BASE/backend/public/admin/app.js"
+curl -fsSL -o "$BACKEND/db/sql-wasm.wasm" "$BASE/backend/db/sql-wasm.wasm"
+chmod 755 "$BACKEND/db" 2>/dev/null || true
+chmod 644 "$BACKEND/db/sql-wasm.wasm" 2>/dev/null || true
 grep -q driver-sqljs "$BACKEND/db/init.js"
 
 echo "=== Install deps into $BACKEND/node_modules ==="
