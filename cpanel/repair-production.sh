@@ -35,7 +35,9 @@ curl -fsSL -o "$BACKEND/services/settings.js" "$BASE/backend/services/settings.j
 curl -fsSL -o "$BACKEND/services/geminiModels.js" "$BASE/backend/services/geminiModels.js"
 curl -fsSL -o "$APP/cpanel/merge-htaccess.sh" "$BASE/cpanel/merge-htaccess.sh"
 curl -fsSL -o "$APP/cpanel/fix-api-404.sh" "$BASE/cpanel/fix-api-404.sh"
-chmod +x "$APP/cpanel/merge-htaccess.sh" "$APP/cpanel/fix-api-404.sh" 2>/dev/null || true
+curl -fsSL -o "$APP/cpanel/publish-icon-fonts.sh" "$BASE/cpanel/publish-icon-fonts.sh"
+curl -fsSL -o "$APP/scripts/copy-icon-fonts.mjs" "$BASE/scripts/copy-icon-fonts.mjs"
+chmod +x "$APP/cpanel/merge-htaccess.sh" "$APP/cpanel/fix-api-404.sh" "$APP/cpanel/publish-icon-fonts.sh" 2>/dev/null || true
 
 # Restore API routing if Passenger block was wiped
 if ! grep -q 'PASSENGER CONFIGURATION BEGIN' "$PUBLIC/.htaccess" 2>/dev/null; then
@@ -55,6 +57,9 @@ if [ -f "$INDEX" ] && ! grep -q 'app-config.js' "$INDEX"; then
   sed -i 's|</head>|<script src="/app-config.js"></script></head>|' "$INDEX" 2>/dev/null || true
 fi
 cp -f "$BACKEND/public/admin/"* "$PUBLIC/admin/" 2>/dev/null || true
+
+echo "=== Icon fonts (dashboard UI) ==="
+bash "$APP/cpanel/publish-icon-fonts.sh" || echo "WARN: icon fonts — run: bash ~/ehealth-ai/cpanel/publish-icon-fonts.sh"
 
 if [ ! -d "$BACKEND/node_modules/express" ]; then
   echo "=== Installing backend dependencies ==="
