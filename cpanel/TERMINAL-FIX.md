@@ -1,13 +1,11 @@
-# cPanel — fix backend deps (copy entire block into Terminal)
+# cPanel — install backend (no native SQLite / GLIBC)
 
-Parent `~/ehealth-ai/package-lock.json` breaks `npm install` in `backend/` (only ~39 packages, no express/bcryptjs).
+The server cannot run `better-sqlite3` (GLIBC_2.29). The API uses **sql.js** (pure JavaScript).
 
 ```bash
 source /home/ehealtha/nodevenv/ehealth-ai/20/bin/activate
 unset NODE_PATH
 rm -f /home/ehealtha/ehealth-ai/package-lock.json
-rm -rf /home/ehealtha/nodevenv/ehealth-ai/20/lib/node_modules/better-sqlite3
-rm -rf /home/ehealtha/nodevenv/ehealth-ai/22/lib/node_modules/better-sqlite3
 
 TMP=$(mktemp -d)
 cat > "$TMP/package.json" << 'EOF'
@@ -16,31 +14,26 @@ cat > "$TMP/package.json" << 'EOF'
   "private": true,
   "dependencies": {
     "bcryptjs": "2.4.3",
-    "better-sqlite3": "9.6.0",
     "cors": "2.8.5",
     "dotenv": "16.4.7",
     "express": "4.21.2",
-    "jsonwebtoken": "9.0.2"
+    "jsonwebtoken": "9.0.2",
+    "sql.js": "1.12.0"
   }
 }
 EOF
 
 cd "$TMP"
-npm install --omit=dev
-test -f node_modules/express/package.json
-test -f node_modules/bcryptjs/package.json
+npm install --omit=dev --install-strategy=nested --no-audit
+ls -la node_modules/express node_modules/bcryptjs node_modules/sql.js
 
 rm -rf /home/ehealtha/ehealth-ai/backend/node_modules
 mv "$TMP/node_modules" /home/ehealtha/ehealth-ai/backend/node_modules
-rmdir "$TMP" 2>/dev/null || rm -rf "$TMP"
+rm -rf "$TMP"
 
 cd /home/ehealtha/ehealth-ai/backend
-npm rebuild better-sqlite3 --build-from-source
-find node_modules/better-sqlite3 -name better_sqlite3.node -type f
 unset NODE_PATH
-node -e "require('./db/init').initDatabase(); console.log('DB OK');"
+node -e "require('./db/init').initDatabase().then(() => console.log('DB OK')).catch(e => { console.error(e); process.exit(1); })"
 ```
 
-Then **cPanel → Node.js → RESTART** → `https://www.ehealthaigh.com/api/health` must show `"db":true`.
-
-After next GitHub deploy you can use: `bash ~/ehealth-ai/cpanel/install-backend-deps.sh`
+Then **RESTART** Node.js in cPanel → `/api/health` → `"db":true`.

@@ -113,11 +113,8 @@ if [ -n "$NODE_BIN" ] && [ -x "$(dirname "$NODE_BIN")/npm" ]; then
     echo "backend/node_modules missing — running isolated install script ..."
     chmod +x "$SRC/cpanel/install-backend-deps.sh" 2>/dev/null || true
     bash "$SRC/cpanel/install-backend-deps.sh" || true
-  else
-    echo "backend/node_modules present from deploy — rebuild sqlite only ..."
-    (cd "$SRC/backend" && npm_config_build_from_source=true "$NPM_BIN" rebuild better-sqlite3 --build-from-source) || true
   fi
-  (cd "$SRC/backend" && "$NODE_BIN" -e "require('better-sqlite3'); require('./db/init').initDatabase(); console.log('DB OK');") \
+  (cd "$SRC/backend" && "$NODE_BIN" -e "require('./db/init').initDatabase().then(() => console.log('DB OK')).catch(e => { console.error(e); process.exit(1); })") \
     > "$SRC/startup-check.log" 2>&1 && echo "Startup check OK" || echo "WARN: see $SRC/startup-check.log"
 elif [ -f "$SRC/package.json" ] && command -v npm >/dev/null 2>&1; then
   (cd "$SRC" && npm install --omit=dev) || true

@@ -1,27 +1,8 @@
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-
-const backendRoot = path.join(__dirname, '..');
-const modulePaths = [
-  path.join(backendRoot, 'node_modules'),
-  path.join(backendRoot, '..', 'node_modules'),
-];
-
-function requireFromBackend(name) {
-  return require(require.resolve(name, { paths: modulePaths }));
-}
-
-const bcrypt = requireFromBackend('bcryptjs');
-
-// Must load from backend/node_modules — never nodevenv (wrong glibc / missing .node)
-let Database;
-const sqlitePkg = path.join(backendRoot, 'node_modules', 'better-sqlite3');
-if (fs.existsSync(path.join(sqlitePkg, 'package.json'))) {
-  Database = require(sqlitePkg);
-} else {
-  Database = requireFromBackend('better-sqlite3');
-}
+const bcrypt = require('bcryptjs');
+const { openDatabase } = require('./driver-sqljs');
 
 const DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, 'medassistant.db');
 
@@ -37,9 +18,7 @@ function now() {
 
 function getDb() {
   if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
+    throw new Error('Database not initialized — wait for startup or check server logs');
   }
   return db;
 }
@@ -224,18 +203,6 @@ function seedAdmin() {
   console.log(`Admin seeded: username="${username}" (change ADMIN_PASSWORD in production)`);
 }
 
-function initDatabase() {
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  initSchema();
-  seedPointRules();
-  seedPointPackages();
-  seedSettings();
-  seedAdmin();
-  syncEnvSecrets();
-  migratePackagesToGhs();
-}
-
 function migratePackagesToGhs() {
   const database = getDb();
   const row = database.prepare('SELECT id, currency, amount_kobo FROM point_packages WHERE points = 100 ORDER BY sort_order LIMIT 1').get();
@@ -246,6 +213,17 @@ function migratePackagesToGhs() {
       )
       .run(now(), row.id);
   }
+}
+
+async function initDatabase() {
+  db = await openDatabase(DB_PATH);
+  initSchema();
+  seedPointRules();
+  seedPointPackages();
+  seedSettings();
+  seedAdmin();
+  syncEnvSecrets();
+  migratePackagesToGhs();
 }
 
 module.exports = { getDb, initDatabase, uuid, now, DB_PATH };

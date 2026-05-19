@@ -15,15 +15,8 @@ const cors = require('cors');
 const express = require('express');
 const fs = require('fs');
 
-let initDatabase;
+const { initDatabase } = require('./db/init');
 let dbBootError = null;
-try {
-  ({ initDatabase } = require('./db/init'));
-  initDatabase();
-} catch (err) {
-  dbBootError = err;
-  console.error('Database init failed:', err);
-}
 
 const { requireAppAuth } = require('./middleware/appSecret');
 
@@ -156,4 +149,14 @@ module.exports = app;
 
 // cPanel Node.js: must listen on PORT from the panel (also export for Passenger)
 const listenPort = Number(process.env.PORT) || PORT;
-app.listen(listenPort, '0.0.0.0', onListen);
+
+(async () => {
+  try {
+    await initDatabase();
+    console.log('Database ready (sql.js)');
+  } catch (err) {
+    dbBootError = err;
+    console.error('Database init failed:', err);
+  }
+  app.listen(listenPort, '0.0.0.0', onListen);
+})();
