@@ -7,9 +7,10 @@
   RewriteEngine On
   RewriteBase /
 
-  # Let Node/Passenger handle API
+  # Let Node/Passenger handle API + runtime PWA config
   RewriteRule ^api(/|$) - [L]
   RewriteRule ^admin/api(/|$) - [L]
+  RewriteRule ^app-config\.js$ - [L]
 
   # Admin static assets (must not fall through to PWA index.html)
   RewriteRule ^admin/.+\.(css|js|png|ico|svg|woff2?)$ - [L]

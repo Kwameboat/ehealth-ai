@@ -1,15 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiAuthHeadersAsync } from './apiAuth';
+import { getApiUrl } from './appConfig';
 
 const PENDING_REF_KEY = 'ehealth_pending_payment_ref';
 
 function getApiBase() {
-  const fromEnv = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
-  if (fromEnv) return fromEnv;
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin.replace(/\/$/, '');
-  }
-  return null;
+  return getApiUrl();
 }
 
 async function request(path, options = {}) {

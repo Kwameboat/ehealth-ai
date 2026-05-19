@@ -1,8 +1,9 @@
 import { getStoredToken } from './authStorage';
+import { getAppApiSecret } from './appConfig';
 
-/** App bundle secret — not shown in UI. */
+/** App bundle secret — from /app-config.js (production) or build-time env. */
 export function getApiAuthHeaders() {
-  const secret = process.env.EXPO_PUBLIC_APP_API_SECRET;
+  const secret = getAppApiSecret();
   const headers = {};
   if (secret) {
     headers['X-MedAssistant-Key'] = secret;

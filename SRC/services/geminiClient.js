@@ -1,17 +1,13 @@
 import { GEMINI_API_KEY, GEMINI_MODEL } from '../Config/gemini';
 import { getApiAuthHeadersAsync } from './apiAuth';
+import { getApiUrl } from './appConfig';
 import { notifyPointsBalance } from './pointsBridge';
 
 export const GEMINI_MODEL_FLASH = 'gemini-2.0-flash';
 export const GEMINI_MODEL_PRO = 'gemini-pro';
 
 function getApiBaseUrl() {
-  const fromEnv = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
-  if (fromEnv) return fromEnv;
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin.replace(/\/$/, '');
-  }
-  return null;
+  return getApiUrl();
 }
 
 function resolveFeatureKey(contents, override) {

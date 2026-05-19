@@ -1,16 +1,12 @@
 import { getApiAuthHeaders, getApiAuthHeadersAsync } from './apiAuth';
+import { getApiUrl, getAppApiSecret } from './appConfig';
 
 function getApiBase() {
-  const fromEnv = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
-  if (fromEnv) return fromEnv;
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin.replace(/\/$/, '');
-  }
-  return null;
+  return getApiUrl();
 }
 
 export function isBackendConfigured() {
-  return !!getApiBase() && !!process.env.EXPO_PUBLIC_APP_API_SECRET;
+  return !!getApiBase() && !!getAppApiSecret();
 }
 
 async function request(path, options = {}) {
@@ -19,15 +15,27 @@ async function request(path, options = {}) {
 
   const authHeaders = options.useUserAuth ? await getApiAuthHeadersAsync() : getApiAuthHeaders();
 
-  const response = await fetch(`${apiBase}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders,
-      ...(options.headers || {}),
-    },
-    body: options.body,
-  });
+  let response;
+  try {
+    response = await fetch(`${apiBase}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders,
+        ...(options.headers || {}),
+      },
+      body: options.body,
+    });
+  } catch (err) {
+    if (!getAppApiSecret()) {
+      throw new Error(
+        'App API key missing. Redeploy the site or ask admin to set APP_API_SECRET in cPanel and restart Node.'
+      );
+    }
+    throw new Error(
+      `Cannot reach API at ${apiBase}. Check /api/health in the browser, then restart the Node app in cPanel.`
+    );
+  }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {

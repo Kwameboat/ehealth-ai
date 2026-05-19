@@ -55,8 +55,28 @@ app.use(
       callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-MedAssistant-Key', 'x-medassistant-key'],
   })
 );
+
+/** PWA reads APP_API_SECRET at runtime (no rebuild when cPanel secret changes). */
+app.get('/app-config.js', (req, res) => {
+  const secret = process.env.APP_API_SECRET || '';
+  const apiUrl =
+    process.env.PUBLIC_APP_URL ||
+    (req.get('x-forwarded-proto') && req.get('host')
+      ? `${req.get('x-forwarded-proto')}://${req.get('host')}`
+      : '');
+  res.type('application/javascript');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(
+    `window.__EHEALTH_CONFIG__=${JSON.stringify({
+      appApiSecret: secret,
+      apiUrl: apiUrl.replace(/\/$/, ''),
+    })};`
+  );
+});
 
 app.get('/api/health', async (req, res) => {
   try {

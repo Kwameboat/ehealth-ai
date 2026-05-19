@@ -55,6 +55,11 @@ resolve_node_bin() {
 if [ -d "$SRC/dist" ]; then
   find "$PUBLIC" -mindepth 1 -maxdepth 1 ! -name cgi-bin -exec rm -rf {} + 2>/dev/null || true
   cp -r "$SRC/dist/"* "$PUBLIC/"
+  if [ -f "$PUBLIC/index.html" ] && ! grep -q 'app-config.js' "$PUBLIC/index.html"; then
+    sed -i 's|</head>|<script src="/app-config.js"></script></head>|' "$PUBLIC/index.html" 2>/dev/null || \
+      sed -i '' 's|</head>|<script src="/app-config.js"></script></head>|' "$PUBLIC/index.html" 2>/dev/null || true
+    echo "Injected app-config.js into PWA index.html"
+  fi
   cp -f "$SRC/public/manifest.json" "$PUBLIC/" 2>/dev/null || true
   cp -f "$SRC/public/sw.js" "$PUBLIC/" 2>/dev/null || true
   cp -r "$SRC/public/icons" "$PUBLIC/" 2>/dev/null || true

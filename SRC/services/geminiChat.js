@@ -1,4 +1,5 @@
 import { getApiAuthHeadersAsync } from './apiAuth';
+import { getApiUrl } from './appConfig';
 import { notifyPointsBalance } from './pointsBridge';
 
 const MEDICAL_CHAT_SYSTEM_PROMPT =
@@ -7,12 +8,7 @@ const MEDICAL_CHAT_SYSTEM_PROMPT =
   'When the user shares an image or PDF (lab report, prescription, scan, etc.), analyze it carefully and explain findings in plain language.';
 
 function getApiBase() {
-  const fromEnv = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
-  if (fromEnv) return fromEnv;
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin.replace(/\/$/, '');
-  }
-  return null;
+  return getApiUrl();
 }
 
 /**
