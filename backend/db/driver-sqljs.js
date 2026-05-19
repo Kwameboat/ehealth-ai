@@ -50,6 +50,7 @@ function createWrapper(SQL, dbPath) {
   let rawDb;
   let deferPersist = false;
   let dirty = false;
+  let txnDepth = 0;
 
   function loadFromDisk() {
     if (fs.existsSync(dbPath)) {
@@ -60,7 +61,7 @@ function createWrapper(SQL, dbPath) {
   }
 
   function persist() {
-    if (deferPersist) {
+    if (deferPersist || txnDepth > 0) {
       dirty = true;
       return;
     }
@@ -120,13 +121,16 @@ function createWrapper(SQL, dbPath) {
     },
     transaction(fn) {
       return () => {
-        rawDb.run('BEGIN');
+        rawDb.run('BEGIN TRANSACTION');
+        txnDepth += 1;
         try {
           const result = fn();
           rawDb.run('COMMIT');
+          txnDepth -= 1;
           persist();
           return result;
         } catch (err) {
+          txnDepth -= 1;
           try {
             rawDb.run('ROLLBACK');
           } catch (_) {

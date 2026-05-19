@@ -41,7 +41,7 @@ router.post('/register', (req, res) => {
         `INSERT INTO users (id, email, password_hash, full_name, points_balance, is_active, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, 1, ?, ?)`
       )
-      .run(id, normalizedEmail, hash, fullName || null, bonus, ts, ts);
+      .run(id, normalizedEmail, hash, fullName || null, 0, ts, ts);
 
     if (bonus > 0) {
       creditPoints(id, bonus, 'signup_bonus', `Welcome bonus: ${bonus} points`);
