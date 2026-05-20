@@ -17,6 +17,7 @@ import { APP_TAGLINE } from '../constants/branding';
 import { useMemo } from 'react';
 import { useMedTheme } from '../hooks/useMedTheme';
 import { useResponsive } from '../hooks/useResponsive';
+import { resetToRoute } from '../utils/navigationHelpers';
 import {
   ChatIllustration,
   ConditionsIllustration,
@@ -76,7 +77,7 @@ export default function OnboardingScreen({ navigation }) {
   const finishOnboarding = useCallback(async () => {
     await AsyncStorage.setItem('hasSeenOnboarding', 'true');
     const { isBackendConfigured } = await import('../services/authApi');
-    navigation.replace(isBackendConfigured() ? 'Auth' : 'MedicalHome');
+    resetToRoute(navigation, isBackendConfigured() ? 'Auth' : 'MedicalHome');
   }, [navigation]);
 
   const goToSlide = useCallback(

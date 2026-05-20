@@ -15,10 +15,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AppLogo from '../Components/AppLogo';
 import { APP_TAGLINE } from '../constants/branding';
 import ThemeToggleButton from '../Components/ThemeToggleButton';
+import { useNavigation } from '@react-navigation/native';
 import { useMedTheme } from '../hooks/useMedTheme';
 import { useAuth } from '../Context/AuthContext';
+import { resetToRoute } from '../utils/navigationHelpers';
 
 const AuthScreen = () => {
+  const navigation = useNavigation();
   const med = useMedTheme();
   const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
   const { login, register } = useAuth();
@@ -38,7 +41,7 @@ const AuthScreen = () => {
       } else {
         await register(email.trim(), password, fullName.trim() || undefined);
       }
-      navigation.replace('MedicalHome');
+      resetToRoute(navigation, 'MedicalHome');
     } catch (e) {
       setError(e.message || 'Something went wrong');
     } finally {
