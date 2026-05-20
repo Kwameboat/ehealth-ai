@@ -118,7 +118,41 @@ export const ThemeProvider = ({ children }) => {
 export const useTheme = () => {
   const ctx = useContext(ThemeContext);
   if (!ctx) {
-    throw new Error('useTheme must be used within ThemeProvider');
+    const med = getMedTheme(true);
+    return {
+      isDarkMode: true,
+      isThemeLoaded: true,
+      isUsingSystem: false,
+      toggleTheme: () => {},
+      setThemeMode: () => {},
+      resetToSystem: () => {},
+      med,
+      colors: {
+        background: med.bg,
+        card: med.surface,
+        header: med.bgElevated,
+        footer: med.bgElevated,
+        text: med.text,
+        textSecondary: med.textMuted,
+        border: med.cardBorder,
+        primary: med.primary,
+        primaryHover: '#60A5FA',
+        secondary: '#6366F1',
+        accent: med.accent,
+        success: med.success,
+        warning: '#F59E0B',
+        danger: med.danger,
+        buttonText: '#FFFFFF',
+        buttonPrimaryBg: med.primary,
+      },
+      metrics: {
+        borderRadius: 12,
+        padding: 16,
+        margin: 8,
+        headerHeight: 60,
+        transition: '300ms ease-in-out',
+      },
+    };
   }
   return ctx;
 };
