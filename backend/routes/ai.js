@@ -59,11 +59,17 @@ router.post('/gemini/generateContent', async (req, res) => {
 router.post('/chat', async (req, res) => {
   let featureKey = 'chat_text';
   try {
-    const { history = [], userText = '', attachment = null, featureKey: overrideKey } = req.body || {};
-    featureKey = overrideKey || resolveChatFeatureKey(attachment);
+    const {
+      history = [],
+      userText = '',
+      attachment = null,
+      attachments = null,
+      featureKey: overrideKey,
+    } = req.body || {};
+    featureKey = overrideKey || resolveChatFeatureKey(attachment, attachments);
 
     const deduction = deductPoints(req.userId, featureKey);
-    const reply = await chatCompletion(history, userText, attachment);
+    const reply = await chatCompletion(history, userText, attachment, attachments);
     res.json({
       reply,
       points: { charged: deduction.charged, balance: deduction.balance, featureKey },

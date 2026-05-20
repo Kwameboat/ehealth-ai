@@ -1,4 +1,5 @@
 import { formatClinicalResponse } from '../utils/formatClinicalResponse';
+import { attachmentToBase64, guessImageMimeType } from './fileToBase64';
 import { generateContent } from './geminiClient';
 
 const CLINICAL_INSTRUCTIONS = `You are writing a clinical assessment for a patient in eHealth AI.
@@ -35,12 +36,16 @@ Patient information (facts only — do not repeat verbatim):
 ${userText.trim()}`;
 }
 
-function buildImagePrompt(condition) {
+function buildImagePrompt(condition, fileCount = 1) {
+  const multi =
+    fileCount > 1
+      ? `Review all ${fileCount} attached clinical images or documents together as one case. `
+      : 'Review the attached clinical image. ';
   return `${CLINICAL_INSTRUCTIONS}
 
 Condition category: ${condition}
 
-Review the attached clinical image. Describe only what is reasonably visible, then complete all four sections. Do not claim a definitive diagnosis from the image alone.`;
+${multi}Describe only what is reasonably visible, then complete all four sections. Do not claim a definitive diagnosis from the image alone.`;
 }
 
 function getCandidate(data) {
@@ -113,15 +118,41 @@ export async function analyzeSymptomFromText({ condition, userText }) {
  * @param {{ condition: string, base64: string, mimeType?: string }} params
  */
 export async function analyzeSymptomFromImage({ condition, base64, mimeType = 'image/jpeg' }) {
-  const contents = [
-    {
-      role: 'user',
-      parts: [
-        { text: buildImagePrompt(condition) },
-        { inline_data: { mime_type: mimeType, data: base64 } },
-      ],
-    },
-  ];
+  return analyzeSymptomFromAssets({
+    condition,
+    assets: [{ base64, mimeType, kind: 'image' }],
+  });
+}
+
+/**
+ * @param {{ condition: string, assets: Array<{ uri?: string, file?: File | Blob, base64?: string, mimeType?: string, kind?: string }> }} params
+ */
+export async function analyzeSymptomFromAssets({ condition, assets }) {
+  const items = [];
+  for (const asset of assets || []) {
+    if (asset.base64) {
+      items.push({
+        base64: asset.base64,
+        mimeType: asset.mimeType || 'image/jpeg',
+      });
+      continue;
+    }
+    const base64 = await attachmentToBase64(asset);
+    const mimeType =
+      asset.mimeType ||
+      (asset.kind === 'pdf'
+        ? 'application/pdf'
+        : guessImageMimeType(asset.uri, asset.name));
+    items.push({ base64, mimeType });
+  }
+  if (!items.length) throw new Error('No files to analyze');
+
+  const parts = [{ text: buildImagePrompt(condition, items.length) }];
+  for (const item of items) {
+    parts.push({ inline_data: { mime_type: item.mimeType, data: item.base64 } });
+  }
+
+  const contents = [{ role: 'user', parts }];
   return generateWithContinuation(contents, 'symptom_image');
 }
 

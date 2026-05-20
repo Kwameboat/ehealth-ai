@@ -15,8 +15,8 @@ import { QUICK_ACTIONS, SYMPTOM_CATEGORIES } from '../constants/symptomCategorie
 import { useAuth } from '../Context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
 import { useChatVoiceInput } from '../hooks/useChatVoiceInput';
-import { stashAttachment } from '../services/attachmentBridge';
-import { pickChatAttachment } from '../services/chatAttachmentPicker';
+import { stashAttachments } from '../services/attachmentBridge';
+import { pickChatAttachments } from '../services/chatAttachmentPicker';
 
 const MedicalHomeScreen = ({ navigation }) => {
   const r = useResponsive();
@@ -43,26 +43,25 @@ const MedicalHomeScreen = ({ navigation }) => {
     ImagePicker.requestMediaLibraryPermissionsAsync();
   }, []);
 
-  const goToChat = (initialMessage = '', attachment = null) => {
-    if (attachment) {
-      stashAttachment(attachment);
-    }
+  const goToChat = (initialMessage = '', attachments = null) => {
+    const list = Array.isArray(attachments) ? attachments : attachments ? [attachments] : [];
+    if (list.length) stashAttachments(list);
     navigation.navigate('MedicalChat', {
       initialMessage: initialMessage.trim() || undefined,
-      hasAttachment: !!attachment,
+      hasAttachment: list.length > 0,
     });
   };
 
-  const handleHomeFilePicked = (attachment) => {
+  const handleHomeFilePicked = (attachments) => {
     setChatFocusMode(true);
-    goToChat(homeInput, attachment);
+    goToChat(homeInput, attachments);
     setHomeInput('');
   };
 
   const handleHomeAttach = async () => {
     try {
-      const picked = await pickChatAttachment();
-      if (picked) handleHomeFilePicked(picked);
+      const picked = await pickChatAttachments();
+      if (picked?.length) handleHomeFilePicked(picked);
     } catch (e) {
       console.error('Attach error:', e);
     }

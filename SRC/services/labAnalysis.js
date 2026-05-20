@@ -1,4 +1,5 @@
 import { formatClinicalResponse } from '../utils/formatClinicalResponse';
+import { attachmentToBase64, guessImageMimeType } from './fileToBase64';
 import { generateContent } from './geminiClient';
 
 const LAB_INSTRUCTIONS = `You are interpreting a laboratory report for a patient in eHealth AI.
@@ -17,16 +18,14 @@ What this may mean
 Recommendations
 When to seek care`;
 
-function buildImagePrompt() {
+function buildPrompt(fileCount) {
+  const multi =
+    fileCount > 1
+      ? `Review all ${fileCount} attached lab report files (images and/or PDFs) together. `
+      : 'Review the attached lab report. ';
   return `${LAB_INSTRUCTIONS}
 
-Review the attached lab report image. Describe only what is reasonably visible, then complete all sections.`;
-}
-
-function buildPdfPrompt() {
-  return `${LAB_INSTRUCTIONS}
-
-Review the attached lab report PDF. Summarize visible test names and values, then complete all sections.`;
+${multi}Summarize visible test names and values, then complete all sections.`;
 }
 
 function getRawText(data) {
@@ -38,10 +37,7 @@ async function generateLab(contents, featureKey) {
   let data = await generateContent({ contents }, { featureKey });
   let combined = getRawText(data);
   const truncated = data?.candidates?.[0]?.finishReason;
-  if (
-    combined &&
-    (truncated === 'MAX_TOKENS' || truncated === 'LENGTH')
-  ) {
+  if (combined && (truncated === 'MAX_TOKENS' || truncated === 'LENGTH')) {
     const cont = await generateContent(
       {
         contents: [
@@ -66,28 +62,48 @@ async function generateLab(contents, featureKey) {
   return formatClinicalResponse(combined);
 }
 
-export async function analyzeLabFromImage({ base64, mimeType = 'image/jpeg' }) {
+async function assetsToInlineParts(assets) {
+  const parts = [];
+  for (const asset of assets) {
+    const base64 = asset.base64 || (await attachmentToBase64(asset));
+    const mimeType =
+      asset.mimeType ||
+      (asset.kind === 'pdf'
+        ? 'application/pdf'
+        : guessImageMimeType(asset.uri, asset.name));
+    parts.push({ inline_data: { mime_type: mimeType, data: base64 } });
+  }
+  return parts;
+}
+
+/**
+ * Analyze one or more lab images/PDFs (web-safe base64 reading).
+ * @param {{ assets: Array<{ uri?, file?, name?, mimeType?, kind?, base64? }> }} params
+ */
+export async function analyzeLabFromAssets({ assets }) {
+  const list = (assets || []).filter(Boolean);
+  if (!list.length) throw new Error('No lab files to analyze');
+
+  const inlineParts = await assetsToInlineParts(list);
   const contents = [
     {
       role: 'user',
-      parts: [
-        { text: buildImagePrompt() },
-        { inline_data: { mime_type: mimeType, data: base64 } },
-      ],
+      parts: [{ text: buildPrompt(list.length) }, ...inlineParts],
     },
   ];
   return generateLab(contents, 'lab_report');
 }
 
+/** @deprecated Use analyzeLabFromAssets */
+export async function analyzeLabFromImage({ base64, mimeType = 'image/jpeg' }) {
+  return analyzeLabFromAssets({
+    assets: [{ base64, mimeType, kind: 'image' }],
+  });
+}
+
+/** @deprecated Use analyzeLabFromAssets */
 export async function analyzeLabFromPdf({ base64 }) {
-  const contents = [
-    {
-      role: 'user',
-      parts: [
-        { text: buildPdfPrompt() },
-        { inline_data: { mime_type: 'application/pdf', data: base64 } },
-      ],
-    },
-  ];
-  return generateLab(contents, 'lab_report');
+  return analyzeLabFromAssets({
+    assets: [{ base64, mimeType: 'application/pdf', kind: 'pdf' }],
+  });
 }

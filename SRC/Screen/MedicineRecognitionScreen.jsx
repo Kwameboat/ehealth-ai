@@ -1,6 +1,6 @@
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import * as ImagePicker from 'expo-image-picker';
+import { pickClinicalGalleryImages, takeClinicalPhoto } from '../services/clinicalMediaPicker';
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
@@ -21,7 +21,7 @@ const MedicineRecognitionScreen = () => {
   const navigation = useNavigation();
   const styles = createStyles(theme);
   
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedImages, setSelectedImages] = useState([]);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [history, setHistory] = useState([]);
@@ -82,45 +82,29 @@ const MedicineRecognitionScreen = () => {
     }, ...prev]);
   };
 
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
+  const runMockAnalysis = (uris) => {
+    if (!uris.length) return;
+    setSelectedImages(uris);
+    setAnalysisResult(null);
+    analyzeMedicineWithAI(uris[0]);
+  };
 
-    if (!result.canceled && result.assets[0].uri) {
-      setSelectedImage(result.assets[0].uri);
-      setAnalysisResult(null);
-      analyzeMedicineWithAI(result.assets[0].uri);
-    }
+  const pickImage = async () => {
+    const assets = await pickClinicalGalleryImages();
+    if (assets.length) runMockAnalysis(assets.map((a) => a.uri));
   };
 
   const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    
-    if (status !== 'granted') {
+    const asset = await takeClinicalPhoto();
+    if (!asset) {
       Alert.alert('Permission required', 'Camera access is needed to take photos of medications');
       return;
     }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets[0].uri) {
-      setSelectedImage(result.assets[0].uri);
-      setAnalysisResult(null);
-      analyzeMedicineWithAI(result.assets[0].uri);
-    }
+    runMockAnalysis([asset.uri]);
   };
 
   const clearSelection = () => {
-    setSelectedImage(null);
+    setSelectedImages([]);
     setAnalysisResult(null);
   };
 
@@ -142,7 +126,7 @@ const MedicineRecognitionScreen = () => {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContainer}>
-        {!selectedImage ? (
+        {!selectedImages.length ? (
           <View style={styles.uploadSection}>
             <View style={styles.illustrationContainer}>
               <FontAwesome5 name="pills" size={80} color={theme.colors.primary} />
@@ -173,7 +157,7 @@ const MedicineRecognitionScreen = () => {
         ) : (
           <View style={styles.analysisSection}>
             <View style={styles.imagePreviewContainer}>
-              <Image source={{ uri: selectedImage }} style={styles.imagePreview} />
+              <Image source={{ uri: selectedImages[0] }} style={styles.imagePreview} />
               <TouchableOpacity style={styles.clearButton} onPress={clearSelection}>
                 <Ionicons name="close-circle" size={32} color={theme.colors.danger} />
               </TouchableOpacity>

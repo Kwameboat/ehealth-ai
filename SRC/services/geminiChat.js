@@ -18,11 +18,24 @@ function getApiBase() {
  * @param {Array<{role: 'user'|'assistant', text: string}>} params.history
  * @param {string} [params.userText]
  * @param {{ mimeType: string, base64: string } | null} [params.attachment]
+ * @param {Array<{ mimeType: string, base64: string }>} [params.attachments]
  * @param {(balance: number) => void} [params.onPointsUpdate]
  * @returns {Promise<string>} reply text
  */
-export async function sendChatMessage({ history = [], userText = '', attachment = null, onPointsUpdate }) {
+export async function sendChatMessage({
+  history = [],
+  userText = '',
+  attachment = null,
+  attachments = null,
+  onPointsUpdate,
+}) {
   const apiBase = getApiBase();
+  const fileList =
+    attachments?.length > 0
+      ? attachments
+      : attachment?.base64
+        ? [attachment]
+        : [];
 
   if (apiBase) {
     const response = await fetch(`${apiBase}/api/chat`, {
@@ -31,7 +44,12 @@ export async function sendChatMessage({ history = [], userText = '', attachment 
         'Content-Type': 'application/json',
         ...(await getApiAuthHeadersAsync()),
       },
-      body: JSON.stringify({ history, userText, attachment }),
+      body: JSON.stringify({
+        history,
+        userText,
+        attachment: fileList[0] || null,
+        attachments: fileList.length ? fileList : null,
+      }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -53,10 +71,12 @@ export async function sendChatMessage({ history = [], userText = '', attachment 
   const { generateContent } = await import('./geminiClient');
 
   const userParts = [];
-  if (attachment?.base64 && attachment?.mimeType) {
-    userParts.push({
-      inline_data: { mime_type: attachment.mimeType, data: attachment.base64 },
-    });
+  for (const file of fileList) {
+    if (file?.base64 && file?.mimeType) {
+      userParts.push({
+        inline_data: { mime_type: file.mimeType, data: file.base64 },
+      });
+    }
   }
   const trimmedText = (userText || '').trim();
   if (trimmedText) userParts.push({ text: trimmedText });

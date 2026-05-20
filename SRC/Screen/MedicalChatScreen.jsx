@@ -7,6 +7,7 @@ import {
   FlatList,
   Image,
   KeyboardAvoidingView,
+  ScrollView,
   Platform,
   StyleSheet,
   Text,
@@ -21,9 +22,9 @@ import { MED_THEME } from '../constants/appTheme';
 import { useResponsive } from '../hooks/useResponsive';
 import { attachmentToBase64, guessImageMimeType } from '../services/fileToBase64';
 import { useChatVoiceInput } from '../hooks/useChatVoiceInput';
-import { pickChatAttachment } from '../services/chatAttachmentPicker';
+import { pickChatAttachments } from '../services/chatAttachmentPicker';
 import { sendChatMessage } from '../services/geminiChat';
-import { takeStashedAttachment } from '../services/attachmentBridge';
+import { takeStashedAttachments } from '../services/attachmentBridge';
 
 const MAX_PDF_BYTES = 8 * 1024 * 1024;
 
@@ -47,7 +48,7 @@ export default function MedicalChatScreen({ navigation, route }) {
     ),
   ]);
   const [input, setInput] = useState(initialMessage || '');
-  const [pendingAttachment, setPendingAttachment] = useState(null);
+  const [pendingAttachments, setPendingAttachments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [initialSent, setInitialSent] = useState(false);
   const listRef = useRef(null);
@@ -81,79 +82,95 @@ export default function MedicalChatScreen({ navigation, route }) {
 
   const handleAttachPress = async () => {
     try {
-      const picked = await pickChatAttachment();
-      if (picked) applyPickedAsset(picked.type, picked);
+      const picked = await pickChatAttachments();
+      if (picked?.length) applyPickedAssets(picked);
     } catch (e) {
-      Alert.alert('Error', 'Could not attach file. Please try again.');
+      Alert.alert('Error', 'Could not attach files. Please try again.');
     }
   };
 
-  const applyPickedAsset = (type, asset) => {
-    if (!asset) return;
-    if (asset.size && asset.size > MAX_PDF_BYTES) {
-      Alert.alert('File too large', 'Please choose a file under 8 MB.');
-      return;
+  const applyPickedAssets = (assets) => {
+    const next = [];
+    for (const asset of assets) {
+      if (!asset) continue;
+      if (asset.size && asset.size > MAX_PDF_BYTES) {
+        Alert.alert('File too large', `${asset.name || 'File'} is over 8 MB.`);
+        continue;
+      }
+      next.push({
+        type: asset.type,
+        name: asset.name,
+        uri: asset.uri,
+        file: asset.file,
+        mimeType:
+          asset.mimeType ||
+          (asset.type === 'pdf'
+            ? 'application/pdf'
+            : guessImageMimeType(asset.uri || asset.name)),
+      });
     }
-    setPendingAttachment({
-      type,
-      name: asset.name,
-      uri: asset.uri,
-      file: asset.file,
-      mimeType:
-        asset.mimeType ||
-        (type === 'pdf' ? 'application/pdf' : guessImageMimeType(asset.name)),
-    });
+    if (next.length) setPendingAttachments((prev) => [...prev, ...next].slice(0, 6));
   };
 
   useEffect(() => {
-    const stashed = takeStashedAttachment();
-    if (stashed) {
-      applyPickedAsset(stashed.type, stashed);
-    }
+    const stashed = takeStashedAttachments();
+    if (stashed.length) applyPickedAssets(stashed);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
 
   const handleSend = async (overrideText) => {
     if (voice.isListening) voice.stop();
     const text = (typeof overrideText === 'string' ? overrideText : input).trim();
-    if (!text && !pendingAttachment) {
-      Alert.alert('Empty message', 'Type a message or attach a photo/PDF.');
+    if (!text && !pendingAttachments.length) {
+      Alert.alert('Empty message', 'Type a message or attach photos/PDFs.');
       return;
     }
     if (isLoading) return;
 
-    const attachmentMeta = pendingAttachment
-      ? {
-          type: pendingAttachment.type,
-          name: pendingAttachment.name,
-          uri: pendingAttachment.uri,
-        }
-      : null;
+    const attachmentMeta =
+      pendingAttachments.length === 1
+        ? {
+            type: pendingAttachments[0].type,
+            name: pendingAttachments[0].name,
+            uri: pendingAttachments[0].uri,
+          }
+        : pendingAttachments.length > 1
+          ? {
+              type: 'multi',
+              name: `${pendingAttachments.length} files`,
+              uris: pendingAttachments.map((a) => a.uri).filter(Boolean),
+            }
+          : null;
 
-    const userMessage = createMessage(
-      'user',
-      text || (pendingAttachment?.type === 'pdf' ? 'Please analyze this PDF.' : 'Please analyze this image.'),
-      attachmentMeta
-    );
+    const hasPdf = pendingAttachments.some((a) => a.type === 'pdf');
+    const defaultPrompt = hasPdf
+      ? 'Please analyze these PDFs and images.'
+      : pendingAttachments.length > 1
+        ? 'Please analyze these images.'
+        : pendingAttachments[0]?.type === 'pdf'
+          ? 'Please analyze this PDF.'
+          : 'Please analyze this image.';
+
+    const userMessage = createMessage('user', text || defaultPrompt, attachmentMeta);
 
     const history = historyForApi();
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
-    const attachmentToSend = pendingAttachment;
-    setPendingAttachment(null);
+    const attachmentsToSend = pendingAttachments;
+    setPendingAttachments([]);
     setIsLoading(true);
 
     try {
-      let apiAttachment = null;
-      if (attachmentToSend) {
-        const base64 = await attachmentToBase64(attachmentToSend);
-        apiAttachment = { mimeType: attachmentToSend.mimeType, base64 };
+      const apiAttachments = [];
+      for (const att of attachmentsToSend) {
+        const base64 = await attachmentToBase64(att);
+        apiAttachments.push({ mimeType: att.mimeType, base64 });
       }
 
       const reply = await sendChatMessage({
         history,
         userText: userMessage.text,
-        attachment: apiAttachment,
+        attachments: apiAttachments.length ? apiAttachments : null,
       });
       setMessages((prev) => [...prev, createMessage('assistant', reply)]);
     } catch (e) {
@@ -168,6 +185,23 @@ export default function MedicalChatScreen({ navigation, route }) {
 
   const renderAttachmentPreview = (attachment, compact = false) => {
     if (!attachment) return null;
+    if (attachment.type === 'multi' && attachment.uris?.length) {
+      return (
+        <View style={compact ? styles.pendingMulti : styles.multiBubble}>
+          {attachment.uris.slice(0, 3).map((uri) => (
+            <Image
+              key={uri}
+              source={{ uri }}
+              style={compact ? styles.pendingThumbSmall : styles.bubbleThumbSmall}
+              resizeMode="cover"
+            />
+          ))}
+          {attachment.uris.length > 3 ? (
+            <Text style={styles.multiCount}>+{attachment.uris.length - 3}</Text>
+          ) : null}
+        </View>
+      );
+    }
     if (attachment.type === 'image' && attachment.uri) {
       return (
         <Image
@@ -254,10 +288,16 @@ export default function MedicalChatScreen({ navigation, route }) {
               </View>
             )}
 
-            {pendingAttachment && (
+            {pendingAttachments.length > 0 && (
               <View style={[styles.pendingBar, { marginHorizontal: r.horizontalPadding }]}>
-                {renderAttachmentPreview(pendingAttachment, true)}
-                <TouchableOpacity onPress={() => setPendingAttachment(null)}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pendingScroll}>
+                  {pendingAttachments.map((att, idx) => (
+                    <View key={`${att.uri}-${idx}`} style={styles.pendingItem}>
+                      {renderAttachmentPreview(att, true)}
+                    </View>
+                  ))}
+                </ScrollView>
+                <TouchableOpacity onPress={() => setPendingAttachments([])}>
                   <Ionicons name="close-circle" size={24} color={MED_THEME.textMuted} />
                 </TouchableOpacity>
               </View>
@@ -368,4 +408,11 @@ const styles = StyleSheet.create({
     borderColor: MED_THEME.cardBorder,
   },
   pendingThumb: { width: 48, height: 48, borderRadius: 8 },
+  pendingScroll: { flex: 1, marginRight: 8 },
+  pendingItem: { marginRight: 8 },
+  pendingThumbSmall: { width: 44, height: 44, borderRadius: 8 },
+  bubbleThumbSmall: { width: 56, height: 56, borderRadius: 8, marginBottom: 6, marginRight: 6 },
+  pendingMulti: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  multiBubble: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 },
+  multiCount: { color: MED_THEME.textMuted, fontSize: 12, alignSelf: 'center' },
 });

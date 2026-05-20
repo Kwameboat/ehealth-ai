@@ -1,6 +1,5 @@
 // VomitingNauseaScreen.js
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import * as FileSystem from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
 import * as Speech from 'expo-speech';
 import {
@@ -23,13 +22,15 @@ import {
 import { useTheme } from '../Context/ThemeContext';
 
 import ClinicalAnalysisView from '../Components/ClinicalAnalysisView';
-import { analyzeSymptomFromImage, analyzeSymptomFromText } from '../services/symptomAnalysis';
+import MultiImagePreview from '../Components/MultiImagePreview';
+import { analyzeSymptomFromText } from '../services/symptomAnalysis';
+import { uploadSymptomCameraPhoto, uploadSymptomGalleryImages } from '../services/symptomScreenUpload';
 
 const VomitingNauseaScreen = ({ navigation }) => {
   const theme = useTheme();
   const styles = getStyles(theme);
 
-  const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedImages, setSelectedImages] = useState([]);
   const [analysisResult, setAnalysisResult] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -150,57 +151,23 @@ const VomitingNauseaScreen = ({ navigation }) => {
     }
   };
 
-  // Analyze Image with Gemini
-  const analyzeImageWithGemini = async (imageUri) => {
-    setIsAnalyzing(true);
-    setAnalysisResult('');
-    try {
-      const base64 = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      const mimeType = 'image/jpeg';
-      const resultText = await analyzeSymptomFromImage({
-        condition: 'Vomiting & Nausea',
-        base64,
-        mimeType,
-      });
-      setAnalysisResult(resultText);
-    } catch (error) {
-      console.error('Clinical analysis error:', error);
-      Alert.alert('Analysis Error', 'Failed to analyze the image. Please try again.');
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
-
   // Pick Image
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
+    await uploadSymptomGalleryImages({
+      condition: 'Vomiting & Nausea',
+      setIsAnalyzing,
+      setAnalysisResult,
+      setSelectedImages,
     });
-
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      setSelectedImage(result.assets[0].uri);
-      analyzeImageWithGemini(result.assets[0].uri);
-    }
   };
 
-  // Take Photo
   const takePhoto = async () => {
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
+    await uploadSymptomCameraPhoto({
+      condition: 'Vomiting & Nausea',
+      setIsAnalyzing,
+      setAnalysisResult,
+      setSelectedImages,
     });
-
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      setSelectedImage(result.assets[0].uri);
-      analyzeImageWithGemini(result.assets[0].uri);
-    }
   };
 
   // Speak Result
@@ -400,14 +367,8 @@ const VomitingNauseaScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
-          {selectedImage && (
-            <View style={styles.imagePreviewContainer}>
-              <Image 
-                source={{ uri: selectedImage }} 
-                style={styles.imagePreview} 
-                resizeMode="cover"
-              />
-            </View>
+          {selectedImages.length > 0 && (
+            <MultiImagePreview uris={selectedImages} onClear={() => setSelectedImages([])} />
           )}
 
           {isAnalyzing && (

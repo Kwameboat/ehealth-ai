@@ -1,12 +1,9 @@
 import { FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import * as FileSystem from 'expo-file-system';
-import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,105 +11,84 @@ import {
   View,
 } from 'react-native';
 import ClinicalAnalysisView from '../Components/ClinicalAnalysisView';
+import MultiImagePreview from '../Components/MultiImagePreview';
 import { useTheme } from '../Context/ThemeContext';
-import { analyzeLabFromImage, analyzeLabFromPdf } from '../services/labAnalysis';
-import { pickPdfDocument } from '../services/pickPdf';
+import {
+  pickClinicalGalleryImages,
+  pickClinicalPdfDocuments,
+  takeClinicalPhoto,
+} from '../services/clinicalMediaPicker';
+import { analyzeLabFromAssets } from '../services/labAnalysis';
 
 const LabResultsScreen = () => {
   const theme = useTheme();
   const navigation = useNavigation();
   const styles = createStyles(theme);
 
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [selectedPdf, setSelectedPdf] = useState(null);
+  const [imageUris, setImageUris] = useState([]);
+  const [pdfAssets, setPdfAssets] = useState([]);
   const [analysisResult, setAnalysisResult] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   useEffect(() => {
-    ImagePicker.requestCameraPermissionsAsync();
-    ImagePicker.requestMediaLibraryPermissionsAsync();
+    import('expo-image-picker').then((ImagePicker) => {
+      ImagePicker.requestCameraPermissionsAsync();
+      ImagePicker.requestMediaLibraryPermissionsAsync();
+    });
   }, []);
 
-  const runAnalysis = async (imageUri, pdfAsset) => {
+  const runAnalysis = async (assets) => {
+    if (!assets?.length) return;
     setIsAnalyzing(true);
     setAnalysisResult('');
     try {
-      if (pdfAsset?.uri) {
-        const base64 = await FileSystem.readAsStringAsync(pdfAsset.uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        const text = await analyzeLabFromPdf({ base64 });
-        setAnalysisResult(text);
-      } else if (imageUri) {
-        const base64 = await FileSystem.readAsStringAsync(imageUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        const text = await analyzeLabFromImage({
-          base64,
-          mimeType: 'image/jpeg',
-        });
-        setAnalysisResult(text);
-      }
+      const text = await analyzeLabFromAssets({ assets });
+      setAnalysisResult(text);
     } catch (e) {
       console.error('Lab analysis error:', e);
-      Alert.alert('Analysis Error', e.message || 'Failed to analyze your lab report. Please try again.');
+      Alert.alert(
+        'Analysis Error',
+        e.message || 'Failed to analyze your lab report. Please try again.'
+      );
     } finally {
       setIsAnalyzing(false);
     }
   };
 
+  const applyAssets = (assets) => {
+    const images = assets.filter((a) => a.kind === 'image');
+    const pdfs = assets.filter((a) => a.kind === 'pdf');
+    setImageUris(images.map((a) => a.uri));
+    setPdfAssets(pdfs);
+    runAnalysis(assets);
+  };
+
   const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.85,
-    });
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      setSelectedPdf(null);
-      setSelectedImage(result.assets[0].uri);
-      setAnalysisResult('');
-      runAnalysis(result.assets[0].uri, null);
-    }
+    const assets = await pickClinicalGalleryImages();
+    if (assets.length) applyAssets(assets);
   };
 
   const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
+    const asset = await takeClinicalPhoto();
+    if (!asset) {
       Alert.alert('Permission required', 'Camera access is needed to photograph your lab report.');
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.85,
-    });
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      setSelectedPdf(null);
-      setSelectedImage(result.assets[0].uri);
-      setAnalysisResult('');
-      runAnalysis(result.assets[0].uri, null);
-    }
+    applyAssets([asset]);
   };
 
   const pickPdf = async () => {
-    const result = await pickPdfDocument();
-    if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
-    setSelectedImage(null);
-    setSelectedPdf(asset);
-    setAnalysisResult('');
-    runAnalysis(null, asset);
+    const assets = await pickClinicalPdfDocuments();
+    if (assets.length) applyAssets(assets);
   };
 
   const clearSelection = () => {
-    setSelectedImage(null);
-    setSelectedPdf(null);
+    setImageUris([]);
+    setPdfAssets([]);
     setAnalysisResult('');
   };
 
-  const hasSelection = selectedImage || selectedPdf;
+  const hasSelection = imageUris.length > 0 || pdfAssets.length > 0;
 
   return (
     <View style={styles.container}>
@@ -131,7 +107,7 @@ const LabResultsScreen = () => {
               <MaterialCommunityIcons name="microscope" size={80} color={theme.colors.primary} />
               <Text style={styles.illustrationText}>Understand Your Lab Report</Text>
               <Text style={styles.illustrationSubtext}>
-                Upload a photo or PDF of your lab results for a clear explanation
+                Upload one or more photos or PDFs of your lab results for a clear explanation
               </Text>
             </View>
 
@@ -148,7 +124,7 @@ const LabResultsScreen = () => {
                 style={[styles.uploadButton, { backgroundColor: theme.colors.card }]}
                 onPress={pickImage}
               >
-                <Ionicons name="image" size={32} color={theme.colors.primary} />
+                <Ionicons name="images" size={32} color={theme.colors.primary} />
                 <Text style={[styles.uploadButtonText, { color: theme.colors.text }]}>Gallery</Text>
               </TouchableOpacity>
 
@@ -163,24 +139,32 @@ const LabResultsScreen = () => {
           </View>
         ) : (
           <View style={styles.analysisSection}>
-            {selectedImage ? (
-              <View style={styles.imagePreviewContainer}>
-                <Image source={{ uri: selectedImage }} style={styles.imagePreview} />
-                <TouchableOpacity style={styles.clearButton} onPress={clearSelection}>
-                  <Ionicons name="close-circle" size={32} color={theme.colors.danger} />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={[styles.pdfChip, { backgroundColor: theme.colors.card }]}>
+            {imageUris.length > 0 ? (
+              <MultiImagePreview uris={imageUris} onClear={clearSelection} imageHeight={220} />
+            ) : null}
+
+            {pdfAssets.map((pdf) => (
+              <View
+                key={pdf.uri || pdf.name}
+                style={[styles.pdfChip, { backgroundColor: theme.colors.card }]}
+              >
                 <FontAwesome5 name="file-pdf" size={24} color={theme.colors.primary} />
                 <Text style={[styles.pdfName, { color: theme.colors.text }]} numberOfLines={2}>
-                  {selectedPdf?.name || 'Lab report.pdf'}
+                  {pdf.name || 'Lab report.pdf'}
                 </Text>
-                <TouchableOpacity onPress={clearSelection}>
-                  <Ionicons name="close-circle" size={28} color={theme.colors.danger} />
-                </TouchableOpacity>
+                {!imageUris.length && pdfAssets.length === 1 ? (
+                  <TouchableOpacity onPress={clearSelection}>
+                    <Ionicons name="close-circle" size={28} color={theme.colors.danger} />
+                  </TouchableOpacity>
+                ) : null}
               </View>
-            )}
+            ))}
+
+            {pdfAssets.length > 1 ? (
+              <TouchableOpacity onPress={clearSelection} style={styles.clearLink}>
+                <Text style={{ color: theme.colors.danger }}>Clear all</Text>
+              </TouchableOpacity>
+            ) : null}
 
             {isAnalyzing ? (
               <View style={styles.analyzingContainer}>
@@ -259,26 +243,18 @@ const createStyles = (theme) =>
     },
     uploadButtonText: { marginTop: 8, fontSize: 13, fontWeight: '600', textAlign: 'center' },
     analysisSection: { width: '100%' },
-    imagePreviewContainer: { position: 'relative', marginBottom: 20 },
-    imagePreview: {
-      width: '100%',
-      height: 220,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    clearButton: { position: 'absolute', top: 8, right: 8 },
     pdfChip: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
       padding: 16,
       borderRadius: 12,
-      marginBottom: 20,
+      marginBottom: 12,
       borderWidth: 1,
       borderColor: theme.colors.border,
     },
     pdfName: { flex: 1, fontSize: 15 },
+    clearLink: { alignSelf: 'flex-end', marginBottom: 12 },
     analyzingContainer: { alignItems: 'center', padding: 24 },
     analyzingText: { marginTop: 12, fontSize: 16 },
     resultsContainer: {

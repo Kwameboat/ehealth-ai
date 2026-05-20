@@ -3,10 +3,13 @@ import * as DocumentPicker from 'expo-document-picker';
 /**
  * @returns {Promise<import('expo-document-picker').DocumentPickerResult>}
  */
-export async function pickPdfDocument() {
+/**
+ * @param {{ multiple?: boolean }} [options]
+ */
+export async function pickPdfDocument(options = {}) {
   return DocumentPicker.getDocumentAsync({
     type: 'application/pdf',
     copyToCacheDirectory: true,
-    multiple: false,
+    multiple: options.multiple !== false,
   });
 }

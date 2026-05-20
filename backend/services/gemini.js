@@ -62,13 +62,22 @@ function isChatTruncated(data) {
   return reason === 'MAX_TOKENS' || reason === 'LENGTH';
 }
 
-function buildChatContents(history, userText, attachment) {
+function normalizeAttachments(attachment, attachments) {
+  if (Array.isArray(attachments) && attachments.length) return attachments;
+  if (attachment?.base64 && attachment?.mimeType) return [attachment];
+  return [];
+}
+
+function buildChatContents(history, userText, attachment, attachments) {
   const userParts = [];
-  const b64 = normalizeBase64(attachment?.base64);
-  if (b64 && attachment?.mimeType) {
-    userParts.push({
-      inline_data: { mime_type: attachment.mimeType, data: b64 },
-    });
+  const files = normalizeAttachments(attachment, attachments);
+  for (const file of files) {
+    const b64 = normalizeBase64(file?.base64);
+    if (b64 && file?.mimeType) {
+      userParts.push({
+        inline_data: { mime_type: file.mimeType, data: b64 },
+      });
+    }
   }
   const trimmed = (userText || '').trim();
   if (trimmed) userParts.push({ text: trimmed });
@@ -94,16 +103,17 @@ function buildChatContents(history, userText, attachment) {
   ];
 }
 
-function resolveChatFeatureKey(attachment) {
-  if (!attachment?.mimeType) return 'chat_text';
-  if (attachment.mimeType === 'application/pdf') return 'chat_pdf';
-  if (attachment.mimeType.startsWith('image/')) return 'chat_image';
+function resolveChatFeatureKey(attachment, attachments) {
+  const files = normalizeAttachments(attachment, attachments);
+  if (!files.length) return 'chat_text';
+  if (files.some((f) => f.mimeType === 'application/pdf')) return 'chat_pdf';
+  if (files.some((f) => (f.mimeType || '').startsWith('image/'))) return 'chat_image';
   return 'chat_text';
 }
 
-async function chatCompletion(history, userText, attachment) {
+async function chatCompletion(history, userText, attachment, attachments) {
   const recommending = shouldGiveRecommendations(history);
-  const contents = buildChatContents(history, userText, attachment);
+  const contents = buildChatContents(history, userText, attachment, attachments);
   const generationConfig = recommending
     ? MEDICAL_CHAT_RECOMMENDATION_CONFIG
     : MEDICAL_CHAT_GENERATION_CONFIG;
