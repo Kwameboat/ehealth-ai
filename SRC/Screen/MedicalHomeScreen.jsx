@@ -20,6 +20,8 @@ import { stashAttachments } from '../services/attachmentBridge';
 import { pickChatAttachments } from '../services/chatAttachmentPicker';
 
 const MedicalHomeScreen = ({ navigation }) => {
+  const med = useMedTheme();
+  const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
   const r = useResponsive();
   const { user, backendRequired, pointsEnabled } = useAuth();
   const [greeting, setGreeting] = useState('GOOD MORNING');
