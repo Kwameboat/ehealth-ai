@@ -13,8 +13,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppLogo from '../Components/AppLogo';
-import { APP_TAGLINE } from '../constants/branding';
+import PasswordInput from '../Components/PasswordInput';
 import ThemeToggleButton from '../Components/ThemeToggleButton';
+import { APP_TAGLINE } from '../constants/branding';
 import { useNavigation } from '@react-navigation/native';
 import { useMedTheme } from '../hooks/useMedTheme';
 import { useAuth } from '../Context/AuthContext';
@@ -66,10 +67,11 @@ const AuthScreen = () => {
           {mode === 'register' && (
             <TextInput
               style={styles.input}
-              placeholder="Full name (optional)"
+              placeholder="Full name"
               placeholderTextColor={med.textMuted}
               value={fullName}
               onChangeText={setFullName}
+              autoCapitalize="words"
             />
           )}
           <TextInput
@@ -81,11 +83,10 @@ const AuthScreen = () => {
             value={email}
             onChangeText={setEmail}
           />
-          <TextInput
-            style={styles.input}
+          <PasswordInput
+            med={med}
             placeholder="Password (min 6 characters)"
             placeholderTextColor={med.textMuted}
-            secureTextEntry
             value={password}
             onChangeText={setPassword}
           />
@@ -118,7 +119,6 @@ const createStyles = (med) => StyleSheet.create({
   flex: { flex: 1 },
   themeRow: { position: 'absolute', top: 12, right: 16, zIndex: 10 },
   scroll: { flexGrow: 1, justifyContent: 'center', padding: 28, maxWidth: 420, alignSelf: 'center', width: '100%' },
-  title: { fontSize: 32, fontWeight: '800', color: med.text, marginBottom: 8 },
   subtitle: { color: med.textMuted, marginBottom: 28, lineHeight: 22 },
   input: {
     backgroundColor: med.inputBg,

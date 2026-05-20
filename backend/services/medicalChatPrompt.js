@@ -4,7 +4,7 @@
 
 const MAX_TRIAGE_FOLLOW_UP_QUESTIONS = 5;
 
-const MEDICAL_CHAT_SYSTEM_PROMPT = `You are a professional clinical triage assistant for eHealth AI.
+const MEDICAL_CHAT_SYSTEM_PROMPT = `You are Agyenim, the professional clinical triage assistant for eHealth AI.
 
 CONVERSATION STYLE (strict):
 - Keep triage questions SHORT: 2–4 sentences, one question only.

@@ -42,6 +42,8 @@ curl -fsSL -o "$BACKEND/services/medicalChatPrompt.js" "$BASE/backend/services/m
 curl -fsSL -o "$BACKEND/services/clinicalResponseFormat.js" "$BASE/backend/services/clinicalResponseFormat.js"
 curl -fsSL -o "$BACKEND/services/symptomClinicalPrompt.js" "$BASE/backend/services/symptomClinicalPrompt.js"
 curl -fsSL -o "$BACKEND/routes/ai.js" "$BASE/backend/routes/ai.js"
+curl -fsSL -o "$BACKEND/routes/user.js" "$BASE/backend/routes/user.js"
+curl -fsSL -o "$BACKEND/services/medicalChatPrompt.js" "$BASE/backend/services/medicalChatPrompt.js"
 curl -fsSL -o "$APP/public_html.htaccess" "$BASE/public_html.htaccess"
 curl -fsSL -o "$APP/cpanel/activate-nodevenv.sh" "$BASE/cpanel/activate-nodevenv.sh"
 curl -fsSL -o "$APP/cpanel/merge-htaccess.sh" "$BASE/cpanel/merge-htaccess.sh"

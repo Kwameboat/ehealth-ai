@@ -67,3 +67,19 @@ export async function fetchMe() {
     useUserAuth: true,
   });
 }
+
+export async function updateMe({ fullName, email, password, currentPassword }) {
+  return request('/api/me', {
+    method: 'PATCH',
+    useUserAuth: true,
+    body: JSON.stringify({ fullName, email, password, currentPassword }),
+  });
+}
+
+export async function deleteMe({ password }) {
+  return request('/api/me', {
+    method: 'DELETE',
+    useUserAuth: true,
+    body: JSON.stringify({ password }),
+  });
+}

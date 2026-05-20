@@ -17,6 +17,7 @@ import FeverChillsScreen from '../Screen/FeverChillsScreen';
 import GeneralFatigueScreen from '../Screen/GeneralFatigueScreen';
 import HeadacheMigraineScreen from '../Screen/HeadacheMigraineScreen';
 import JointMusclePainScreen from '../Screen/JointMusclePainScreen';
+import AccountScreen from '../Screen/AccountScreen';
 import AuthScreen from '../Screen/AuthScreen';
 import BuyPointsScreen from '../Screen/BuyPointsScreen';
 import MedicalHomeScreen from '../Screen/MedicalHomeScreen';
@@ -79,6 +80,7 @@ const StackNavigation = () => {
       {/* Onboarding Screen - Only shown if hasn't been seen */}
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />
       <Stack.Screen name="Auth" component={AuthScreen} />
+      <Stack.Screen name="Account" component={AccountScreen} />
       <Stack.Screen name="BuyPoints" component={BuyPointsScreen} />
       {/* Main App Screens */}
       <Stack.Screen name="Allergies" component={AllergiesScreen} />

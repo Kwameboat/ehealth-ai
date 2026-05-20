@@ -7,7 +7,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppBottomNav from '../Components/AppBottomNav';
 import AppLogo from '../Components/AppLogo';
-import { APP_TAGLINE } from '../constants/branding';
+import { AI_ASSISTANT_NAME, APP_TAGLINE, getUserFirstName } from '../constants/branding';
 import ChatInputBar from '../Components/ChatInputBar';
 import ResponsiveContainer from '../Components/ResponsiveContainer';
 import SymptomMenuModal from '../Components/SymptomMenuModal';
@@ -23,7 +23,8 @@ const MedicalHomeScreen = ({ navigation }) => {
   const med = useMedTheme();
   const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
   const r = useResponsive();
-  const { user, backendRequired, pointsEnabled } = useAuth();
+  const { user, backendRequired, pointsEnabled, isAuthenticated } = useAuth();
+  const firstName = getUserFirstName(user);
   const [greeting, setGreeting] = useState('GOOD MORNING');
   const [homeInput, setHomeInput] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -96,13 +97,22 @@ const MedicalHomeScreen = ({ navigation }) => {
       <AppLogo size="small" showTagline={false} centered={false} />
       <Text style={styles.taglineSidebar}>{APP_TAGLINE}</Text>
 
-      <View style={styles.profileCard}>
-        <Text style={styles.profileTitle}>Health Profile</Text>
-        <Text style={styles.profileSub}>Medical History Connected</Text>
-        <View style={styles.premiumBadge}>
-          <Text style={styles.premiumText}>PREMIUM MEMBER</Text>
-        </View>
-      </View>
+      <TouchableOpacity
+        style={styles.profileCard}
+        onPress={() => backendRequired && isAuthenticated && navigation.navigate('Account')}
+        disabled={!backendRequired || !isAuthenticated}
+        activeOpacity={0.85}
+      >
+        <Text style={styles.profileTitle}>
+          {user?.fullName?.trim() || 'My Account'}
+        </Text>
+        <Text style={styles.profileSub}>
+          {user?.email || 'Tap to manage profile & sign out'}
+        </Text>
+        {backendRequired && isAuthenticated ? (
+          <Text style={styles.profileLink}>Account settings →</Text>
+        ) : null}
+      </TouchableOpacity>
 
       <Text style={styles.sidebarSection}>Symptom Categories</Text>
       <ScrollView style={styles.sidebarList} showsVerticalScrollIndicator={false}>
@@ -193,14 +203,19 @@ const MedicalHomeScreen = ({ navigation }) => {
                   <View style={[styles.onlinePill, r.isTablet && styles.onlinePillTablet]}>
                     <View style={styles.onlineDot} />
                     <Text style={styles.onlineText} numberOfLines={1}>
-                      MEDICAL AGENT ONLINE
+                      {AI_ASSISTANT_NAME.toUpperCase()} ONLINE
                     </Text>
                   </View>
                 )}
                 <ThemeToggleButton compact />
-                <View style={styles.avatar}>
+                <TouchableOpacity
+                  style={styles.avatar}
+                  onPress={() => backendRequired && isAuthenticated && navigation.navigate('Account')}
+                  disabled={!backendRequired || !isAuthenticated}
+                  accessibilityLabel="My account"
+                >
                   <Ionicons name="person" size={18} color={med.textMuted} />
-                </View>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -226,18 +241,22 @@ const MedicalHomeScreen = ({ navigation }) => {
                   </View>
                 ) : (
                   <>
-                    <Text style={styles.greetingLabel}>{greeting},</Text>
+                    <Text style={styles.greetingLabel}>
+                      {firstName ? `${greeting}, ${firstName.toUpperCase()}` : greeting}
+                    </Text>
                     <Text
                       style={[
                         styles.heroTitle,
                         { fontSize: r.heroTitleSize, lineHeight: r.heroLineHeight },
                       ]}
                     >
-                      How can I assist with your health today?
+                      {firstName
+                        ? `How can ${AI_ASSISTANT_NAME} help you today?`
+                        : `How can ${AI_ASSISTANT_NAME} help with your health today?`}
                     </Text>
                     <Text style={[styles.heroSub, { fontSize: r.heroSubSize }]}>
-                      Describe your symptoms or ask a medical question. Our AI partner is here to
-                      analyze and guide your health journey.
+                      Describe your symptoms or ask a medical question. {AI_ASSISTANT_NAME} is here
+                      to analyze and guide your health journey.
                     </Text>
 
                     {r.useQuickGrid ? (
@@ -371,15 +390,7 @@ const createStyles = (med) =>
   },
   profileTitle: { color: med.text, fontWeight: '700', fontSize: 15 },
   profileSub: { color: med.textMuted, fontSize: 12, marginTop: 4 },
-  premiumBadge: {
-    alignSelf: 'flex-start',
-    marginTop: 10,
-    backgroundColor: 'rgba(99,102,241,0.25)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  premiumText: { color: med.accent, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
+  profileLink: { color: med.primary, fontSize: 12, fontWeight: '600', marginTop: 10 },
   sidebarSection: {
     color: med.textDim,
     fontSize: 11,

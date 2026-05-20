@@ -19,6 +19,7 @@ import AppBottomNav from '../Components/AppBottomNav';
 import ChatInputBar from '../Components/ChatInputBar';
 import ResponsiveContainer from '../Components/ResponsiveContainer';
 import ThemeToggleButton from '../Components/ThemeToggleButton';
+import { AI_ASSISTANT_NAME } from '../constants/branding';
 import { useMedTheme } from '../hooks/useMedTheme';
 import { useResponsive } from '../hooks/useResponsive';
 import { attachmentToBase64, guessImageMimeType } from '../services/fileToBase64';
@@ -47,7 +48,7 @@ export default function MedicalChatScreen({ navigation, route }) {
   const [messages, setMessages] = useState([
     createMessage(
       'assistant',
-      "Hello — I'm your health assistant. Tell me what's bothering you. I'll ask up to 5 short follow-up questions, then share recommendations. For emergencies, use Emergency or call your local emergency number."
+      `Hello — I'm ${AI_ASSISTANT_NAME}, your health assistant at eHealth AI. Tell me what's bothering you. I'll ask up to 5 short follow-up questions, then share recommendations. For emergencies, use Emergency or call your local emergency number.`
     ),
   ]);
   const [input, setInput] = useState(initialMessage || '');
@@ -256,10 +257,10 @@ export default function MedicalChatScreen({ navigation, route }) {
             <Ionicons name="arrow-back" size={24} color={med.text} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Health Chat</Text>
+            <Text style={styles.headerTitle}>Chat with {AI_ASSISTANT_NAME}</Text>
             <View style={styles.onlineRow}>
               <View style={styles.onlineDot} />
-              <Text style={styles.onlineLabel}>Agent online</Text>
+              <Text style={styles.onlineLabel}>{AI_ASSISTANT_NAME} online</Text>
             </View>
           </View>
           <ThemeToggleButton compact style={{ marginRight: 4 }} />

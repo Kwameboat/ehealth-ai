@@ -1,9 +1,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
+  deleteMe,
   fetchMe,
   isBackendConfigured,
   loginUser,
   registerUser,
+  updateMe,
 } from '../services/authApi';
 import { clearSession, getStoredToken, getStoredUser, saveSession } from '../services/authStorage';
 import { setPointsBalanceHandler } from '../services/pointsBridge';
@@ -94,6 +96,20 @@ export function AuthProvider({ children }) {
     setUser((prev) => (prev ? { ...prev, pointsBalance: balance } : prev));
   };
 
+  const updateProfile = async (fields) => {
+    const data = await updateMe(fields);
+    setUser(data.user);
+    if (token) await saveSession(token, data.user);
+    return data.user;
+  };
+
+  const deleteAccount = async (password) => {
+    await deleteMe({ password });
+    await clearSession();
+    setToken(null);
+    setUser(null);
+  };
+
   const value = useMemo(
     () => ({
       user,
@@ -106,6 +122,8 @@ export function AuthProvider({ children }) {
       register,
       logout,
       refreshUser,
+      updateProfile,
+      deleteAccount,
       updatePointsBalance,
     }),
     [user, token, loading, backendRequired, pointsEnabled]
