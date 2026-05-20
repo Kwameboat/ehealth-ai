@@ -11,6 +11,9 @@ const HEADINGS = [
   { match: /^Recommendations$/i, title: 'Recommendations' },
   { match: /^When to seek care$/i, title: 'When to seek care' },
   { match: /^When to Seek Help$/i, title: 'When to seek care' },
+  { match: /^Summary$/i, title: 'Summary' },
+  { match: /^Key findings$/i, title: 'Key findings' },
+  { match: /^What this may mean$/i, title: 'What this may mean' },
 ];
 
 function cleanLine(line) {

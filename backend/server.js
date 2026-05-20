@@ -28,6 +28,7 @@ const paymentRoutes = require('./routes/payments');
 const { paystackWebhookHandler } = require('./routes/payments');
 
 const app = express();
+app.set('trust proxy', 1);
 const isProd = process.env.NODE_ENV === 'production';
 const PORT = Number(process.env.PORT) || 3001;
 const HOST = process.env.HOST || (isProd ? '0.0.0.0' : '127.0.0.1');
@@ -63,11 +64,17 @@ app.use(
 /** PWA reads APP_API_SECRET at runtime (no rebuild when cPanel secret changes). */
 app.get('/app-config.js', (req, res) => {
   const secret = process.env.APP_API_SECRET || '';
+  const host = req.get('host') || '';
+  const forwardedProto = (req.get('x-forwarded-proto') || '').split(',')[0].trim();
+  const proto =
+    forwardedProto === 'https' || req.secure
+      ? 'https'
+      : isProd
+        ? 'https'
+        : forwardedProto || 'http';
   const apiUrl =
-    process.env.PUBLIC_APP_URL ||
-    (req.get('x-forwarded-proto') && req.get('host')
-      ? `${req.get('x-forwarded-proto')}://${req.get('host')}`
-      : '');
+    process.env.PUBLIC_APP_URL?.replace(/\/$/, '') ||
+    (host ? `${proto}://${host}` : '');
   res.type('application/javascript');
   res.setHeader('Cache-Control', 'no-store');
   res.send(

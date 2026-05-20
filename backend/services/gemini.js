@@ -143,7 +143,11 @@ async function chatCompletion(history, userText, attachment) {
 }
 
 function resolveGenerationConfig(featureKey) {
-  if (featureKey === 'symptom_text' || featureKey === 'symptom_image') {
+  if (
+    featureKey === 'symptom_text' ||
+    featureKey === 'symptom_image' ||
+    featureKey === 'lab_report'
+  ) {
     return SYMPTOM_GENERATION_CONFIG;
   }
   return null;

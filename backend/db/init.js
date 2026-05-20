@@ -135,6 +135,7 @@ function seedPointRules() {
     ['voice_consultation', 'Voice consultation', 5, 'Medical voice assistant turn'],
     ['emergency_lookup', 'Emergency lookup', 4, 'Emergency hospital lookup'],
     ['medicine_scan', 'Medicine recognition', 6, 'Medicine image scan (when enabled)'],
+    ['lab_report', 'Lab results analysis', 10, 'Lab report photo or PDF interpretation'],
   ];
 
   const insert = database.prepare(`

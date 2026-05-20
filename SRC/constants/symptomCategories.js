@@ -39,7 +39,7 @@ export const QUICK_ACTIONS = [
     desc: 'Upload and understand your lab reports',
     icon: 'microscope',
     color: '#06B6D4',
-    chatPrompt: 'I want help understanding my lab results. What should I upload?',
+    screen: 'LabResults',
   },
   {
     id: 'voice',

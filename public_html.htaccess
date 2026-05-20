@@ -7,6 +7,11 @@
   RewriteEngine On
   RewriteBase /
 
+  # Force HTTPS (fixes "Not secure" in Chrome on phone when HTTP is used)
+  RewriteCond %{HTTPS} off
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
   # Let Node/Passenger handle API + runtime PWA config
   RewriteRule ^api(/|$) - [L]
   RewriteRule ^admin/api(/|$) - [L]
@@ -31,4 +36,10 @@
 
   # SPA fallback for app routes only
   RewriteRule ^ index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
+  Header always set Content-Security-Policy "upgrade-insecure-requests" env=HTTPS
+  Header always set Referrer-Policy "strict-origin-when-cross-origin" env=HTTPS
 </IfModule>

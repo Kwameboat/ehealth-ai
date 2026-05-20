@@ -23,6 +23,7 @@ import MedicalHomeScreen from '../Screen/MedicalHomeScreen';
 import { useAuth } from '../Context/AuthContext';
 import MedicalChatScreen from '../Screen/MedicalChatScreen';
 import MedicalVoiceAgentScreen from '../Screen/MedicalVoiceAgentScreen';
+import LabResultsScreen from '../Screen/LabResultsScreen';
 import MedicineRecognitionScreen from '../Screen/MedicineRecognitionScreen';
 import MedicalHealth from '../Screen/MentalHealthScreen';
 import SkinProblems from '../Screen/SkinIssuesScreen';
@@ -98,6 +99,7 @@ const StackNavigation = () => {
       <Stack.Screen name="MedicalHealth" component={MedicalHealth} />
       <Stack.Screen name="Emergency" component={EmergencyScreen} />
       <Stack.Screen name="MedicineRecognition" component={MedicineRecognitionScreen} />
+      <Stack.Screen name="LabResults" component={LabResultsScreen} />
       <Stack.Screen name="MedicalVoiceAgent" component={MedicalVoiceAgentScreen} />
       <Stack.Screen name="MedicalChat" component={MedicalChatScreen} />
 
