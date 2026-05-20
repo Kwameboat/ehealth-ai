@@ -1,7 +1,7 @@
 #!/bin/bash
 # One-shot repair — DB + backend files. NEVER overwrites Passenger .htaccess.
 # Usage: bash ~/ehealth-ai/cpanel/repair-production.sh
-set -u
+set -eo pipefail
 
 HOME_DIR="${HOME:-/home/ehealtha}"
 APP="$HOME_DIR/ehealth-ai"
@@ -11,14 +11,18 @@ BASE=https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main
 
 echo "=== eHealth AI production repair ==="
 
-for v in "$HOME_DIR/nodevenv/ehealth-ai"/*/bin/activate; do
-  [ -f "$v" ] && . "$v" && break
-done
+# shellcheck disable=SC1091
+. "$APP/cpanel/activate-nodevenv.sh" 2>/dev/null || {
+  for bin in "$HOME_DIR/nodevenv/ehealth-ai"/*/bin; do
+    [ -x "$bin/node" ] && export PATH="$bin:$PATH" && break
+  done
+}
+
 if ! command -v node >/dev/null 2>&1; then
-  echo "ERROR: node not found. Run: source ~/nodevenv/ehealth-ai/20/bin/activate"
+  echo "ERROR: node not found. Check cPanel Node.js app root is ehealth-ai, then RESTART."
   exit 1
 fi
-unset NODE_PATH
+echo "Using node: $(command -v node)"
 
 mkdir -p "$APP/data" "$BACKEND/db"
 chmod 775 "$APP/data" 2>/dev/null || true
@@ -35,13 +39,17 @@ curl -fsSL -o "$BACKEND/services/settings.js" "$BASE/backend/services/settings.j
 curl -fsSL -o "$BACKEND/services/geminiModels.js" "$BASE/backend/services/geminiModels.js"
 curl -fsSL -o "$BACKEND/services/gemini.js" "$BASE/backend/services/gemini.js"
 curl -fsSL -o "$BACKEND/services/medicalChatPrompt.js" "$BASE/backend/services/medicalChatPrompt.js"
+curl -fsSL -o "$BACKEND/services/clinicalResponseFormat.js" "$BASE/backend/services/clinicalResponseFormat.js"
+curl -fsSL -o "$BACKEND/services/symptomClinicalPrompt.js" "$BASE/backend/services/symptomClinicalPrompt.js"
+curl -fsSL -o "$BACKEND/routes/ai.js" "$BASE/backend/routes/ai.js"
+curl -fsSL -o "$APP/public_html.htaccess" "$BASE/public_html.htaccess"
+curl -fsSL -o "$APP/cpanel/activate-nodevenv.sh" "$BASE/cpanel/activate-nodevenv.sh"
 curl -fsSL -o "$APP/cpanel/merge-htaccess.sh" "$BASE/cpanel/merge-htaccess.sh"
 curl -fsSL -o "$APP/cpanel/fix-api-404.sh" "$BASE/cpanel/fix-api-404.sh"
 curl -fsSL -o "$APP/cpanel/publish-icon-fonts.sh" "$BASE/cpanel/publish-icon-fonts.sh"
 curl -fsSL -o "$APP/scripts/copy-icon-fonts.mjs" "$BASE/scripts/copy-icon-fonts.mjs"
-chmod +x "$APP/cpanel/merge-htaccess.sh" "$APP/cpanel/fix-api-404.sh" "$APP/cpanel/publish-icon-fonts.sh" 2>/dev/null || true
+chmod +x "$APP/cpanel/activate-nodevenv.sh" "$APP/cpanel/merge-htaccess.sh" "$APP/cpanel/fix-api-404.sh" "$APP/cpanel/publish-icon-fonts.sh" 2>/dev/null || true
 
-# Restore API routing if Passenger block was wiped
 if ! grep -q 'PASSENGER CONFIGURATION BEGIN' "$PUBLIC/.htaccess" 2>/dev/null; then
   echo "=== Passenger missing — fixing .htaccess ==="
   bash "$APP/cpanel/fix-api-404.sh" || true

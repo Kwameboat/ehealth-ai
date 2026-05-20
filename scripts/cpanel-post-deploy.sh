@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run on server after FTP deploy — publish static files, keep Passenger htaccess, npm in ehealth-ai.
-set -u
+set -eo pipefail
 
 HOME_DIR="${HOME:-/home/ehealtha}"
 SRC="${APP_SRC:-$HOME_DIR/ehealth-ai}"
@@ -12,20 +12,19 @@ if [ -d "$SRC" ]; then
   ln -sfn "$SRC" "$HOME_DIR/ehealth_ai" 2>/dev/null || true
 fi
 
-# cPanel nodevenv (folder name matches application root: ehealth-ai)
-for v in "$HOME_DIR/nodevenv/ehealth-ai"/*/bin/activate "$HOME_DIR/nodevenv/ehealth_ai"/*/bin/activate; do
-  if [ -f "$v" ]; then
-    # shellcheck disable=SC1090
-    . "$v" 2>/dev/null || true
-    break
-  fi
-done
-for bin in "$HOME_DIR/nodevenv/ehealth-ai"/*/bin "$HOME_DIR/nodevenv/ehealth_ai"/*/bin; do
-  [ -d "$bin" ] && export PATH="$bin:$PATH" && break
-done
-for n in /opt/cpanel/ea-nodejs*/bin; do
-  [ -x "$n/node" ] && export PATH="$n:$PATH" && break
-done
+# cPanel Node (PATH only — do not source activate; avoids CL_VIRTUAL_ENV error with set -u)
+if [ -f "$SRC/cpanel/activate-nodevenv.sh" ]; then
+  # shellcheck disable=SC1091
+  HOME_DIR="$HOME_DIR" . "$SRC/cpanel/activate-nodevenv.sh"
+else
+  for bin in "$HOME_DIR/nodevenv/ehealth-ai"/*/bin "$HOME_DIR/nodevenv/ehealth_ai"/*/bin; do
+    if [ -x "$bin/node" ]; then export PATH="$bin:$PATH"; break; fi
+  done
+  for n in /opt/cpanel/ea-nodejs*/bin; do
+    [ -x "$n/node" ] && export PATH="$n:$PATH" && break
+  done
+  unset NODE_PATH 2>/dev/null || true
+fi
 
 echo "cpanel-post-deploy: APP=$SRC"
 

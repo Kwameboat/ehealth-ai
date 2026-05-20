@@ -2,8 +2,8 @@
 # Reset admin password — cPanel Terminal
 # Example: ADMIN_PASSWORD='MySecurePass123' bash ~/ehealth-ai/cpanel/reset-admin-password.sh
 set -e
-source /home/ehealtha/nodevenv/ehealth-ai/20/bin/activate
-unset NODE_PATH
+# shellcheck disable=SC1091
+. /home/ehealtha/ehealth-ai/cpanel/activate-nodevenv.sh
 cd /home/ehealtha/ehealth-ai/backend
 
 export ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"

@@ -6,12 +6,12 @@ APP="$HOME_DIR/ehealth-ai"
 BACKEND="$APP/backend"
 PKG_SRC="$APP/cpanel/backend-production.package.json"
 
-for v in "$HOME_DIR/nodevenv/ehealth-ai/20/bin/activate" \
-         "$HOME_DIR/nodevenv/ehealth-ai/18/bin/activate"; do
-  [ -f "$v" ] && . "$v" && break
-done
-
-unset NODE_PATH
+# shellcheck disable=SC1091
+. "$APP/cpanel/activate-nodevenv.sh" 2>/dev/null || {
+  for bin in "$HOME_DIR/nodevenv/ehealth-ai"/*/bin; do
+    [ -x "$bin/node" ] && export PATH="$bin:$PATH" && break
+  done
+}
 NPM_BIN="$(command -v npm)"
 NODE_BIN="$(command -v node)"
 

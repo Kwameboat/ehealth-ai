@@ -1,7 +1,7 @@
 #!/bin/bash
 # Restore /api/* routing (Passenger was removed from .htaccess).
 # Usage: bash ~/ehealth-ai/cpanel/fix-api-404.sh
-set -u
+set -eo pipefail
 
 HOME_DIR="${HOME:-/home/ehealtha}"
 APP="$HOME_DIR/ehealth-ai"
@@ -9,9 +9,8 @@ PUBLIC="$HOME_DIR/public_html"
 
 echo "=== Fix API 404 (restore Passenger in .htaccess) ==="
 
-for v in "$HOME_DIR/nodevenv/ehealth-ai"/*/bin/activate; do
-  [ -f "$v" ] && . "$v" && break
-done
+# shellcheck disable=SC1091
+. "$APP/cpanel/activate-nodevenv.sh" 2>/dev/null || true
 
 if [ ! -f "$APP/public_html.htaccess" ]; then
   curl -fsSL -o "$APP/public_html.htaccess" \
