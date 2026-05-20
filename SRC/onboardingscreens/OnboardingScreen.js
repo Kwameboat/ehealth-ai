@@ -12,8 +12,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppLogo from '../Components/AppLogo';
+import ThemeToggleButton from '../Components/ThemeToggleButton';
 import { APP_TAGLINE } from '../constants/branding';
-import { MED_THEME } from '../constants/appTheme';
+import { useMemo } from 'react';
+import { useMedTheme } from '../hooks/useMedTheme';
 import { useResponsive } from '../hooks/useResponsive';
 import {
   ChatIllustration,
@@ -45,7 +47,7 @@ const SLIDES = [
   },
 ];
 
-function TaglineRow() {
+function TaglineRow({ styles }) {
   return (
     <View style={styles.taglineRow}>
       <View style={styles.taglineLine} />
@@ -56,6 +58,8 @@ function TaglineRow() {
 }
 
 export default function OnboardingScreen({ navigation }) {
+  const med = useMedTheme();
+  const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef(null);
   const { width } = useWindowDimensions();
@@ -118,11 +122,15 @@ export default function OnboardingScreen({ navigation }) {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={MED_THEME.bg} />
+      <StatusBar barStyle={med.isDarkMode ? 'light-content' : 'dark-content'} backgroundColor={med.bg} />
 
       <View style={[styles.header, { paddingHorizontal: horizontalPadding }]}>
-        <AppLogo size={isSmallPhone ? 'small' : 'medium'} centered />
-        <TaglineRow />
+        <View style={styles.headerTopRow}>
+          <View style={styles.headerSpacer} />
+          <AppLogo size={isSmallPhone ? 'small' : 'medium'} centered style={styles.headerLogo} />
+          <ThemeToggleButton compact />
+        </View>
+        <TaglineRow styles={styles} />
       </View>
 
       <FlatList
@@ -180,17 +188,27 @@ export default function OnboardingScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (med) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: MED_THEME.bg,
+    backgroundColor: med.bg,
   },
   header: {
     alignItems: 'center',
     paddingTop: 8,
     paddingBottom: 4,
     zIndex: 2,
+    width: '100%',
   },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 4,
+  },
+  headerSpacer: { width: 40 },
+  headerLogo: { flex: 1 },
   taglineRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -207,7 +225,7 @@ const styles = StyleSheet.create({
     maxWidth: 48,
   },
   taglineText: {
-    color: MED_THEME.textMuted,
+    color: med.textMuted,
     fontSize: 11,
     textAlign: 'center',
     flexShrink: 1,
@@ -238,12 +256,12 @@ const styles = StyleSheet.create({
   title: {
     fontWeight: '700',
     textAlign: 'center',
-    color: MED_THEME.text,
+    color: med.text,
     marginBottom: 12,
     paddingHorizontal: 8,
   },
   subtitle: {
-    color: MED_THEME.textMuted,
+    color: med.textMuted,
     textAlign: 'center',
     paddingHorizontal: 12,
     maxWidth: 400,
@@ -254,8 +272,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 56,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: MED_THEME.cardBorder,
-    backgroundColor: MED_THEME.bg,
+    borderTopColor: med.cardBorder,
+    backgroundColor: med.bg,
   },
   skipBtn: {
     minWidth: 72,
@@ -263,7 +281,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   skipText: {
-    color: MED_THEME.textMuted,
+    color: med.textMuted,
     fontSize: 16,
     fontWeight: '500',
   },
@@ -287,16 +305,16 @@ const styles = StyleSheet.create({
   },
   dotInactive: {
     width: 8,
-    backgroundColor: MED_THEME.surface,
+    backgroundColor: med.surface,
   },
   nextBtn: {
-    backgroundColor: MED_THEME.primary,
+    backgroundColor: med.primary,
     paddingVertical: 14,
     paddingHorizontal: 28,
     borderRadius: 24,
     minWidth: 120,
     alignItems: 'center',
-    shadowColor: MED_THEME.primary,
+    shadowColor: med.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,

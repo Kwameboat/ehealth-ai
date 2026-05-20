@@ -14,7 +14,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppLogo from '../Components/AppLogo';
 import { APP_TAGLINE } from '../constants/branding';
-import { MED_THEME } from '../constants/appTheme';
+import { useMemo } from 'react';
+import { useMedTheme } from '../hooks/useMedTheme';
 import { useAuth } from '../Context/AuthContext';
 import {
   fetchPointPackages,
@@ -31,7 +32,9 @@ function formatMoney(amountMinor, currency = 'GHS', amountDisplay) {
   return `${currency} ${amount.toFixed(2)}`;
 }
 
-const BuyPointsScreen = ({ navigation }) => {
+const BuyPointsScreen = () => {
+  const med = useMedTheme();
+  const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
   const { user, updatePointsBalance, refreshUser } = useAuth();
   const [packages, setPackages] = useState([]);
   const [paystackEnabled, setPaystackEnabled] = useState(false);
@@ -112,7 +115,7 @@ const BuyPointsScreen = ({ navigation }) => {
         </View>
 
         {loading ? (
-          <ActivityIndicator color={MED_THEME.primary} style={{ marginTop: 40 }} />
+          <ActivityIndicator color={med.primary} style={{ marginTop: 40 }} />
         ) : !paystackEnabled ? (
           <Text style={styles.hint}>Paystack is not configured on the server. Contact your administrator.</Text>
         ) : (
@@ -154,43 +157,43 @@ const BuyPointsScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: MED_THEME.bg },
+const createStyles = (med) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: med.bg },
   scroll: { padding: 24, paddingBottom: 48 },
   back: { marginBottom: 16 },
-  backText: { color: MED_THEME.primary, fontWeight: '600' },
+  backText: { color: med.primary, fontWeight: '600' },
   disclaimer: {
     textAlign: 'center',
-    color: MED_THEME.textMuted,
+    color: med.textMuted,
     fontSize: 11,
     marginTop: 4,
     marginBottom: 24,
   },
   balanceCard: {
-    backgroundColor: MED_THEME.surface,
+    backgroundColor: med.surface,
     borderRadius: 16,
     padding: 20,
     borderWidth: 1,
-    borderColor: MED_THEME.cardBorder,
+    borderColor: med.cardBorder,
     marginBottom: 28,
     alignItems: 'center',
   },
-  balanceLabel: { color: MED_THEME.textMuted, fontSize: 13 },
+  balanceLabel: { color: med.textMuted, fontSize: 13 },
   balanceValue: { color: '#00C9A7', fontSize: 32, fontWeight: '800', marginTop: 4 },
-  sectionTitle: { color: MED_THEME.text, fontSize: 18, fontWeight: '700', marginBottom: 14 },
+  sectionTitle: { color: med.text, fontSize: 18, fontWeight: '700', marginBottom: 14 },
   packageCard: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: MED_THEME.surface,
+    backgroundColor: med.surface,
     borderRadius: 14,
     padding: 18,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: MED_THEME.cardBorder,
+    borderColor: med.cardBorder,
   },
-  pkgName: { color: MED_THEME.text, fontWeight: '700', fontSize: 16 },
-  pkgDesc: { color: MED_THEME.textMuted, fontSize: 12, marginTop: 4, maxWidth: 220 },
+  pkgName: { color: med.text, fontWeight: '700', fontSize: 16 },
+  pkgDesc: { color: med.textMuted, fontSize: 12, marginTop: 4, maxWidth: 220 },
   pkgPoints: { color: '#00C9A7', fontWeight: '700', marginTop: 8, fontSize: 14 },
   pkgPrice: { color: '#0052D4', fontWeight: '800', fontSize: 18 },
   pendingBox: {
@@ -201,8 +204,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 201, 167, 0.35)',
     backgroundColor: 'rgba(0, 201, 167, 0.08)',
   },
-  pendingTitle: { color: MED_THEME.text, fontWeight: '700', marginBottom: 6 },
-  pendingRef: { color: MED_THEME.textMuted, fontSize: 12, marginBottom: 14 },
+  pendingTitle: { color: med.text, fontWeight: '700', marginBottom: 6 },
+  pendingRef: { color: med.textMuted, fontSize: 12, marginBottom: 14 },
   confirmBtn: {
     backgroundColor: '#00C9A7',
     borderRadius: 12,
@@ -210,7 +213,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   confirmBtnText: { color: '#0a0e17', fontWeight: '800' },
-  hint: { color: MED_THEME.textMuted, textAlign: 'center', marginTop: 24, lineHeight: 22 },
+  hint: { color: med.textMuted, textAlign: 'center', marginTop: 24, lineHeight: 22 },
 });
 
 export default BuyPointsScreen;

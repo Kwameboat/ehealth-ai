@@ -9,9 +9,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { MED_THEME } from '../constants/appTheme';
+import { useMemo } from 'react';
+import { useMedTheme } from '../hooks/useMedTheme';
 
 export default function SymptomMenuModal({ visible, onClose, categories, onSelect }) {
+  const med = useMedTheme();
+  const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
@@ -33,7 +36,7 @@ export default function SymptomMenuModal({ visible, onClose, categories, onSelec
                   <MaterialCommunityIcons name={item.icon} size={20} color="#fff" />
                 </View>
                 <Text style={styles.rowText}>{item.name}</Text>
-                <MaterialCommunityIcons name="chevron-right" size={22} color={MED_THEME.textDim} />
+                <MaterialCommunityIcons name="chevron-right" size={22} color={med.textDim} />
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -46,14 +49,14 @@ export default function SymptomMenuModal({ visible, onClose, categories, onSelec
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (med) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: MED_THEME.bgElevated,
+    backgroundColor: med.bgElevated,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     maxHeight: '85%',
@@ -62,7 +65,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 40,
     height: 4,
-    backgroundColor: MED_THEME.textDim,
+    backgroundColor: med.textDim,
     borderRadius: 2,
     alignSelf: 'center',
     marginTop: 12,
@@ -71,12 +74,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: MED_THEME.text,
+    color: med.text,
     paddingHorizontal: 20,
   },
   sub: {
     fontSize: 13,
-    color: MED_THEME.textMuted,
+    color: med.textMuted,
     paddingHorizontal: 20,
     marginTop: 4,
     marginBottom: 12,
@@ -100,7 +103,7 @@ const styles = StyleSheet.create({
   },
   rowText: {
     flex: 1,
-    color: MED_THEME.text,
+    color: med.text,
     fontSize: 15,
     fontWeight: '500',
   },
@@ -110,7 +113,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     borderRadius: 14,
-    backgroundColor: MED_THEME.surface,
+    backgroundColor: med.surface,
   },
-  closeText: { color: MED_THEME.primary, fontWeight: '600', fontSize: 16 },
+  closeText: { color: med.primary, fontWeight: '600', fontSize: 16 },
 });

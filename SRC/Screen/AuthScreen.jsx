@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -14,10 +14,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppLogo from '../Components/AppLogo';
 import { APP_TAGLINE } from '../constants/branding';
-import { MED_THEME } from '../constants/appTheme';
+import ThemeToggleButton from '../Components/ThemeToggleButton';
+import { useMedTheme } from '../hooks/useMedTheme';
 import { useAuth } from '../Context/AuthContext';
 
-const AuthScreen = ({ navigation }) => {
+const AuthScreen = () => {
+  const med = useMedTheme();
+  const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
   const { login, register } = useAuth();
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
@@ -45,7 +48,10 @@ const AuthScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <LinearGradient colors={['#0f172a', '#1e293b', '#0b1220']} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={[med.bg, med.bgGradientEnd, med.bg]} style={StyleSheet.absoluteFill} />
+      <View style={styles.themeRow}>
+        <ThemeToggleButton compact />
+      </View>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <AppLogo size="medium" showTagline />
@@ -58,7 +64,7 @@ const AuthScreen = ({ navigation }) => {
             <TextInput
               style={styles.input}
               placeholder="Full name (optional)"
-              placeholderTextColor={MED_THEME.textMuted}
+              placeholderTextColor={med.textMuted}
               value={fullName}
               onChangeText={setFullName}
             />
@@ -66,7 +72,7 @@ const AuthScreen = ({ navigation }) => {
           <TextInput
             style={styles.input}
             placeholder="Email"
-            placeholderTextColor={MED_THEME.textMuted}
+            placeholderTextColor={med.textMuted}
             autoCapitalize="none"
             keyboardType="email-address"
             value={email}
@@ -75,7 +81,7 @@ const AuthScreen = ({ navigation }) => {
           <TextInput
             style={styles.input}
             placeholder="Password (min 6 characters)"
-            placeholderTextColor={MED_THEME.textMuted}
+            placeholderTextColor={med.textMuted}
             secureTextEntry
             value={password}
             onChangeText={setPassword}
@@ -104,35 +110,36 @@ const AuthScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: MED_THEME.bg },
+const createStyles = (med) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: med.bg },
   flex: { flex: 1 },
+  themeRow: { position: 'absolute', top: 12, right: 16, zIndex: 10 },
   scroll: { flexGrow: 1, justifyContent: 'center', padding: 28, maxWidth: 420, alignSelf: 'center', width: '100%' },
-  title: { fontSize: 32, fontWeight: '800', color: '#fff', marginBottom: 8 },
-  subtitle: { color: MED_THEME.textMuted, marginBottom: 28, lineHeight: 22 },
+  title: { fontSize: 32, fontWeight: '800', color: med.text, marginBottom: 8 },
+  subtitle: { color: med.textMuted, marginBottom: 28, lineHeight: 22 },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: med.inputBg,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: med.cardBorder,
     borderRadius: 12,
     padding: 14,
-    color: '#fff',
+    color: med.text,
     marginBottom: 12,
     fontSize: 16,
   },
   error: { color: '#f87171', marginBottom: 12 },
   primaryBtn: {
-    backgroundColor: MED_THEME.primary,
+    backgroundColor: med.primary,
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     marginTop: 8,
   },
   primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  switch: { color: MED_THEME.primary, textAlign: 'center', marginTop: 20 },
-  hint: { color: MED_THEME.textMuted, fontSize: 12, textAlign: 'center', marginTop: 24, lineHeight: 18 },
+  switch: { color: med.primary, textAlign: 'center', marginTop: 20 },
+  hint: { color: med.textMuted, fontSize: 12, textAlign: 'center', marginTop: 24, lineHeight: 18 },
   disclaimer: {
-    color: MED_THEME.textDim,
+    color: med.textDim,
     fontSize: 11,
     textAlign: 'center',
     marginBottom: 20,

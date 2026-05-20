@@ -1,7 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -18,7 +18,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import AppBottomNav from '../Components/AppBottomNav';
 import ChatInputBar from '../Components/ChatInputBar';
 import ResponsiveContainer from '../Components/ResponsiveContainer';
-import { MED_THEME } from '../constants/appTheme';
+import ThemeToggleButton from '../Components/ThemeToggleButton';
+import { useMedTheme } from '../hooks/useMedTheme';
 import { useResponsive } from '../hooks/useResponsive';
 import { attachmentToBase64, guessImageMimeType } from '../services/fileToBase64';
 import { useChatVoiceInput } from '../hooks/useChatVoiceInput';
@@ -39,6 +40,8 @@ function createMessage(role, text, attachment = null) {
 }
 
 export default function MedicalChatScreen({ navigation, route }) {
+  const med = useMedTheme();
+  const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
   const r = useResponsive();
   const initialMessage = route.params?.initialMessage;
   const [messages, setMessages] = useState([
@@ -213,7 +216,7 @@ export default function MedicalChatScreen({ navigation, route }) {
     }
     return (
       <View style={styles.pdfChip}>
-        <MaterialCommunityIcons name="file-pdf-box" size={20} color={MED_THEME.primary} />
+        <MaterialCommunityIcons name="file-pdf-box" size={20} color={med.primary} />
         <Text style={styles.pdfName} numberOfLines={1}>
           {attachment.name}
         </Text>
@@ -233,7 +236,7 @@ export default function MedicalChatScreen({ navigation, route }) {
       >
         {!isUser && (
           <View style={styles.avatarBot}>
-            <MaterialCommunityIcons name="robot-happy-outline" size={18} color={MED_THEME.primary} />
+            <MaterialCommunityIcons name="robot-happy-outline" size={18} color={med.primary} />
           </View>
         )}
         <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
@@ -246,11 +249,11 @@ export default function MedicalChatScreen({ navigation, route }) {
 
   return (
     <View style={styles.root}>
-      <LinearGradient colors={[MED_THEME.bg, '#0F172A']} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={[med.bg, med.bgGradientEnd]} style={StyleSheet.absoluteFill} />
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-            <Ionicons name="arrow-back" size={24} color={MED_THEME.text} />
+            <Ionicons name="arrow-back" size={24} color={med.text} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
             <Text style={styles.headerTitle}>Health Chat</Text>
@@ -259,8 +262,9 @@ export default function MedicalChatScreen({ navigation, route }) {
               <Text style={styles.onlineLabel}>Agent online</Text>
             </View>
           </View>
+          <ThemeToggleButton compact style={{ marginRight: 4 }} />
           <TouchableOpacity onPress={() => navigation.navigate('MedicalHome')} style={styles.headerBtn}>
-            <Ionicons name="home-outline" size={22} color={MED_THEME.textMuted} />
+            <Ionicons name="home-outline" size={22} color={med.textMuted} />
           </TouchableOpacity>
         </View>
 
@@ -298,7 +302,7 @@ export default function MedicalChatScreen({ navigation, route }) {
                   ))}
                 </ScrollView>
                 <TouchableOpacity onPress={() => setPendingAttachments([])}>
-                  <Ionicons name="close-circle" size={24} color={MED_THEME.textMuted} />
+                  <Ionicons name="close-circle" size={24} color={med.textMuted} />
                 </TouchableOpacity>
               </View>
             )}
@@ -331,7 +335,8 @@ export default function MedicalChatScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (med) =>
+  StyleSheet.create({
   root: { flex: 1 },
   safe: { flex: 1 },
   flex: { flex: 1 },
@@ -341,14 +346,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: MED_THEME.cardBorder,
+    borderBottomColor: med.cardBorder,
   },
   headerBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { fontSize: 17, fontWeight: '700', color: MED_THEME.text },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: med.text },
   onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-  onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: MED_THEME.success },
-  onlineLabel: { fontSize: 11, color: MED_THEME.success },
+  onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: med.success },
+  onlineLabel: { fontSize: 11, color: med.success },
   list: { paddingVertical: 16, paddingBottom: 8 },
   messageRow: { flexDirection: 'row', marginBottom: 14, width: '100%' },
   rowUser: { alignSelf: 'flex-end' },
@@ -357,7 +362,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: MED_THEME.surface,
+    backgroundColor: med.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
@@ -370,17 +375,17 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   bubbleUser: {
-    backgroundColor: MED_THEME.primary,
+    backgroundColor: med.primary,
     borderBottomRightRadius: 4,
   },
   bubbleAssistant: {
-    backgroundColor: MED_THEME.surface,
+    backgroundColor: med.surface,
     borderWidth: 1,
-    borderColor: MED_THEME.cardBorder,
+    borderColor: med.cardBorder,
     borderBottomLeftRadius: 4,
     flex: 1,
   },
-  bubbleText: { fontSize: 15, lineHeight: 22, color: MED_THEME.text },
+  bubbleText: { fontSize: 15, lineHeight: 22, color: med.text },
   bubbleTextUser: { color: '#fff' },
   bubbleImage: { width: 200, height: 130, borderRadius: 10, marginBottom: 8 },
   pdfChip: {
@@ -392,9 +397,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(59,130,246,0.12)',
     borderRadius: 8,
   },
-  pdfName: { color: MED_THEME.text, fontSize: 13, flex: 1 },
+  pdfName: { color: med.text, fontSize: 13, flex: 1 },
   typing: { paddingHorizontal: 20, paddingBottom: 6 },
-  typingText: { color: MED_THEME.textMuted, fontSize: 13, fontStyle: 'italic' },
+  typingText: { color: med.textMuted, fontSize: 13, fontStyle: 'italic' },
   pendingBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -402,10 +407,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 6,
     padding: 10,
-    backgroundColor: MED_THEME.surface,
+    backgroundColor: med.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: MED_THEME.cardBorder,
+    borderColor: med.cardBorder,
   },
   pendingThumb: { width: 48, height: 48, borderRadius: 8 },
   pendingScroll: { flex: 1, marginRight: 8 },
@@ -414,5 +419,5 @@ const styles = StyleSheet.create({
   bubbleThumbSmall: { width: 56, height: 56, borderRadius: 8, marginBottom: 6, marginRight: 6 },
   pendingMulti: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   multiBubble: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 },
-  multiCount: { color: MED_THEME.textMuted, fontSize: 12, alignSelf: 'center' },
+  multiCount: { color: med.textMuted, fontSize: 12, alignSelf: 'center' },
 });

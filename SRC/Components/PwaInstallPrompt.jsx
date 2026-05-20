@@ -9,10 +9,13 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { MED_THEME } from '../constants/appTheme';
+import { useMemo } from 'react';
+import { useMedTheme } from '../hooks/useMedTheme';
 import { usePwaInstall } from '../hooks/usePwaInstall';
 
 export default function PwaInstallPrompt() {
+  const med = useMedTheme();
+  const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
   const {
     isWeb,
     visible,
@@ -35,7 +38,7 @@ export default function PwaInstallPrompt() {
       <Pressable style={styles.overlay} onPress={() => dismiss(24)}>
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <View style={styles.iconWrap}>
-            <MaterialCommunityIcons name="medical-bag" size={32} color={MED_THEME.primary} />
+            <MaterialCommunityIcons name="medical-bag" size={32} color={med.primary} />
           </View>
 
           {isOpenAppMode ? (
@@ -46,7 +49,7 @@ export default function PwaInstallPrompt() {
                 drawer for the best experience.
               </Text>
               <View style={styles.hintBox}>
-                <Ionicons name="phone-portrait-outline" size={20} color={MED_THEME.primary} />
+                <Ionicons name="phone-portrait-outline" size={20} color={med.primary} />
                 <Text style={styles.hintText}>
                   Look for the eHealth AI icon on your home screen.
                 </Text>
@@ -101,21 +104,21 @@ export default function PwaInstallPrompt() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (med) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: MED_THEME.bgElevated,
+    backgroundColor: med.bgElevated,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
     paddingTop: 20,
     paddingBottom: 32,
     borderTopWidth: 1,
-    borderColor: MED_THEME.cardBorder,
+    borderColor: med.cardBorder,
   },
   iconWrap: {
     width: 56,
@@ -129,34 +132,34 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: '700',
-    color: MED_THEME.text,
+    color: med.text,
     marginBottom: 10,
   },
   body: {
     fontSize: 15,
     lineHeight: 22,
-    color: MED_THEME.textMuted,
+    color: med.textMuted,
     marginBottom: 16,
   },
   hintBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    backgroundColor: MED_THEME.surface,
+    backgroundColor: med.surface,
     padding: 14,
     borderRadius: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: MED_THEME.cardBorder,
+    borderColor: med.cardBorder,
   },
   hintText: {
     flex: 1,
-    color: MED_THEME.text,
+    color: med.text,
     fontSize: 14,
     lineHeight: 20,
   },
   iosSteps: {
-    color: MED_THEME.text,
+    color: med.text,
     fontSize: 14,
     lineHeight: 22,
   },
@@ -165,7 +168,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: MED_THEME.primary,
+    backgroundColor: med.primary,
     paddingVertical: 16,
     borderRadius: 14,
     marginBottom: 10,
@@ -180,7 +183,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   secondaryBtnText: {
-    color: MED_THEME.textMuted,
+    color: med.textMuted,
     fontSize: 15,
     fontWeight: '500',
   },

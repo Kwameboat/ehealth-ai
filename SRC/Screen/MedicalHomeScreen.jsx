@@ -2,6 +2,7 @@ import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useMemo, useState } from 'react';
+import ThemeToggleButton from '../Components/ThemeToggleButton';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppBottomNav from '../Components/AppBottomNav';
@@ -10,7 +11,7 @@ import { APP_TAGLINE } from '../constants/branding';
 import ChatInputBar from '../Components/ChatInputBar';
 import ResponsiveContainer from '../Components/ResponsiveContainer';
 import SymptomMenuModal from '../Components/SymptomMenuModal';
-import { MED_THEME } from '../constants/appTheme';
+import { useMedTheme } from '../hooks/useMedTheme';
 import { QUICK_ACTIONS, SYMPTOM_CATEGORIES } from '../constants/symptomCategories';
 import { useAuth } from '../Context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
@@ -117,7 +118,7 @@ const MedicalHomeScreen = ({ navigation }) => {
               <MaterialCommunityIcons
                 name={cat.icon}
                 size={20}
-                color={active ? '#fff' : MED_THEME.textMuted}
+                color={active ? '#fff' : med.textMuted}
               />
               <Text style={[styles.sidebarItemText, active && styles.sidebarItemTextActive]}>
                 {cat.name}
@@ -160,7 +161,7 @@ const MedicalHomeScreen = ({ navigation }) => {
 
   return (
     <View style={styles.root}>
-      <LinearGradient colors={[MED_THEME.bg, '#0F172A', MED_THEME.bg]} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={[med.bg, med.bgGradientEnd, med.bg]} style={StyleSheet.absoluteFill} />
       <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.layout}>
           {r.showSidebar && <Sidebar />}
@@ -168,7 +169,7 @@ const MedicalHomeScreen = ({ navigation }) => {
           <View style={styles.main}>
             <View style={[styles.topBar, { paddingHorizontal: r.horizontalPadding }]}>
               <TouchableOpacity style={styles.menuBtn} onPress={() => setMenuOpen(true)}>
-                <Feather name="menu" size={24} color={MED_THEME.text} />
+                <Feather name="menu" size={24} color={med.text} />
               </TouchableOpacity>
               <Text
                 style={[styles.topTitle, r.isSmallPhone && styles.topTitleSmall]}
@@ -194,8 +195,9 @@ const MedicalHomeScreen = ({ navigation }) => {
                     </Text>
                   </View>
                 )}
+                <ThemeToggleButton compact />
                 <View style={styles.avatar}>
-                  <Ionicons name="person" size={18} color={MED_THEME.textMuted} />
+                  <Ionicons name="person" size={18} color={med.textMuted} />
                 </View>
               </View>
             </View>
@@ -271,7 +273,7 @@ const MedicalHomeScreen = ({ navigation }) => {
                           <MaterialCommunityIcons
                             name="ambulance"
                             size={20}
-                            color={MED_THEME.danger}
+                            color={med.danger}
                           />
                           <Text style={styles.toolBtnText}>Emergency</Text>
                         </TouchableOpacity>
@@ -282,7 +284,7 @@ const MedicalHomeScreen = ({ navigation }) => {
                           <MaterialCommunityIcons
                             name="view-grid"
                             size={20}
-                            color={MED_THEME.primary}
+                            color={med.primary}
                           />
                           <Text style={styles.toolBtnText}>All Symptoms</Text>
                         </TouchableOpacity>
@@ -326,15 +328,16 @@ const MedicalHomeScreen = ({ navigation }) => {
   );
 };
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: MED_THEME.bg },
+const createStyles = (med) =>
+  StyleSheet.create({
+  root: { flex: 1, backgroundColor: med.bg },
   safe: { flex: 1 },
   layout: { flex: 1, flexDirection: 'row' },
   sidebar: {
-    width: MED_THEME.sidebarWidth,
-    backgroundColor: MED_THEME.bgElevated,
+    width: med.sidebarWidth,
+    backgroundColor: med.bgElevated,
     borderRightWidth: 1,
-    borderRightColor: MED_THEME.cardBorder,
+    borderRightColor: med.cardBorder,
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 16,
@@ -348,24 +351,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  brandText: { fontSize: 18, fontWeight: '700', color: MED_THEME.text },
+  brandText: { fontSize: 18, fontWeight: '700', color: med.text },
   taglineSidebar: {
     fontSize: 10,
-    color: MED_THEME.textMuted,
+    color: med.textMuted,
     marginBottom: 16,
     lineHeight: 14,
     fontStyle: 'italic',
   },
   profileCard: {
-    backgroundColor: MED_THEME.surface,
+    backgroundColor: med.surface,
     borderRadius: 14,
     padding: 14,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: MED_THEME.cardBorder,
+    borderColor: med.cardBorder,
   },
-  profileTitle: { color: MED_THEME.text, fontWeight: '700', fontSize: 15 },
-  profileSub: { color: MED_THEME.textMuted, fontSize: 12, marginTop: 4 },
+  profileTitle: { color: med.text, fontWeight: '700', fontSize: 15 },
+  profileSub: { color: med.textMuted, fontSize: 12, marginTop: 4 },
   premiumBadge: {
     alignSelf: 'flex-start',
     marginTop: 10,
@@ -374,9 +377,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
   },
-  premiumText: { color: MED_THEME.accent, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
+  premiumText: { color: med.accent, fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
   sidebarSection: {
-    color: MED_THEME.textDim,
+    color: med.textDim,
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.8,
@@ -393,11 +396,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 4,
   },
-  sidebarItemActive: { backgroundColor: MED_THEME.accent },
-  sidebarItemText: { color: MED_THEME.textMuted, fontSize: 14, flex: 1 },
+  sidebarItemActive: { backgroundColor: med.accent },
+  sidebarItemText: { color: med.textMuted, fontSize: 14, flex: 1 },
   sidebarItemTextActive: { color: '#fff', fontWeight: '600' },
   recentChat: { paddingVertical: 8, paddingHorizontal: 4 },
-  recentChatText: { color: MED_THEME.textMuted, fontSize: 13 },
+  recentChatText: { color: med.textMuted, fontSize: 13 },
   main: { flex: 1 },
   contentArea: { flex: 1, width: '100%' },
   topBar: {
@@ -417,7 +420,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 17,
     fontWeight: '700',
-    color: MED_THEME.text,
+    color: med.text,
     textAlign: 'center',
   },
   topTitleSmall: { fontSize: 15 },
@@ -433,9 +436,9 @@ const styles = StyleSheet.create({
     maxWidth: 160,
   },
   onlinePillTablet: { maxWidth: 200 },
-  onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: MED_THEME.success },
+  onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: med.success },
   onlineText: {
-    color: MED_THEME.success,
+    color: med.success,
     fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.3,
@@ -444,11 +447,11 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: MED_THEME.surface,
+    backgroundColor: med.surface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: MED_THEME.cardBorder,
+    borderColor: med.cardBorder,
   },
   scrollContent: {
     paddingBottom: 16,
@@ -466,30 +469,30 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   focusChatTitle: {
-    color: MED_THEME.text,
+    color: med.text,
     fontSize: 18,
     fontWeight: '700',
   },
   showSymptomsLink: {
-    color: MED_THEME.primary,
+    color: med.primary,
     fontSize: 14,
     fontWeight: '600',
   },
   greetingLabel: {
-    color: MED_THEME.primary,
+    color: med.primary,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 1.2,
     marginTop: 8,
   },
   heroTitle: {
-    color: MED_THEME.text,
+    color: med.text,
     fontWeight: '800',
     marginTop: 8,
     maxWidth: 560,
   },
   heroSub: {
-    color: MED_THEME.textMuted,
+    color: med.textMuted,
     lineHeight: 24,
     marginTop: 12,
     maxWidth: 520,
@@ -503,11 +506,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   quickCard: {
-    backgroundColor: MED_THEME.surface,
+    backgroundColor: med.surface,
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
-    borderColor: MED_THEME.cardBorder,
+    borderColor: med.cardBorder,
     marginRight: 14,
   },
   quickCardGrid: {
@@ -521,8 +524,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 14,
   },
-  quickTitle: { color: MED_THEME.text, fontSize: 16, fontWeight: '700', marginBottom: 8 },
-  quickDesc: { color: MED_THEME.textMuted, fontSize: 13, lineHeight: 20 },
+  quickTitle: { color: med.text, fontSize: 16, fontWeight: '700', marginBottom: 8 },
+  quickDesc: { color: med.textMuted, fontSize: 13, lineHeight: 20 },
   mobileTools: {
     flexDirection: 'row',
     gap: 12,
@@ -536,11 +539,11 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: MED_THEME.surface,
+    backgroundColor: med.surface,
     borderWidth: 1,
-    borderColor: MED_THEME.cardBorder,
+    borderColor: med.cardBorder,
   },
-  toolBtnText: { color: MED_THEME.text, fontSize: 14, fontWeight: '600' },
+  toolBtnText: { color: med.text, fontSize: 14, fontWeight: '600' },
   pointsPill: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { MED_THEME } from '../constants/appTheme';
+import { useMedTheme } from '../hooks/useMedTheme';
 
 const TABS = [
   { id: 'chat', label: 'Chat', icon: 'chatbubbles', lib: 'ion' },
@@ -10,6 +10,8 @@ const TABS = [
 ];
 
 export default function AppBottomNav({ active = 'chat', onChat, onVoice, onRecords }) {
+  const med = useMedTheme();
+  const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
   const handlers = { chat: onChat, voice: onVoice, records: onRecords };
 
   return (
@@ -24,11 +26,11 @@ export default function AppBottomNav({ active = 'chat', onChat, onVoice, onRecor
             activeOpacity={0.85}
           >
             {tab.id === 'chat' ? (
-              <Ionicons name="chatbubbles" size={22} color={isActive ? MED_THEME.primary : MED_THEME.textMuted} />
+              <Ionicons name="chatbubbles" size={22} color={isActive ? med.primary : med.textMuted} />
             ) : tab.id === 'voice' ? (
-              <Ionicons name="mic" size={22} color={isActive ? MED_THEME.primary : MED_THEME.textMuted} />
+              <Ionicons name="mic" size={22} color={isActive ? med.primary : med.textMuted} />
             ) : (
-              <Ionicons name="folder-outline" size={22} color={isActive ? MED_THEME.primary : MED_THEME.textMuted} />
+              <Ionicons name="folder-outline" size={22} color={isActive ? med.primary : med.textMuted} />
             )}
             <Text style={[styles.label, isActive && styles.labelActive]}>{tab.label}</Text>
           </TouchableOpacity>
@@ -38,7 +40,7 @@ export default function AppBottomNav({ active = 'chat', onChat, onVoice, onRecor
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (med) => StyleSheet.create({
   wrap: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -46,9 +48,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     paddingBottom: 14,
-    backgroundColor: MED_THEME.bgElevated,
+    backgroundColor: med.bgElevated,
     borderTopWidth: 1,
-    borderTopColor: MED_THEME.cardBorder,
+    borderTopColor: med.cardBorder,
   },
   tab: {
     flex: 1,
@@ -65,11 +67,11 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     marginTop: 4,
-    color: MED_THEME.textMuted,
+    color: med.textMuted,
     fontWeight: '500',
   },
   labelActive: {
-    color: MED_THEME.primary,
+    color: med.primary,
     fontWeight: '600',
   },
 });

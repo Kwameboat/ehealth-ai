@@ -1,12 +1,15 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { MED_THEME } from '../constants/appTheme';
+import { useMemo } from 'react';
+import { useMedTheme } from '../hooks/useMedTheme';
 
 /**
  * Web-friendly attach menu (Alert.alert action sheets are unreliable on react-native-web).
  */
 export default function AttachFileModal({ visible, onClose, onPickPhoto, onPickPdf, showCamera }) {
+  const med = useMedTheme();
+  const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
@@ -21,7 +24,7 @@ export default function AttachFileModal({ visible, onClose, onPickPhoto, onPickP
               onClose();
             }}
           >
-            <MaterialCommunityIcons name="image-outline" size={22} color={MED_THEME.primary} />
+            <MaterialCommunityIcons name="image-outline" size={22} color={med.primary} />
             <Text style={styles.rowText}>Photo</Text>
           </TouchableOpacity>
 
@@ -33,7 +36,7 @@ export default function AttachFileModal({ visible, onClose, onPickPhoto, onPickP
                 onClose();
               }}
             >
-              <MaterialCommunityIcons name="camera-outline" size={22} color={MED_THEME.primary} />
+              <MaterialCommunityIcons name="camera-outline" size={22} color={med.primary} />
               <Text style={styles.rowText}>Take photo</Text>
             </TouchableOpacity>
           ) : null}
@@ -45,7 +48,7 @@ export default function AttachFileModal({ visible, onClose, onPickPhoto, onPickP
               onClose();
             }}
           >
-            <MaterialCommunityIcons name="file-pdf-box" size={22} color={MED_THEME.primary} />
+            <MaterialCommunityIcons name="file-pdf-box" size={22} color={med.primary} />
             <Text style={styles.rowText}>PDF document</Text>
           </TouchableOpacity>
 
@@ -58,7 +61,7 @@ export default function AttachFileModal({ visible, onClose, onPickPhoto, onPickP
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (med) => StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -68,26 +71,26 @@ const styles = StyleSheet.create({
       : {}),
   },
   sheet: {
-    backgroundColor: MED_THEME.bgElevated,
+    backgroundColor: med.bgElevated,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 28,
     borderTopWidth: 1,
-    borderColor: MED_THEME.cardBorder,
+    borderColor: med.cardBorder,
   },
-  title: { fontSize: 18, fontWeight: '700', color: MED_THEME.text },
-  sub: { fontSize: 13, color: MED_THEME.textMuted, marginTop: 4, marginBottom: 16 },
+  title: { fontSize: 18, fontWeight: '700', color: med.text },
+  sub: { fontSize: 13, color: med.textMuted, marginTop: 4, marginBottom: 16 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: MED_THEME.cardBorder,
+    borderBottomColor: med.cardBorder,
   },
-  rowText: { fontSize: 16, color: MED_THEME.text, fontWeight: '500' },
+  rowText: { fontSize: 16, color: med.text, fontWeight: '500' },
   cancelBtn: { marginTop: 12, alignItems: 'center', paddingVertical: 12 },
-  cancelText: { fontSize: 15, color: MED_THEME.textMuted, fontWeight: '600' },
+  cancelText: { fontSize: 15, color: med.textMuted, fontWeight: '600' },
 });

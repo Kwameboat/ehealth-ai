@@ -23,6 +23,7 @@ import MedicalHomeScreen from '../Screen/MedicalHomeScreen';
 import { useAuth } from '../Context/AuthContext';
 import MedicalChatScreen from '../Screen/MedicalChatScreen';
 import MedicalVoiceAgentScreen from '../Screen/MedicalVoiceAgentScreen';
+import FloatingThemeToggle from '../Components/FloatingThemeToggle';
 import LabResultsScreen from '../Screen/LabResultsScreen';
 import MedicineRecognitionScreen from '../Screen/MedicineRecognitionScreen';
 import MedicalHealth from '../Screen/MentalHealthScreen';
@@ -72,6 +73,7 @@ const StackNavigation = () => {
   }
 
   return (
+    <>
     <Stack.Navigator
       initialRouteName={initialRoute}
       screenOptions={{ headerShown: false }}
@@ -105,6 +107,8 @@ const StackNavigation = () => {
 
      
     </Stack.Navigator>
+    <FloatingThemeToggle />
+    </>
   );
 };
 

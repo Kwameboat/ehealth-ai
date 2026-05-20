@@ -1,5 +1,5 @@
 import { Feather, Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { MED_THEME } from '../constants/appTheme';
+import { useMedTheme } from '../hooks/useMedTheme';
 
 export default function ChatInputBar({
   value,
@@ -23,6 +23,9 @@ export default function ChatInputBar({
   isLoading = false,
   showDisclaimer = true,
 }) {
+  const med = useMedTheme();
+  const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
+
   const handleAttachPress = () => {
     if (isLoading) return;
     if (onAttach) onAttach();
@@ -37,12 +40,12 @@ export default function ChatInputBar({
           disabled={isLoading}
           accessibilityLabel="Attach photo or PDF"
         >
-          <Feather name="plus" size={22} color={MED_THEME.textMuted} />
+          <Feather name="plus" size={22} color={med.textMuted} />
         </TouchableOpacity>
         <TextInput
           style={styles.input}
           placeholder={isListening ? 'Listening…' : placeholder}
-          placeholderTextColor={MED_THEME.textDim}
+          placeholderTextColor={med.textDim}
           value={value}
           onChangeText={onChangeText}
           multiline
@@ -59,7 +62,7 @@ export default function ChatInputBar({
             <Ionicons
               name={isListening ? 'mic' : 'mic-outline'}
               size={22}
-              color={isListening ? MED_THEME.danger : MED_THEME.textMuted}
+              color={isListening ? med.danger : med.textMuted}
             />
           </TouchableOpacity>
         )}
@@ -84,59 +87,60 @@ export default function ChatInputBar({
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: {
-    paddingHorizontal: 0,
-    paddingTop: 8,
-    paddingBottom: 4,
-    backgroundColor: 'transparent',
-    width: '100%',
-  },
-  bar: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    backgroundColor: MED_THEME.inputBg,
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: MED_THEME.cardBorder,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    gap: 4,
-  },
-  iconBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  micActive: {
-    backgroundColor: 'rgba(239, 68, 68, 0.12)',
-    borderRadius: 20,
-  },
-  input: {
-    flex: 1,
-    color: MED_THEME.text,
-    fontSize: 15,
-    maxHeight: 100,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
-    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : null),
-  },
-  sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: MED_THEME.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendDisabled: { opacity: 0.65 },
-  disclaimer: {
-    fontSize: 9,
-    letterSpacing: 0.4,
-    textAlign: 'center',
-    color: MED_THEME.textDim,
-    marginTop: 10,
-    lineHeight: 13,
-  },
-});
+const createStyles = (med) =>
+  StyleSheet.create({
+    wrap: {
+      paddingHorizontal: 0,
+      paddingTop: 8,
+      paddingBottom: 4,
+      backgroundColor: 'transparent',
+      width: '100%',
+    },
+    bar: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      backgroundColor: med.inputBg,
+      borderRadius: 28,
+      borderWidth: 1,
+      borderColor: med.cardBorder,
+      paddingHorizontal: 6,
+      paddingVertical: 6,
+      gap: 4,
+    },
+    iconBtn: {
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    micActive: {
+      backgroundColor: 'rgba(239, 68, 68, 0.12)',
+      borderRadius: 20,
+    },
+    input: {
+      flex: 1,
+      color: med.text,
+      fontSize: 15,
+      maxHeight: 100,
+      paddingVertical: 10,
+      paddingHorizontal: 4,
+      ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : null),
+    },
+    sendBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: med.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    sendDisabled: { opacity: 0.65 },
+    disclaimer: {
+      fontSize: 9,
+      letterSpacing: 0.4,
+      textAlign: 'center',
+      color: med.textDim,
+      marginTop: 10,
+      lineHeight: 13,
+    },
+  });

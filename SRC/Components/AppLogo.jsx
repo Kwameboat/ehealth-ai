@@ -1,11 +1,14 @@
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { APP_TAGLINE } from '../constants/branding';
-import { MED_THEME } from '../constants/appTheme';
+import { useMemo } from 'react';
+import { useMedTheme } from '../hooks/useMedTheme';
 
 const logoSource = require('../../assets/images/ehealth-logo.png');
 
 export default function AppLogo({ size = 'medium', showTagline = false, centered = true, style }) {
+  const med = useMedTheme();
+  const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
   const width = size === 'large' ? 280 : size === 'small' ? 140 : 220;
 
   return (
@@ -16,12 +19,12 @@ export default function AppLogo({ size = 'medium', showTagline = false, centered
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (med) => StyleSheet.create({
   wrap: { gap: 10 },
   centered: { alignItems: 'center' },
   tagline: {
     fontSize: 12,
-    color: MED_THEME.textMuted,
+    color: med.textMuted,
     textAlign: 'center',
     maxWidth: 300,
     lineHeight: 18,

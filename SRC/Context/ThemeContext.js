@@ -1,28 +1,27 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useColorScheme } from 'react-native';
+import { getMedTheme } from '../constants/appTheme';
 
 const THEME_KEY = '@app_theme_preference';
 
-const ThemeContext = createContext();
+const ThemeContext = createContext(null);
 
 export const ThemeProvider = ({ children }) => {
   const colorScheme = useColorScheme();
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isThemeLoaded, setIsThemeLoaded] = useState(false);
-  const [isUsingSystem, setIsUsingSystem] = useState(true);
+  const [isUsingSystem, setIsUsingSystem] = useState(false);
 
-  // Load saved theme preference
   useEffect(() => {
     const loadThemePreference = async () => {
       try {
         const savedTheme = await AsyncStorage.getItem(THEME_KEY);
-        
-        if (savedTheme) {
+        if (savedTheme === 'light' || savedTheme === 'dark') {
           setIsDarkMode(savedTheme === 'dark');
           setIsUsingSystem(false);
         } else {
-          setIsDarkMode(colorScheme === 'dark');
+          setIsDarkMode(colorScheme !== 'light');
           setIsUsingSystem(true);
         }
       } catch (error) {
@@ -33,16 +32,14 @@ export const ThemeProvider = ({ children }) => {
     };
 
     loadThemePreference();
-  }, []);
+  }, [colorScheme]);
 
-  // Update theme when system preference changes (if using system theme)
   useEffect(() => {
     if (isThemeLoaded && isUsingSystem) {
-      setIsDarkMode(colorScheme === 'dark');
+      setIsDarkMode(colorScheme !== 'light');
     }
   }, [colorScheme, isThemeLoaded, isUsingSystem]);
 
-  // Save theme preference to AsyncStorage
   const saveThemePreference = async (darkMode, usingSystem = false) => {
     try {
       if (usingSystem) {
@@ -55,64 +52,73 @@ export const ThemeProvider = ({ children }) => {
     }
   };
 
-  // Toggle theme and save preference
-  const toggleTheme = useCallback(() => {
-    const newMode = !isDarkMode;
-    setIsDarkMode(newMode);
+  const setThemeMode = useCallback((dark) => {
+    setIsDarkMode(dark);
     setIsUsingSystem(false);
-    saveThemePreference(newMode);
-  }, [isDarkMode]);
+    saveThemePreference(dark);
+  }, []);
 
-  // Reset to system theme
+  const toggleTheme = useCallback(() => {
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      setIsUsingSystem(false);
+      saveThemePreference(next);
+      return next;
+    });
+  }, []);
+
   const resetToSystem = useCallback(() => {
-    setIsDarkMode(colorScheme === 'dark');
+    const systemDark = colorScheme !== 'light';
+    setIsDarkMode(systemDark);
     setIsUsingSystem(true);
     saveThemePreference(null, true);
   }, [colorScheme]);
 
-  // Theme object with colors and metrics
-  const theme = {
-    isDarkMode,
-    isThemeLoaded,
-    isUsingSystem,
-    toggleTheme,
-    resetToSystem,
-    colors: {
-      background: isDarkMode ? '#0B1220' : '#f8f9fa',
-      card: isDarkMode ? '#1A2332' : '#ffffff',
-      header: isDarkMode ? '#111827' : '#2a86ff',
-      footer: isDarkMode ? '#111827' : '#eef6ff',
-      text: isDarkMode ? '#F8FAFC' : '#1e293b',
-      textSecondary: isDarkMode ? '#94A3B8' : '#64748b',
-      border: isDarkMode ? 'rgba(148,163,184,0.12)' : '#e5e7eb',
-      primary: '#3B82F6',
-      primaryHover: isDarkMode ? '#60a5fa' : '#2563eb',
-      secondary: '#6366F1',
-      accent: '#6366F1',
-      
-      // Status
-      success: '#10b981',
-      warning: '#f59e0b',
-      danger: '#ef4444',
-      
-      // Buttons
-      buttonText: isDarkMode ? '#f0f9ff' : '#ffffff',
-      buttonPrimaryBg: isDarkMode ? '#1e40af' : '#3b82f6',
-    },
-    metrics: {
-      borderRadius: 12,
-      padding: 16,
-      margin: 8,
-      headerHeight: 60,
-      transition: '300ms ease-in-out',
-    },
-  };
+  const theme = useMemo(() => {
+    const med = getMedTheme(isDarkMode);
+    return {
+      isDarkMode,
+      isThemeLoaded,
+      isUsingSystem,
+      toggleTheme,
+      setThemeMode,
+      resetToSystem,
+      med,
+      colors: {
+        background: med.bg,
+        card: med.surface,
+        header: isDarkMode ? med.bgElevated : '#FFFFFF',
+        footer: isDarkMode ? med.bgElevated : '#EEF6FF',
+        text: med.text,
+        textSecondary: med.textMuted,
+        border: med.cardBorder,
+        primary: med.primary,
+        primaryHover: isDarkMode ? '#60A5FA' : '#2563EB',
+        secondary: '#6366F1',
+        accent: med.accent,
+        success: med.success,
+        warning: '#F59E0B',
+        danger: med.danger,
+        buttonText: '#FFFFFF',
+        buttonPrimaryBg: med.primary,
+      },
+      metrics: {
+        borderRadius: 12,
+        padding: 16,
+        margin: 8,
+        headerHeight: 60,
+        transition: '300ms ease-in-out',
+      },
+    };
+  }, [isDarkMode, isThemeLoaded, isUsingSystem, toggleTheme, setThemeMode, resetToSystem]);
 
-  return (
-    <ThemeContext.Provider value={theme}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 };
 
-export const useTheme = () => useContext(ThemeContext);
+export const useTheme = () => {
+  const ctx = useContext(ThemeContext);
+  if (!ctx) {
+    throw new Error('useTheme must be used within ThemeProvider');
+  }
+  return ctx;
+};
