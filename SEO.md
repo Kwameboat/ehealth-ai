@@ -26,12 +26,8 @@ Deploy as usual (`cpanel-post-deploy.sh` copies `robots.txt` and `sitemap.xml` t
 
 1. Go to [Google Search Console](https://search.google.com/search-console)
 2. Add property: `https://www.ehealthaigh.com` (prefer **URL prefix** or **Domain** if you control DNS)
-3. Verify ownership — easiest options:
-   - **HTML tag**: copy the meta content value Google gives you, set in cPanel / build env:
-     ```bash
-     EXPO_PUBLIC_GOOGLE_SITE_VERIFICATION=your_code_here
-     ```
-     Rebuild and redeploy, then click **Verify** in Search Console.
+3. Verify ownership — **HTML tag** is already configured in the app (`EVGPzHgfdl7…`). After deploy, click **Verify** in Search Console.
+   - Override via build env: `EXPO_PUBLIC_GOOGLE_SITE_VERIFICATION=your_code_here`
    - Or upload Google’s HTML file to `public_html/`
 4. Submit sitemap: `https://www.ehealthaigh.com/sitemap.xml`
 5. **URL inspection** → enter `https://www.ehealthaigh.com/` → **Request indexing**

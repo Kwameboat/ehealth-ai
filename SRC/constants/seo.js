@@ -6,6 +6,11 @@ export const SITE_URL = (
   process.env.EXPO_PUBLIC_SITE_URL || 'https://www.ehealthaigh.com'
 ).replace(/\/$/, '');
 
+/** Google Search Console HTML tag verification (content value only) */
+export const GOOGLE_SITE_VERIFICATION =
+  process.env.EXPO_PUBLIC_GOOGLE_SITE_VERIFICATION ||
+  'EVGPzHgfdl7PWlqlelkWFexwIwDKMB2rVrO7sIGZ5N8';
+
 export const SEO = {
   siteName: 'eHealth AI',
   title:

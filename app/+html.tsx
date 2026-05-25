@@ -1,6 +1,13 @@
 import { ScrollViewStyleReset } from 'expo-router/html';
 import type { PropsWithChildren } from 'react';
-import { getCanonicalUrl, getOgImageUrl, getStructuredData, SEO, SITE_URL } from '../SRC/constants/seo';
+import {
+  getCanonicalUrl,
+  getOgImageUrl,
+  getStructuredData,
+  GOOGLE_SITE_VERIFICATION,
+  SEO,
+  SITE_URL,
+} from '../SRC/constants/seo';
 
 /** Matches @expo/vector-icons font family names — served from /fonts/ (see scripts/copy-icon-fonts.mjs) */
 const iconFontFaces = `
@@ -58,7 +65,6 @@ if ('serviceWorker' in navigator) {
 }
 `;
 
-const googleVerification = process.env.EXPO_PUBLIC_GOOGLE_SITE_VERIFICATION;
 const bingVerification = process.env.EXPO_PUBLIC_BING_SITE_VERIFICATION;
 
 export default function Root({ children }: PropsWithChildren) {
@@ -105,8 +111,8 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="twitter:image" content={ogImage} />
 
         {/* Search Console verification (set at build time) */}
-        {googleVerification ? (
-          <meta name="google-site-verification" content={googleVerification} />
+        {GOOGLE_SITE_VERIFICATION ? (
+          <meta name="google-site-verification" content={GOOGLE_SITE_VERIFICATION} />
         ) : null}
         {bingVerification ? (
           <meta name="msvalidate.01" content={bingVerification} />
