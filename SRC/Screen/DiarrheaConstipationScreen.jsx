@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../Context/ThemeContext';
 
+import ScreenHeaderBar from '../Components/ScreenHeaderBar';
 import ClinicalAnalysisView from '../Components/ClinicalAnalysisView';
 import MultiImagePreview from '../Components/MultiImagePreview';
 import { analyzeSymptomFromText } from '../services/symptomAnalysis';
@@ -180,14 +181,7 @@ const DiarrheaConstipationScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={28} color={theme.colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Digestive Health Analysis</Text>
-      </View>
-
+      <ScreenHeaderBar title="Digestive Health Analysis" />
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         {/* Symptom Type Selector */}
         <View style={styles.section}>
@@ -388,22 +382,6 @@ const getStyles = (theme) => StyleSheet.create({
   container: { 
     flex: 1, 
     backgroundColor: theme.colors.background 
-  },
-  header: {
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    padding: 20,
-    backgroundColor: theme.colors.header, 
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  backButton: { 
-    marginRight: 15 
-  },
-  headerTitle: { 
-    fontSize: 20, 
-    fontWeight: '700', 
-    color: theme.colors.text 
   },
   scrollContainer: { 
     padding: 20, 

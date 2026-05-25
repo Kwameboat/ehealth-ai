@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../Context/ThemeContext';
 
+import ScreenHeaderBar from '../Components/ScreenHeaderBar';
 import ClinicalAnalysisView from '../Components/ClinicalAnalysisView';
 import MultiImagePreview from '../Components/MultiImagePreview';
 import { analyzeSymptomFromText } from '../services/symptomAnalysis';
@@ -189,15 +190,7 @@ const FeverChillsScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={28} color={theme.colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Fever & Chills Analysis</Text>
-        <FontAwesome5 name="temperature-high" size={24} color={theme.colors.text} style={styles.headerIcon} />
-      </View>
-
+      <ScreenHeaderBar title="Fever & Chills Analysis" />
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         {/* Fever-specific input */}
         <View style={styles.section}>
@@ -435,26 +428,6 @@ const getStyles = (theme) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: theme.colors.header,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
-  },
-  backButton: {
-    marginRight: 15,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: theme.colors.text,
-    flex: 1,
-  },
-  headerIcon: {
-    marginLeft: 10
   },
   scrollContainer: {
     padding: 20,

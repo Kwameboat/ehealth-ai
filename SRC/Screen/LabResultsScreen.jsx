@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import ScreenHeaderBar from '../Components/ScreenHeaderBar';
 import ClinicalAnalysisView from '../Components/ClinicalAnalysisView';
 import MultiImagePreview from '../Components/MultiImagePreview';
 import { useTheme } from '../Context/ThemeContext';
@@ -92,13 +93,7 @@ const LabResultsScreen = () => {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={28} color={theme.colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Lab Results</Text>
-        <View style={styles.backButton} />
-      </View>
+      <ScreenHeaderBar title="Lab Results" />
 
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         {!hasSelection ? (
@@ -194,18 +189,6 @@ const LabResultsScreen = () => {
 const createStyles = (theme) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.colors.background },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: 20,
-      paddingTop: 50,
-      backgroundColor: theme.colors.card,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
-    },
-    backButton: { width: 40 },
-    headerTitle: { fontSize: 20, fontWeight: '700', color: theme.colors.text },
     scrollContainer: { padding: 20, paddingBottom: 40 },
     uploadSection: { alignItems: 'center' },
     illustrationContainer: { alignItems: 'center', marginBottom: 32, marginTop: 20 },
