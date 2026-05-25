@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSSpeechRecognitionUsageDescription": "Allow this app to use speech recognition.",
-        "NSMicrophoneUsageDescription": "Allow this app to use the microphone."
+        "NSMicrophoneUsageDescription": "Allow this app to use the microphone.",
+        "NSLocationWhenInUseUsageDescription": "eHealth AI uses your location to find the nearest hospitals and emergency facilities."
       },
       "bundleIdentifier": "com.yourname.aimedicalagent"
     },
@@ -23,7 +24,9 @@
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ],
       "package": "com.yourname.aimedicalagent"
     },

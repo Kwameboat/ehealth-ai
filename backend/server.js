@@ -25,6 +25,7 @@ const userRoutes = require('./routes/user');
 const aiRoutes = require('./routes/ai');
 const adminRoutes = require('./routes/admin');
 const paymentRoutes = require('./routes/payments');
+const emergencyRoutes = require('./routes/emergency');
 const { paystackWebhookHandler } = require('./routes/payments');
 
 const app = express();
@@ -166,6 +167,7 @@ app.use('/api/auth', requireAppAuth, authRoutes);
 app.use('/api', requireAppAuth, userRoutes);
 app.use('/api', requireAppAuth, aiRoutes);
 app.use('/api/payments', requireAppAuth, paymentRoutes);
+app.use('/api/emergency', requireAppAuth, emergencyRoutes);
 
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin', 'index.html'));

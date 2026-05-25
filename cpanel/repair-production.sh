@@ -43,6 +43,8 @@ curl -fsSL -o "$BACKEND/services/clinicalResponseFormat.js" "$BASE/backend/servi
 curl -fsSL -o "$BACKEND/services/symptomClinicalPrompt.js" "$BASE/backend/services/symptomClinicalPrompt.js"
 curl -fsSL -o "$BACKEND/routes/ai.js" "$BASE/backend/routes/ai.js"
 curl -fsSL -o "$BACKEND/routes/user.js" "$BASE/backend/routes/user.js"
+curl -fsSL -o "$BACKEND/routes/emergency.js" "$BASE/backend/routes/emergency.js"
+curl -fsSL -o "$BACKEND/services/nearbyPlaces.js" "$BASE/backend/services/nearbyPlaces.js"
 curl -fsSL -o "$BACKEND/routes/payments.js" "$BASE/backend/routes/payments.js"
 curl -fsSL -o "$BACKEND/services/payments.js" "$BASE/backend/services/payments.js"
 curl -fsSL -o "$BACKEND/services/paystack.js" "$BASE/backend/services/paystack.js"
