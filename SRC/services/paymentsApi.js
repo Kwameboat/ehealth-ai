@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getApiAuthHeadersAsync } from './apiAuth';
 import { getApiUrl } from './appConfig';
 
-const PENDING_REF_KEY = 'ehealth_pending_payment_ref';
+export const PENDING_REF_KEY = 'ehealth_pending_payment_ref';
 
 function getApiBase() {
   return getApiUrl();

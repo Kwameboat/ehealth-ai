@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Alert } from 'react-native';
 import {
   deleteMe,
   fetchMe,
@@ -8,6 +9,11 @@ import {
   updateMe,
 } from '../services/authApi';
 import { clearSession, getStoredToken, getStoredUser, saveSession } from '../services/authStorage';
+import {
+  resumeWatchingIfPending,
+  stopWatching,
+  subscribePaymentVerified,
+} from '../services/pendingPaymentAutoVerify';
 import { setPointsBalanceHandler } from '../services/pointsBridge';
 
 const AuthContext = createContext(null);
@@ -56,6 +62,32 @@ export function AuthProvider({ children }) {
     });
     return () => setPointsBalanceHandler(null);
   }, []);
+
+  useEffect(() => {
+    if (!token) {
+      stopWatching();
+      return undefined;
+    }
+
+    resumeWatchingIfPending();
+
+    const unsub = subscribePaymentVerified(async (result) => {
+      setUser((prev) => (prev ? { ...prev, pointsBalance: result.balance } : prev));
+      try {
+        const me = await fetchMe();
+        setUser(me.user);
+        if (token) await saveSession(token, me.user);
+      } catch {
+        /* balance already updated from verify response */
+      }
+      Alert.alert(
+        'Payment successful',
+        `+${result.pointsAdded} points added. Your balance is now ${result.balance} points.`
+      );
+    });
+
+    return () => unsub();
+  }, [token]);
 
   const applySession = async (sessionToken, sessionUser) => {
     await saveSession(sessionToken, sessionUser);

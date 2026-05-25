@@ -1,6 +1,6 @@
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,14 +15,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AppLogo from '../Components/AppLogo';
 import { APP_TAGLINE } from '../constants/branding';
-import { useMemo } from 'react';
 import { useMedTheme } from '../hooks/useMedTheme';
 import { useAuth } from '../Context/AuthContext';
+import {
+  kickVerify,
+  startWatching,
+  subscribePaymentVerified,
+} from '../services/pendingPaymentAutoVerify';
 import {
   fetchPointPackages,
   getPendingPaymentReference,
   initializePayment,
-  verifyPayment,
 } from '../services/paymentsApi';
 
 function formatMoney(amountMinor, currency = 'GHS', amountDisplay) {
@@ -43,7 +46,7 @@ const BuyPointsScreen = () => {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [pendingRef, setPendingRef] = useState(null);
-  const autoVerifyAttempted = useRef(false);
+  const [autoVerifying, setAutoVerifying] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,7 +54,12 @@ const BuyPointsScreen = () => {
       const data = await fetchPointPackages();
       setPackages(data.packages || []);
       setPaystackEnabled(!!data.paystackEnabled);
-      setPendingRef(await getPendingPaymentReference());
+      const ref = await getPendingPaymentReference();
+      setPendingRef(ref);
+      if (ref) {
+        setAutoVerifying(true);
+        startWatching();
+      }
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
@@ -63,76 +71,65 @@ const BuyPointsScreen = () => {
     load();
   }, [load]);
 
-  const runVerify = useCallback(
-    async (ref, { silent = false } = {}) => {
-      if (!ref) return false;
-      setBusy(true);
-      try {
-        const result = await verifyPayment(ref);
-        updatePointsBalance(result.balance);
-        await refreshUser();
-        setPendingRef(null);
-        autoVerifyAttempted.current = true;
-        if (!silent) {
-          Alert.alert('Success', `+${result.pointsAdded} points added. Balance: ${result.balance}`, [
-            { text: 'Done', onPress: () => navigation.goBack() },
-          ]);
-        }
-        return true;
-      } catch (e) {
-        if (!silent) {
-          Alert.alert('Verification', e.message);
-        }
-        return false;
-      } finally {
-        setBusy(false);
-      }
-    },
-    [navigation, refreshUser, updatePointsBalance]
-  );
+  useEffect(() => {
+    return subscribePaymentVerified(async (result) => {
+      setPendingRef(null);
+      setAutoVerifying(false);
+      setBusy(false);
+      updatePointsBalance(result.balance);
+      await refreshUser();
+    });
+  }, [refreshUser, updatePointsBalance]);
 
   useFocusEffect(
     useCallback(() => {
-      if (!pendingRef || autoVerifyAttempted.current || busy) return undefined;
-      let cancelled = false;
-      const timer = setTimeout(() => {
-        if (cancelled) return;
-        runVerify(pendingRef, { silent: true }).then((ok) => {
-          if (ok && !cancelled) {
-            Alert.alert('Payment confirmed', 'Your points have been added to your account.');
-          }
-        });
-      }, 600);
-      return () => {
-        cancelled = true;
-        clearTimeout(timer);
-      };
-    }, [pendingRef, busy, runVerify])
+      if (!pendingRef) return undefined;
+      setAutoVerifying(true);
+      startWatching();
+      kickVerify();
+      return undefined;
+    }, [pendingRef])
   );
 
   const handleBuy = async (packageId) => {
     setBusy(true);
     try {
       const { authorizationUrl, reference, points } = await initializePayment(packageId);
-      autoVerifyAttempted.current = false;
       setPendingRef(reference);
+      setAutoVerifying(true);
+      startWatching();
+
       const opened = await Linking.openURL(authorizationUrl);
       if (!opened && Platform.OS === 'web') {
         window.open(authorizationUrl, '_blank');
       }
+
       Alert.alert(
-        'Complete payment',
-        `Pay with Paystack to receive ${points} points. When done, tap "Confirm payment" below.`,
+        'Complete payment on Paystack',
+        `When payment succeeds, ${points} points will be added to your balance automatically — no extra steps needed.`,
         [{ text: 'OK' }]
       );
     } catch (e) {
       Alert.alert('Payment', e.message);
+      setAutoVerifying(false);
     } finally {
       setBusy(false);
     }
   };
 
-  const handleVerify = () => runVerify(pendingRef);
+  const handleRetryVerify = async () => {
+    setBusy(true);
+    setAutoVerifying(true);
+    startWatching();
+    const ok = await kickVerify();
+    if (!ok) {
+      Alert.alert(
+        'Still processing',
+        'If you already paid, wait a few seconds or check that Paystack shows success. We will keep checking automatically.'
+      );
+    }
+    setBusy(false);
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -162,7 +159,7 @@ const BuyPointsScreen = () => {
                 key={pkg.id}
                 style={styles.packageCard}
                 onPress={() => handleBuy(pkg.id)}
-                disabled={busy}
+                disabled={busy || autoVerifying}
               >
                 <View>
                   <Text style={styles.pkgName}>{pkg.name}</Text>
@@ -173,16 +170,16 @@ const BuyPointsScreen = () => {
               </TouchableOpacity>
             ))}
 
-            {pendingRef && (
+            {pendingRef && autoVerifying && (
               <View style={styles.pendingBox}>
-                <Text style={styles.pendingTitle}>Pending payment</Text>
-                <Text style={styles.pendingRef}>Ref: {pendingRef.slice(0, 20)}…</Text>
-                <TouchableOpacity style={styles.confirmBtn} onPress={handleVerify} disabled={busy}>
-                  {busy ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.confirmBtnText}>Confirm payment</Text>
-                  )}
+                <ActivityIndicator color="#00C9A7" style={{ marginBottom: 12 }} />
+                <Text style={styles.pendingTitle}>Adding your points…</Text>
+                <Text style={styles.pendingHint}>
+                  Payment detected. Your balance updates automatically after Paystack confirms — usually within a few
+                  seconds.
+                </Text>
+                <TouchableOpacity style={styles.retryBtn} onPress={handleRetryVerify} disabled={busy}>
+                  <Text style={styles.retryBtnText}>Having trouble? Tap to check again</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -193,63 +190,60 @@ const BuyPointsScreen = () => {
   );
 };
 
-const createStyles = (med) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: med.bg },
-  scroll: { padding: 24, paddingBottom: 48 },
-  back: { marginBottom: 16 },
-  backText: { color: med.primary, fontWeight: '600' },
-  disclaimer: {
-    textAlign: 'center',
-    color: med.textMuted,
-    fontSize: 11,
-    marginTop: 4,
-    marginBottom: 24,
-  },
-  balanceCard: {
-    backgroundColor: med.surface,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: med.cardBorder,
-    marginBottom: 28,
-    alignItems: 'center',
-  },
-  balanceLabel: { color: med.textMuted, fontSize: 13 },
-  balanceValue: { color: '#00C9A7', fontSize: 32, fontWeight: '800', marginTop: 4 },
-  sectionTitle: { color: med.text, fontSize: 18, fontWeight: '700', marginBottom: 14 },
-  packageCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: med.surface,
-    borderRadius: 14,
-    padding: 18,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: med.cardBorder,
-  },
-  pkgName: { color: med.text, fontWeight: '700', fontSize: 16 },
-  pkgDesc: { color: med.textMuted, fontSize: 12, marginTop: 4, maxWidth: 220 },
-  pkgPoints: { color: '#00C9A7', fontWeight: '700', marginTop: 8, fontSize: 14 },
-  pkgPrice: { color: '#0052D4', fontWeight: '800', fontSize: 18 },
-  pendingBox: {
-    marginTop: 24,
-    padding: 18,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 201, 167, 0.35)',
-    backgroundColor: 'rgba(0, 201, 167, 0.08)',
-  },
-  pendingTitle: { color: med.text, fontWeight: '700', marginBottom: 6 },
-  pendingRef: { color: med.textMuted, fontSize: 12, marginBottom: 14 },
-  confirmBtn: {
-    backgroundColor: '#00C9A7',
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-  },
-  confirmBtnText: { color: '#0a0e17', fontWeight: '800' },
-  hint: { color: med.textMuted, textAlign: 'center', marginTop: 24, lineHeight: 22 },
-});
+const createStyles = (med) =>
+  StyleSheet.create({
+    safe: { flex: 1, backgroundColor: med.bg },
+    scroll: { padding: 24, paddingBottom: 48 },
+    back: { marginBottom: 16 },
+    backText: { color: med.primary, fontWeight: '600' },
+    disclaimer: {
+      textAlign: 'center',
+      color: med.textMuted,
+      fontSize: 11,
+      marginTop: 4,
+      marginBottom: 24,
+    },
+    balanceCard: {
+      backgroundColor: med.surface,
+      borderRadius: 16,
+      padding: 20,
+      borderWidth: 1,
+      borderColor: med.cardBorder,
+      marginBottom: 28,
+      alignItems: 'center',
+    },
+    balanceLabel: { color: med.textMuted, fontSize: 13 },
+    balanceValue: { color: '#00C9A7', fontSize: 32, fontWeight: '800', marginTop: 4 },
+    sectionTitle: { color: med.text, fontSize: 18, fontWeight: '700', marginBottom: 14 },
+    packageCard: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: med.surface,
+      borderRadius: 14,
+      padding: 18,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: med.cardBorder,
+    },
+    pkgName: { color: med.text, fontWeight: '700', fontSize: 16 },
+    pkgDesc: { color: med.textMuted, fontSize: 12, marginTop: 4, maxWidth: 220 },
+    pkgPoints: { color: '#00C9A7', fontWeight: '700', marginTop: 8, fontSize: 14 },
+    pkgPrice: { color: '#0052D4', fontWeight: '800', fontSize: 18 },
+    pendingBox: {
+      marginTop: 24,
+      padding: 18,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: 'rgba(0, 201, 167, 0.35)',
+      backgroundColor: 'rgba(0, 201, 167, 0.08)',
+      alignItems: 'center',
+    },
+    pendingTitle: { color: med.text, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
+    pendingHint: { color: med.textMuted, fontSize: 13, lineHeight: 20, textAlign: 'center' },
+    retryBtn: { marginTop: 16, paddingVertical: 8 },
+    retryBtnText: { color: med.primary, fontWeight: '600', fontSize: 13 },
+    hint: { color: med.textMuted, textAlign: 'center', marginTop: 24, lineHeight: 22 },
+  });
 
 export default BuyPointsScreen;
