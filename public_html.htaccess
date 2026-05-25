@@ -7,6 +7,10 @@
   RewriteEngine On
   RewriteBase /
 
+  # Canonical host: prefer www (SEO — single indexed URL)
+  RewriteCond %{HTTP_HOST} ^ehealthaigh\.com$ [NC]
+  RewriteRule ^ https://www.ehealthaigh.com%{REQUEST_URI} [L,R=301]
+
   # Force HTTPS (fixes "Not secure" in Chrome on phone when HTTP is used)
   RewriteCond %{HTTPS} off
   RewriteCond %{HTTP:X-Forwarded-Proto} !https
@@ -18,7 +22,9 @@
   RewriteRule ^payment(/|$) - [L]
   RewriteRule ^app-config\.js$ - [L]
 
-  # PWA bundles + icon fonts (must not fall through to index.html)
+  # SEO + PWA static files (must not fall through to index.html)
+  RewriteRule ^robots\.txt$ - [L]
+  RewriteRule ^sitemap\.xml$ - [L]
   RewriteRule ^_expo/ - [L]
   RewriteRule ^assets/ - [L]
   RewriteRule ^fonts/ - [L]

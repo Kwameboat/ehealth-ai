@@ -8,7 +8,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "build:web": "node scripts/generate-pwa-icons.mjs && node scripts/copy-icon-fonts.mjs && expo export -p web",
+    "build:web": "node scripts/generate-pwa-icons.mjs && node scripts/generate-sitemap.mjs && node scripts/copy-icon-fonts.mjs && expo export -p web",
     "pwa:icons": "node scripts/generate-pwa-icons.mjs",
     "smoke-test": "node scripts/smoke-test.mjs",
     "deploy:bundle": "node scripts/prepare-deploy.mjs",

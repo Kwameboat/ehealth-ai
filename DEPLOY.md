@@ -88,7 +88,17 @@ WEB_DIST_PATH=/home/USER/ehealth/dist
 
    Points are credited when Paystack sends `charge.success`, or when the user taps **Confirm payment** in Buy Points, or when the callback page verifies the transaction.
 
-## 6. Verify
+## 6. SEO & Google indexing
+
+See **[SEO.md](./SEO.md)** for Search Console, sitemap, and verification steps.
+
+Production web build should set:
+
+```bash
+EXPO_PUBLIC_SITE_URL=https://www.ehealthaigh.com
+```
+
+## 7. Verify
 
 ```bash
 npm run smoke-test

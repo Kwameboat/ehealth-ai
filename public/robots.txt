@@ -1,0 +1,12 @@
+# eHealth AI — https://www.ehealthaigh.com
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+Disallow: /payment/
+
+# Allow crawlers to fetch PWA assets
+Allow: /icons/
+Allow: /manifest.json
+
+Sitemap: https://www.ehealthaigh.com/sitemap.xml

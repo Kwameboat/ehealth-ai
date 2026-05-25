@@ -60,6 +60,8 @@ if [ -d "$SRC/dist" ]; then
     echo "Injected app-config.js into PWA index.html"
   fi
   cp -f "$SRC/public/manifest.json" "$PUBLIC/" 2>/dev/null || true
+  cp -f "$SRC/public/robots.txt" "$PUBLIC/" 2>/dev/null || true
+  cp -f "$SRC/public/sitemap.xml" "$PUBLIC/" 2>/dev/null || true
   cp -f "$SRC/public/sw.js" "$PUBLIC/" 2>/dev/null || true
   cp -r "$SRC/public/icons" "$PUBLIC/" 2>/dev/null || true
   if [ -d "$SRC/public/fonts" ]; then

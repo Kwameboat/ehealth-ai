@@ -1,8 +1,8 @@
 {
   "id": "/",
   "short_name": "eHealth AI",
-  "name": "eHealth AI — AI Health Assistance",
-  "description": "AI-powered medical guidance, symptom analysis, and health chat.",
+  "name": "eHealth AI — AI Health Assistant Ghana",
+  "description": "AI health assistant: symptom checker, lab results help, medical chat with Agyenim. Educational guidance — not a doctor.",
   "icons": [
     {
       "src": "/icons/icon-192.png",
