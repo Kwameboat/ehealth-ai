@@ -122,7 +122,14 @@ function paystackWebhookHandler(req, res) {
       const reference = event.data?.reference;
       if (reference) {
         const { completePayment } = require('../services/payments');
-        completePayment(reference, event.data);
+        try {
+          const result = completePayment(reference, event.data);
+          console.log(
+            `Paystack webhook credited ${result.points} pts (ref ${reference}, alreadyCompleted=${result.alreadyCompleted})`
+          );
+        } catch (creditErr) {
+          console.error(`Paystack webhook credit failed ref=${reference}:`, creditErr.message);
+        }
       }
     }
     res.status(200).send('OK');

@@ -32,6 +32,16 @@ function getPaymentByReference(reference) {
   return getDb().prepare('SELECT * FROM payments WHERE paystack_reference = ?').get(reference);
 }
 
+function isPaystackSuccess(paystackData) {
+  const status = String(paystackData?.status || '').toLowerCase();
+  return status === 'success' || status === 'successful';
+}
+
+function paystackPaidAmount(paystackData) {
+  const amount = Number(paystackData?.amount);
+  return Number.isFinite(amount) ? amount : 0;
+}
+
 function completePayment(reference, paystackData) {
   const payment = getPaymentByReference(reference);
   if (!payment) {
@@ -45,7 +55,7 @@ function completePayment(reference, paystackData) {
     return { alreadyCompleted: true, balance: user?.points_balance ?? 0, points: payment.points_to_credit };
   }
 
-  if (paystackData.status !== 'success') {
+  if (!isPaystackSuccess(paystackData)) {
     getDb()
       .prepare(`UPDATE payments SET status = 'failed', paystack_response = ?, completed_at = ? WHERE paystack_reference = ?`)
       .run(JSON.stringify(paystackData), now(), reference);
@@ -54,8 +64,8 @@ function completePayment(reference, paystackData) {
     throw err;
   }
 
-  const paidAmount = paystackData.amount;
-  if (paidAmount < payment.amount_kobo) {
+  const paidAmount = paystackPaidAmount(paystackData);
+  if (paidAmount > 0 && paidAmount < payment.amount_kobo) {
     const err = new Error('Paid amount does not match package');
     err.status = 400;
     throw err;

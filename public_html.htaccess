@@ -12,9 +12,10 @@
   RewriteCond %{HTTP:X-Forwarded-Proto} !https
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-  # Let Node/Passenger handle API + runtime PWA config
+  # Let Node/Passenger handle API + runtime PWA config + Paystack callback
   RewriteRule ^api(/|$) - [L]
   RewriteRule ^admin/api(/|$) - [L]
+  RewriteRule ^payment(/|$) - [L]
   RewriteRule ^app-config\.js$ - [L]
 
   # PWA bundles + icon fonts (must not fall through to index.html)

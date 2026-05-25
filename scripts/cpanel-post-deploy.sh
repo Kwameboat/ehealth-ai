@@ -78,6 +78,11 @@ if [ -d "$SRC/dist" ]; then
   fi
   mkdir -p "$PUBLIC/admin"
   cp -r "$SRC/backend/public/admin/"* "$PUBLIC/admin/" 2>/dev/null || true
+  if [ -d "$SRC/backend/public/payment" ]; then
+    mkdir -p "$PUBLIC/payment"
+    cp -r "$SRC/backend/public/payment/"* "$PUBLIC/payment/" 2>/dev/null || true
+    echo "Published payment callback to $PUBLIC/payment"
+  fi
   echo "Published PWA to $PUBLIC"
 fi
 

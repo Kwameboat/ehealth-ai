@@ -1,5 +1,6 @@
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -33,6 +34,7 @@ function formatMoney(amountMinor, currency = 'GHS', amountDisplay) {
 }
 
 const BuyPointsScreen = () => {
+  const navigation = useNavigation();
   const med = useMedTheme();
   const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
   const { user, updatePointsBalance, refreshUser } = useAuth();
@@ -41,6 +43,7 @@ const BuyPointsScreen = () => {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [pendingRef, setPendingRef] = useState(null);
+  const autoVerifyAttempted = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,10 +63,58 @@ const BuyPointsScreen = () => {
     load();
   }, [load]);
 
+  const runVerify = useCallback(
+    async (ref, { silent = false } = {}) => {
+      if (!ref) return false;
+      setBusy(true);
+      try {
+        const result = await verifyPayment(ref);
+        updatePointsBalance(result.balance);
+        await refreshUser();
+        setPendingRef(null);
+        autoVerifyAttempted.current = true;
+        if (!silent) {
+          Alert.alert('Success', `+${result.pointsAdded} points added. Balance: ${result.balance}`, [
+            { text: 'Done', onPress: () => navigation.goBack() },
+          ]);
+        }
+        return true;
+      } catch (e) {
+        if (!silent) {
+          Alert.alert('Verification', e.message);
+        }
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [navigation, refreshUser, updatePointsBalance]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!pendingRef || autoVerifyAttempted.current || busy) return undefined;
+      let cancelled = false;
+      const timer = setTimeout(() => {
+        if (cancelled) return;
+        runVerify(pendingRef, { silent: true }).then((ok) => {
+          if (ok && !cancelled) {
+            Alert.alert('Payment confirmed', 'Your points have been added to your account.');
+          }
+        });
+      }, 600);
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+      };
+    }, [pendingRef, busy, runVerify])
+  );
+
   const handleBuy = async (packageId) => {
     setBusy(true);
     try {
       const { authorizationUrl, reference, points } = await initializePayment(packageId);
+      autoVerifyAttempted.current = false;
       setPendingRef(reference);
       const opened = await Linking.openURL(authorizationUrl);
       if (!opened && Platform.OS === 'web') {
@@ -81,22 +132,7 @@ const BuyPointsScreen = () => {
     }
   };
 
-  const handleVerify = async () => {
-    setBusy(true);
-    try {
-      const result = await verifyPayment(pendingRef);
-      updatePointsBalance(result.balance);
-      await refreshUser();
-      setPendingRef(null);
-      Alert.alert('Success', `+${result.pointsAdded} points added. Balance: ${result.balance}`, [
-        { text: 'Done', onPress: () => navigation.goBack() },
-      ]);
-    } catch (e) {
-      Alert.alert('Verification', e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const handleVerify = () => runVerify(pendingRef);
 
   return (
     <SafeAreaView style={styles.safe}>

@@ -78,11 +78,15 @@ WEB_DIST_PATH=/home/USER/ehealth/dist
 5. Environment variables: copy from `backend/.env` or set in cPanel UI  
 6. Map domain/subdomain to this app (HTTPS)
 
-## 5. Paystack webhook
+## 5. Paystack (live)
 
-In Paystack dashboard → Webhooks:
+1. **Admin → Settings & Keys:** use **live** `sk_live_…` and `pk_live_…` (same mode as your Paystack dashboard).
+2. **Callback URL** in `backend/.env`: `PAYSTACK_CALLBACK_URL=https://yourdomain.com/payment/callback.html`
+3. **Webhook** in Paystack dashboard → Settings → Webhooks:
 
-`https://yourdomain.com/api/payments/webhook`
+   `https://yourdomain.com/api/payments/webhook`
+
+   Points are credited when Paystack sends `charge.success`, or when the user taps **Confirm payment** in Buy Points, or when the callback page verifies the transaction.
 
 ## 6. Verify
 

@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>eHealth AI — Payment</title>
+  <script src="/app-config.js"></script>
   <style>
     body {
       font-family: system-ui, sans-serif;
@@ -29,6 +30,7 @@
     p { color: #94a3b8; font-size: 0.9rem; line-height: 1.5; }
     .ok { color: #22c55e; font-weight: 700; margin-top: 16px; }
     .err { color: #ef4444; font-weight: 700; margin-top: 16px; }
+    a { color: #00C9A7; }
   </style>
 </head>
 <body>
@@ -37,12 +39,22 @@
     <h1>Processing payment…</h1>
     <p id="msg">Please wait while we confirm your purchase.</p>
     <p id="status"></p>
+    <p id="action" style="margin-top:16px"></p>
   </div>
   <script>
+    const PENDING_REF_KEY = 'ehealth_pending_payment_ref';
+    const TOKEN_KEY = 'medassistant_user_token';
+
     const params = new URLSearchParams(location.search);
     const reference = params.get('reference') || params.get('trxref');
-    const token = localStorage.getItem('medassistant_user_token');
-    const appSecret = sessionStorage.getItem('app_api_secret') || '';
+
+    function getAppSecret() {
+      return (window.__EHEALTH_CONFIG__ && window.__EHEALTH_CONFIG__.appApiSecret) || '';
+    }
+
+    function getToken() {
+      return localStorage.getItem(TOKEN_KEY) || '';
+    }
 
     async function run() {
       if (!reference) {
@@ -50,30 +62,65 @@
         document.getElementById('status').textContent = 'Missing payment reference.';
         return;
       }
+
+      try {
+        localStorage.setItem(PENDING_REF_KEY, reference);
+      } catch (_) {}
+
+      const token = getToken();
+      const appSecret = getAppSecret();
+
       if (!token) {
         document.getElementById('msg').textContent =
-          'Payment received. Return to the eHealth AI app and tap “Confirm payment”, or sign in on web.';
+          'Payment received. Open eHealth AI, go to Buy Points, and tap “Confirm payment”.';
         document.getElementById('status').className = 'ok';
-        document.getElementById('status').textContent = 'Reference: ' + reference;
+        document.getElementById('status').textContent = 'Reference saved: ' + reference.slice(0, 24) + '…';
+        document.getElementById('action').innerHTML =
+          '<a href="/">Open app</a>';
         return;
       }
+
+      if (!appSecret) {
+        document.getElementById('status').className = 'err';
+        document.getElementById('status').textContent =
+          'App security key not loaded. Open the home page first, then return here or use Confirm payment in the app.';
+        document.getElementById('action').innerHTML = '<a href="/">Open app</a>';
+        return;
+      }
+
       try {
         const headers = {
           Authorization: 'Bearer ' + token,
           'Content-Type': 'application/json',
+          'X-MedAssistant-Key': appSecret,
         };
-        if (appSecret) headers['X-MedAssistant-Key'] = appSecret;
 
         const r = await fetch('/api/payments/verify/' + encodeURIComponent(reference), { headers });
         const data = await r.json();
         if (!r.ok) throw new Error(data?.error?.message || 'Verification failed');
+
+        try {
+          localStorage.removeItem(PENDING_REF_KEY);
+          const raw = localStorage.getItem('medassistant_user');
+          if (raw) {
+            const user = JSON.parse(raw);
+            user.pointsBalance = data.balance;
+            localStorage.setItem('medassistant_user', JSON.stringify(user));
+          }
+        } catch (_) {}
+
         document.getElementById('msg').textContent = 'Your points have been added successfully.';
         document.getElementById('status').className = 'ok';
         document.getElementById('status').textContent =
           '+' + data.pointsAdded + ' points · Balance: ' + data.balance;
+        document.getElementById('action').innerHTML =
+          '<a href="/">Back to app</a>';
       } catch (e) {
+        document.getElementById('msg').textContent = 'Could not confirm payment automatically.';
         document.getElementById('status').className = 'err';
         document.getElementById('status').textContent = e.message;
+        document.getElementById('action').innerHTML =
+          'Open <a href="/">Buy Points</a> and tap <strong>Confirm payment</strong>.';
       }
     }
     run();
