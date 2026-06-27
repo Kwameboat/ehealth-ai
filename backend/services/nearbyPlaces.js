@@ -57,6 +57,21 @@ function normalizeElement(el, originLat, originLon) {
   };
 }
 
+async function fetchOverpassQuery(query) {
+  const res = await fetch(OVERPASS_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: `data=${encodeURIComponent(query)}`,
+  });
+
+  if (!res.ok) {
+    throw new Error(`Map service error (${res.status})`);
+  }
+
+  const data = await res.json();
+  return data.elements || [];
+}
+
 async function fetchOverpass(lat, lon, radiusMeters) {
   const query = `
 [out:json][timeout:25];
@@ -70,19 +85,72 @@ async function fetchOverpass(lat, lon, radiusMeters) {
 );
 out center tags 20;
 `;
+  return fetchOverpassQuery(query);
+}
 
-  const res = await fetch(OVERPASS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `data=${encodeURIComponent(query)}`,
-  });
+const FACILITY_FILTERS = {
+  pharmacy: {
+    label: 'Pharmacy',
+    tags: [
+      `node["amenity"="pharmacy"](around:{{r}},{{lat}},{{lon}});`,
+      `way["amenity"="pharmacy"](around:{{r}},{{lat}},{{lon}});`,
+      `node["healthcare"="pharmacy"](around:{{r}},{{lat}},{{lon}});`,
+    ],
+  },
+  lab: {
+    label: 'Laboratory',
+    tags: [
+      `node["healthcare"="laboratory"](around:{{r}},{{lat}},{{lon}});`,
+      `way["healthcare"="laboratory"](around:{{r}},{{lat}},{{lon}});`,
+      `node["amenity"="clinic"]["healthcare:speciality"~"laboratory|pathology"](around:{{r}},{{lat}},{{lon}});`,
+    ],
+  },
+  clinic: {
+    label: 'Clinic',
+    tags: [
+      `node["amenity"="clinic"](around:{{r}},{{lat}},{{lon}});`,
+      `way["amenity"="clinic"](around:{{r}},{{lat}},{{lon}});`,
+      `node["healthcare"="clinic"](around:{{r}},{{lat}},{{lon}});`,
+    ],
+  },
+  hospital: {
+    label: 'Hospital',
+    tags: [
+      `node["amenity"="hospital"](around:{{r}},{{lat}},{{lon}});`,
+      `way["amenity"="hospital"](around:{{r}},{{lat}},{{lon}});`,
+      `node["healthcare"="hospital"](around:{{r}},{{lat}},{{lon}});`,
+    ],
+  },
+};
 
-  if (!res.ok) {
-    throw new Error(`Map service error (${res.status})`);
-  }
+async function findNearbyFacilities({ latitude, longitude, type = 'pharmacy', radiusMeters = 15000, limit = 8 }) {
+  const filter = FACILITY_FILTERS[type] || FACILITY_FILTERS.pharmacy;
+  const tagBlock = filter.tags
+    .map((t) => t.replace(/\{\{r\}\}/g, String(radiusMeters)).replace(/\{\{lat\}\}/g, String(latitude)).replace(/\{\{lon\}\}/g, String(longitude)))
+    .join('\n  ');
 
-  const data = await res.json();
-  return data.elements || [];
+  const query = `
+[out:json][timeout:25];
+(
+  ${tagBlock}
+);
+out center tags ${limit + 5};
+`;
+
+  const elements = await fetchOverpassQuery(query);
+  const places = elements
+    .map((el) => normalizeElement(el, latitude, longitude))
+    .filter(Boolean)
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, limit);
+
+  return {
+    type,
+    label: filter.label,
+    places,
+    source: 'openstreetmap',
+    count: places.length,
+  };
 }
 
 /**
@@ -103,4 +171,4 @@ async function findNearbyHospitals({ latitude, longitude, radiusMeters = 20000 }
   };
 }
 
-module.exports = { findNearbyHospitals, haversineKm, formatDistance };
+module.exports = { findNearbyHospitals, findNearbyFacilities, haversineKm, formatDistance };

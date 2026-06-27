@@ -141,6 +141,99 @@ function initSchema() {
   `);
 
   migrateWhatsAppColumns(database);
+  migrateWhatsAppFeatureTables(database);
+}
+
+function migrateWhatsAppFeatureTables(database) {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS family_profiles (
+      id TEXT PRIMARY KEY,
+      owner_user_id TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      relationship TEXT,
+      phone TEXT,
+      conditions TEXT,
+      notes TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (owner_user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS medication_reminders (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      profile_id TEXT,
+      medication_name TEXT NOT NULL,
+      dosage_text TEXT NOT NULL,
+      schedule_times TEXT NOT NULL,
+      duration_days INTEGER,
+      ends_at TEXT,
+      next_fire_at TEXT,
+      last_sent_at TEXT,
+      adherence_count INTEGER NOT NULL DEFAULT 0,
+      snooze_count INTEGER NOT NULL DEFAULT 0,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (profile_id) REFERENCES family_profiles(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS reminder_events (
+      id TEXT PRIMARY KEY,
+      reminder_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (reminder_id) REFERENCES medication_reminders(id),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS wa_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      session_type TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS health_tracker_logs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      profile_id TEXT,
+      tracker_type TEXT NOT NULL,
+      value_text TEXT NOT NULL,
+      value_numeric REAL,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (profile_id) REFERENCES family_profiles(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS wa_delivery_orders (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      medication_name TEXT NOT NULL,
+      amount_kobo INTEGER NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'GHS',
+      paystack_reference TEXT,
+      paystack_url TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      delivery_address TEXT,
+      created_at TEXT NOT NULL,
+      completed_at TEXT,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_family_owner ON family_profiles(owner_user_id);
+    CREATE INDEX IF NOT EXISTS idx_reminders_user ON medication_reminders(user_id);
+    CREATE INDEX IF NOT EXISTS idx_reminders_next ON medication_reminders(next_fire_at);
+    CREATE INDEX IF NOT EXISTS idx_wa_sessions_phone ON wa_sessions(phone);
+    CREATE INDEX IF NOT EXISTS idx_tracker_user ON health_tracker_logs(user_id);
+  `);
 }
 
 function migrateWhatsAppColumns(database) {
@@ -173,6 +266,9 @@ function seedPointRules() {
     ['wa_text', 'WhatsApp text chat', 1, 'WhatsApp standard text message via Agyenim'],
     ['wa_audio', 'WhatsApp voice note', 2, 'WhatsApp audio/voice note analysis'],
     ['wa_image', 'WhatsApp lab/medicine image', 5, 'WhatsApp image — lab or medicine packaging'],
+    ['wa_facility', 'WhatsApp facility finder', 2, 'Find nearby pharmacy, lab, or clinic via location'],
+    ['wa_nhis', 'WhatsApp NHIS assistant', 1, 'NHIS coverage guidance on WhatsApp'],
+    ['wa_diet', 'WhatsApp diet coaching', 1, 'Ghanaian diet & chronic disease coaching'],
   ];
 
   const insert = database.prepare(`
@@ -214,7 +310,7 @@ function seedWhatsAppSettings() {
     ['whatsapp_webhook_secret', process.env.WHATSAPP_WEBHOOK_SECRET || ''],
     [
       'whatsapp_system_prompt',
-      'You are Agyenim, the eHealth AI assistant on WhatsApp. Give concise, caring health guidance in plain language. Not a doctor — advise seeing a clinician when needed.',
+      'You are Agyenim, the eHealth AI assistant on WhatsApp for Ghana. Give concise, caring health guidance in plain language. Use culturally relevant examples (Ghanaian foods, NHIS, local clinics). Not a doctor — advise seeing a clinician when needed. For NHIS questions, explain typical coverage patterns but remind users to confirm at their facility. For diet advice, reference local dishes (fufu, banku, kontomire, plantain, waakye) and practical substitutions.',
     ],
     ['whatsapp_enabled', 'false'],
   ];

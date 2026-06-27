@@ -28,7 +28,8 @@ async function loadWhatsApp() {
           <h3>AI models & points</h3>
           <p>Text / audio: <code>${status.models?.text || 'gemini-2.5-flash'}</code> (${status.pointCosts?.text ?? 1} pt)</p>
           <p>Vision: <code>${status.models?.vision || 'gemini-2.5-pro'}</code> (${status.pointCosts?.image ?? 5} pt)</p>
-          <p>Voice: ${status.pointCosts?.audio ?? 2} pt</p>
+          <p>Voice: ${status.pointCosts?.audio ?? 2} pt · NHIS/Diet: 1 pt · Facility: 2 pt</p>
+          <p class="muted"><strong>Features:</strong> Medication reminders · NHIS · Ghana diet coach · Location finder · Family profiles · MoMo delivery · BP tracker</p>
           <p class="muted">Webhook URL: <code>${location.origin}/whatsapp-webhook</code></p>
         </div>
       </div>

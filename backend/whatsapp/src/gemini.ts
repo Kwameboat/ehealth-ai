@@ -90,4 +90,83 @@ ${caption ? `\nUser caption: ${caption}` : ''}`;
   return extractText(response) || 'I could not analyze the image. Please send a clearer photo.';
 }
 
+export interface PrescriptionExtract {
+  isPrescription: boolean;
+  isLabReport: boolean;
+  medicationName?: string;
+  dosageInstructions?: string;
+  suggestedTimes?: string[];
+  durationDays?: number;
+  deliveryMedications?: string[];
+  summary?: string;
+}
+
+function parseJsonBlock(text: string): Record<string, unknown> | null {
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[0]) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+export async function extractPrescriptionFromImage(
+  apiKey: string,
+  base64: string,
+  mimeType: string,
+  caption?: string
+): Promise<PrescriptionExtract> {
+  const ai = getAi(apiKey);
+  const prompt = `Analyze this medicine/prescription image for a Ghana health app.
+Return ONLY valid JSON (no markdown):
+{
+  "isPrescription": boolean,
+  "isLabReport": boolean,
+  "medicationName": "string or null",
+  "dosageInstructions": "plain language e.g. Take 1 tablet twice daily for 7 days",
+  "suggestedTimes": ["08:00","20:00"],
+  "durationDays": number,
+  "deliveryMedications": ["medicine names if OTC delivery makes sense"],
+  "summary": "short user-facing summary"
+}
+${caption ? `Caption: ${caption}` : ''}`;
+
+  const response = await ai.models.generateContent({
+    model: VISION_MODEL,
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: prompt }, { inlineData: { mimeType: mimeType || 'image/jpeg', data: base64 } }],
+      },
+    ],
+  });
+
+  const raw = extractText(response);
+  const json = parseJsonBlock(raw) || {};
+  return {
+    isPrescription: !!json.isPrescription,
+    isLabReport: !!json.isLabReport,
+    medicationName: json.medicationName ? String(json.medicationName) : undefined,
+    dosageInstructions: json.dosageInstructions ? String(json.dosageInstructions) : undefined,
+    suggestedTimes: Array.isArray(json.suggestedTimes) ? json.suggestedTimes.map(String) : ['08:00', '20:00'],
+    durationDays: json.durationDays ? Number(json.durationDays) : 7,
+    deliveryMedications: Array.isArray(json.deliveryMedications) ? json.deliveryMedications.map(String) : [],
+    summary: json.summary ? String(json.summary) : raw.slice(0, 400),
+  };
+}
+
+export async function analyzeWithSpecialtyPrompt(
+  apiKey: string,
+  specialtyPrompt: string,
+  userText: string
+): Promise<string> {
+  const ai = getAi(apiKey);
+  const response = await ai.models.generateContent({
+    model: TEXT_MODEL,
+    contents: [{ role: 'user', parts: [{ text: `${specialtyPrompt}\n\nUser: ${userText}` }] }],
+  });
+  return extractText(response) || 'I could not generate a response.';
+}
+
 export { TEXT_MODEL, VISION_MODEL };

@@ -32,4 +32,20 @@ export interface WhatsAppDeps {
   getUserBalance: (userId: string) => number;
   requireAdminAuth: RequestHandler;
   PointsError: new (message: string, code?: string, status?: number) => Error & { code: string; status: number };
+  ensureDbReady?: () => Promise<void>;
+  findNearbyFacilities?: (opts: {
+    latitude: number;
+    longitude: number;
+    type?: string;
+    radiusMeters?: number;
+    limit?: number;
+  }) => Promise<{ label?: string; places?: Array<Record<string, unknown>> }>;
+  initializePaystack?: (opts: {
+    email: string;
+    amountMinor: number;
+    currency: string;
+    reference: string;
+    metadata?: Record<string, unknown>;
+  }) => Promise<{ authorization_url?: string }>;
+  getUserEmail?: (userId: string) => string | null;
 }

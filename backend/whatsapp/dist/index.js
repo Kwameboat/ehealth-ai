@@ -4,7 +4,13 @@ exports.normalizePhone = exports.updateWhatsAppConfig = exports.getWhatsAppConfi
 exports.createWhatsAppRouters = createWhatsAppRouters;
 const adminRouter_1 = require("./adminRouter");
 const webhookRouter_1 = require("./webhookRouter");
+const scheduler_1 = require("./scheduler");
+let schedulerStarted = false;
 function createWhatsAppRouters(deps) {
+    if (!schedulerStarted) {
+        schedulerStarted = true;
+        (0, scheduler_1.startWhatsAppScheduler)(deps);
+    }
     return {
         adminRouter: (0, adminRouter_1.createAdminRouter)(deps),
         webhookRouter: (0, webhookRouter_1.createWebhookRouter)(deps),
