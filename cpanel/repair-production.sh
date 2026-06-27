@@ -44,6 +44,8 @@ curl -fsSL -o "$BACKEND/services/symptomClinicalPrompt.js" "$BASE/backend/servic
 curl -fsSL -o "$BACKEND/routes/ai.js" "$BASE/backend/routes/ai.js"
 curl -fsSL -o "$BACKEND/routes/user.js" "$BASE/backend/routes/user.js"
 curl -fsSL -o "$BACKEND/routes/emergency.js" "$BASE/backend/routes/emergency.js"
+curl -fsSL -o "$BACKEND/routes/admin.js" "$BASE/backend/routes/admin.js"
+curl -fsSL -o "$BACKEND/routes/whatsapp-bridge.js" "$BASE/backend/routes/whatsapp-bridge.js"
 curl -fsSL -o "$BACKEND/services/nearbyPlaces.js" "$BASE/backend/services/nearbyPlaces.js"
 curl -fsSL -o "$BACKEND/routes/payments.js" "$BASE/backend/routes/payments.js"
 curl -fsSL -o "$BACKEND/services/payments.js" "$BASE/backend/services/payments.js"
@@ -78,10 +80,14 @@ cp -f "$BACKEND/public/admin/"* "$PUBLIC/admin/" 2>/dev/null || true
 echo "=== Icon fonts (dashboard UI) ==="
 bash "$APP/cpanel/publish-icon-fonts.sh" || echo "WARN: icon fonts — run: bash ~/ehealth-ai/cpanel/publish-icon-fonts.sh"
 
-if [ ! -d "$BACKEND/node_modules/express" ]; then
+if [ ! -d "$BACKEND/node_modules/express" ] || [ ! -f "$BACKEND/node_modules/@google/genai/package.json" ]; then
   echo "=== Installing backend dependencies ==="
   bash "$APP/cpanel/install-backend-deps.sh" || true
 fi
+
+echo "=== WhatsApp module ==="
+chmod +x "$APP/cpanel/sync-whatsapp.sh" 2>/dev/null || true
+bash "$APP/cpanel/sync-whatsapp.sh" || echo "WARN: WhatsApp sync failed — run: bash ~/ehealth-ai/cpanel/sync-whatsapp.sh"
 
 echo "=== Database check ==="
 cd "$BACKEND"

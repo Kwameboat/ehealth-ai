@@ -8,10 +8,12 @@ const { findNearbyFacilities } = require('../services/nearbyPlaces');
 const { initializeTransaction } = require('../services/paystack');
 
 let whatsappModule;
+let whatsappLoadError = null;
 try {
   whatsappModule = require('../whatsapp/dist/index.js');
 } catch (err) {
-  console.warn('WhatsApp module not built. Run: npm run build:whatsapp');
+  whatsappLoadError = err;
+  console.error('WhatsApp module load failed:', err.message);
   whatsappModule = null;
 }
 
@@ -55,9 +57,14 @@ function buildDeps() {
 function createRouters() {
   if (!whatsappModule?.createWhatsAppRouters) {
     const empty = express.Router();
+    const detail = whatsappLoadError?.message || 'dist/index.js missing';
     empty.all('*', (_req, res) => {
       res.status(503).json({
-        error: { message: 'WhatsApp module not built. Run npm run build:whatsapp on the server.' },
+        error: {
+          message: 'WhatsApp module not available on server.',
+          detail,
+          fix: 'Run in cPanel Terminal: bash ~/ehealth-ai/cpanel/sync-whatsapp.sh then RESTART Node.js app',
+        },
       });
     });
     return { adminRouter: empty, webhookRouter: empty };

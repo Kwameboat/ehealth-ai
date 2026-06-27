@@ -134,7 +134,7 @@ async function loadWhatsApp() {
       })
       .catch(() => {});
   } catch (err) {
-    el.innerHTML = `<div class="card"><p class="error-msg">${err.message}</p></div>`;
+    el.innerHTML = `<div class="card"><p class="error-msg">${err.message}</p><p class="muted">${err.detail || ''}</p><p class="muted">Fix: <code>bash ~/ehealth-ai/cpanel/sync-whatsapp.sh</code> then RESTART Node.js app.</p></div>`;
   }
 }
 

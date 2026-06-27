@@ -126,6 +126,10 @@ else
   echo "SKIP npm (no nodevenv yet) — create Node app root ehealth-ai, then Run NPM Install in cPanel"
 fi
 
+if [ -x "$SRC/cpanel/sync-whatsapp.sh" ]; then
+  bash "$SRC/cpanel/sync-whatsapp.sh" || echo "WARN: sync-whatsapp failed"
+fi
+
 mkdir -p "$PUBLIC/tmp" "$SRC/tmp" 2>/dev/null || true
 touch "$PUBLIC/tmp/restart.txt" "$SRC/tmp/restart.txt" 2>/dev/null || true
 echo "cpanel-post-deploy OK $(date -u)"

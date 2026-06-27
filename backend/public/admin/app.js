@@ -55,8 +55,9 @@ async function api(path, options = {}) {
       );
     }
     const detail = data?.error?.detail || data?.error?.wasm;
+    const fix = data?.error?.fix;
     const base = data?.error?.message || `Request failed (${res.status})`;
-    throw new Error(detail ? `${base}: ${detail}` : base);
+    throw new Error([base, detail, fix].filter(Boolean).join(' — '));
   }
   return data;
 }
