@@ -37,14 +37,6 @@ require('jsonwebtoken');
 console.log('core deps OK');
 "
 
-if [ -f "$BACKEND/whatsapp/dist/index.js" ]; then
-  echo "=== Verify WhatsApp module ==="
-  "$NODE_BIN" -e "
-require('./whatsapp/dist/index.js');
-console.log('WhatsApp module OK');
-"
-fi
-
 "$NODE_BIN" -e "require('./db/init').initDatabase().then(() => console.log('DB OK')).catch(e => { console.error(e); process.exit(1); })"
 
 echo "SUCCESS — RESTART Node.js app in cPanel"

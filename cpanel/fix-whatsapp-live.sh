@@ -21,24 +21,35 @@ else
   . "$APP/cpanel/activate-nodevenv.sh"
 fi
 
-mkdir -p "$APP/cpanel" "$BACKEND/whatsapp/dist/features" "$BACKEND/routes" "$PUBLIC/admin" 2>/dev/null || true
+mkdir -p "$APP/cpanel" "$BACKEND/whatsapp/dist/features" "$BACKEND/routes"
 PUBLIC="${PUBLIC_HTML:-$HOME_DIR/public_html}"
+mkdir -p "$PUBLIC/admin" 2>/dev/null || true
 
-echo "=== Download sync script + bridge ==="
+echo "=== Download latest scripts from GitHub ==="
 curl -fsSL -o "$APP/cpanel/sync-whatsapp.sh" "$BASE/cpanel/sync-whatsapp.sh"
 curl -fsSL -o "$APP/cpanel/install-backend-deps.sh" "$BASE/cpanel/install-backend-deps.sh"
-curl -fsSL -o "$APP/cpanel/backend-production.package.json" "$BASE/cpanel/backend-production.package.json"
 chmod +x "$APP/cpanel/sync-whatsapp.sh" "$APP/cpanel/install-backend-deps.sh"
 
-echo "=== Reinstall backend npm (express, sql.js — no genai SDK) ==="
+echo "=== Step 1: Sync NEW WhatsApp dist (fetch-based gemini.js) ==="
+bash "$APP/cpanel/sync-whatsapp.sh"
+
+echo "=== Step 2: Reinstall backend npm ==="
 bash "$APP/cpanel/install-backend-deps.sh"
 
-echo "=== Sync WhatsApp dist + admin UI ==="
-bash "$APP/cpanel/sync-whatsapp.sh"
+echo "=== Step 3: Final WhatsApp verify ==="
+cd "$BACKEND"
+if grep -q '@google/genai' "$BACKEND/whatsapp/dist/gemini.js" 2>/dev/null; then
+  echo "ERROR: gemini.js still old (has @google/genai). Re-downloading..."
+  curl -fsSL -o "$BACKEND/whatsapp/dist/gemini.js" "$BASE/backend/whatsapp/dist/gemini.js"
+fi
+node -e "
+const m = require('./whatsapp/dist/index.js');
+if (typeof m.createWhatsAppRouters !== 'function') throw new Error('createWhatsAppRouters missing');
+console.log('WhatsApp module OK');
+"
 
 curl -fsSL -o "$BACKEND/public/admin/whatsapp-admin.js" "$BASE/backend/public/admin/whatsapp-admin.js"
 curl -fsSL -o "$BACKEND/public/admin/app.js" "$BASE/backend/public/admin/app.js"
-mkdir -p "$PUBLIC/admin"
 cp -f "$BACKEND/public/admin/whatsapp-admin.js" "$PUBLIC/admin/" 2>/dev/null || true
 cp -f "$BACKEND/public/admin/app.js" "$PUBLIC/admin/" 2>/dev/null || true
 
