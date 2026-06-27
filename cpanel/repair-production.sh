@@ -80,7 +80,7 @@ cp -f "$BACKEND/public/admin/"* "$PUBLIC/admin/" 2>/dev/null || true
 echo "=== Icon fonts (dashboard UI) ==="
 bash "$APP/cpanel/publish-icon-fonts.sh" || echo "WARN: icon fonts — run: bash ~/ehealth-ai/cpanel/publish-icon-fonts.sh"
 
-if [ ! -d "$BACKEND/node_modules/express" ] || [ ! -f "$BACKEND/node_modules/p-retry/package.json" ]; then
+if [ ! -d "$BACKEND/node_modules/express" ]; then
   echo "=== Installing backend dependencies ==="
   bash "$APP/cpanel/install-backend-deps.sh" || true
 fi

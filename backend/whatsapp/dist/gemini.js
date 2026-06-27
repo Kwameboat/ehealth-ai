@@ -6,71 +6,55 @@ exports.analyzeAudio = analyzeAudio;
 exports.analyzeLabOrMedicineImage = analyzeLabOrMedicineImage;
 exports.extractPrescriptionFromImage = extractPrescriptionFromImage;
 exports.analyzeWithSpecialtyPrompt = analyzeWithSpecialtyPrompt;
-const genai_1 = require("@google/genai");
 const TEXT_MODEL = 'gemini-2.5-flash';
 exports.TEXT_MODEL = TEXT_MODEL;
 const VISION_MODEL = 'gemini-2.5-pro';
 exports.VISION_MODEL = VISION_MODEL;
-function getAi(apiKey) {
-    return new genai_1.GoogleGenAI({ apiKey });
-}
-function extractText(response) {
-    if (response.text)
-        return response.text.trim();
-    const parts = response.candidates?.[0]?.content?.parts || [];
+function extractText(data) {
+    const parts = data?.candidates?.[0]?.content?.parts || [];
     return parts.map((p) => p.text || '').join('').trim();
 }
+async function geminiGenerate(apiKey, model, parts) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            contents: [{ role: 'user', parts }],
+        }),
+    });
+    const data = (await res.json());
+    if (!res.ok) {
+        throw new Error(data?.error?.message || `Gemini request failed (${res.status})`);
+    }
+    return extractText(data);
+}
 async function analyzeText(apiKey, systemPrompt, userText, history = []) {
-    const ai = getAi(apiKey);
     const context = history.length > 0
         ? `Recent conversation:\n${history.slice(-6).join('\n')}\n\nUser: ${userText}`
         : userText;
-    const response = await ai.models.generateContent({
-        model: TEXT_MODEL,
-        contents: [
-            {
-                role: 'user',
-                parts: [{ text: `${systemPrompt}\n\n${context}` }],
-            },
-        ],
-    });
-    return extractText(response) || 'I could not generate a response. Please try again.';
+    const reply = await geminiGenerate(apiKey, TEXT_MODEL, [
+        { text: `${systemPrompt}\n\n${context}` },
+    ]);
+    return reply || 'I could not generate a response. Please try again.';
 }
 async function analyzeAudio(apiKey, systemPrompt, base64, mimeType) {
-    const ai = getAi(apiKey);
-    const response = await ai.models.generateContent({
-        model: TEXT_MODEL,
-        contents: [
-            {
-                role: 'user',
-                parts: [
-                    { text: `${systemPrompt}\n\nListen to this voice note and respond helpfully in plain language.` },
-                    { inlineData: { mimeType: mimeType || 'audio/ogg', data: base64 } },
-                ],
-            },
-        ],
-    });
-    return extractText(response) || 'I could not process the voice note. Please try again or send text.';
+    const reply = await geminiGenerate(apiKey, TEXT_MODEL, [
+        { text: `${systemPrompt}\n\nListen to this voice note and respond helpfully in plain language.` },
+        { inline_data: { mime_type: mimeType || 'audio/ogg', data: base64 } },
+    ]);
+    return reply || 'I could not process the voice note. Please try again or send text.';
 }
 async function analyzeLabOrMedicineImage(apiKey, systemPrompt, base64, mimeType, caption) {
-    const ai = getAi(apiKey);
     const prompt = `${systemPrompt}
 
 Analyze this image. If it looks like a lab report, summarize key values and flag anything that may need clinician review. If it looks like medicine packaging, identify the medicine name, common uses, and general safety reminders. If unclear, say what you see and ask for a clearer photo.
 ${caption ? `\nUser caption: ${caption}` : ''}`;
-    const response = await ai.models.generateContent({
-        model: VISION_MODEL,
-        contents: [
-            {
-                role: 'user',
-                parts: [
-                    { text: prompt },
-                    { inlineData: { mimeType: mimeType || 'image/jpeg', data: base64 } },
-                ],
-            },
-        ],
-    });
-    return extractText(response) || 'I could not analyze the image. Please send a clearer photo.';
+    const reply = await geminiGenerate(apiKey, VISION_MODEL, [
+        { text: prompt },
+        { inline_data: { mime_type: mimeType || 'image/jpeg', data: base64 } },
+    ]);
+    return reply || 'I could not analyze the image. Please send a clearer photo.';
 }
 function parseJsonBlock(text) {
     const match = text.match(/\{[\s\S]*\}/);
@@ -84,7 +68,6 @@ function parseJsonBlock(text) {
     }
 }
 async function extractPrescriptionFromImage(apiKey, base64, mimeType, caption) {
-    const ai = getAi(apiKey);
     const prompt = `Analyze this medicine/prescription image for a Ghana health app.
 Return ONLY valid JSON (no markdown):
 {
@@ -98,16 +81,10 @@ Return ONLY valid JSON (no markdown):
   "summary": "short user-facing summary"
 }
 ${caption ? `Caption: ${caption}` : ''}`;
-    const response = await ai.models.generateContent({
-        model: VISION_MODEL,
-        contents: [
-            {
-                role: 'user',
-                parts: [{ text: prompt }, { inlineData: { mimeType: mimeType || 'image/jpeg', data: base64 } }],
-            },
-        ],
-    });
-    const raw = extractText(response);
+    const raw = await geminiGenerate(apiKey, VISION_MODEL, [
+        { text: prompt },
+        { inline_data: { mime_type: mimeType || 'image/jpeg', data: base64 } },
+    ]);
     const json = parseJsonBlock(raw) || {};
     return {
         isPrescription: !!json.isPrescription,
@@ -121,10 +98,6 @@ ${caption ? `Caption: ${caption}` : ''}`;
     };
 }
 async function analyzeWithSpecialtyPrompt(apiKey, specialtyPrompt, userText) {
-    const ai = getAi(apiKey);
-    const response = await ai.models.generateContent({
-        model: TEXT_MODEL,
-        contents: [{ role: 'user', parts: [{ text: `${specialtyPrompt}\n\nUser: ${userText}` }] }],
-    });
-    return extractText(response) || 'I could not generate a response.';
+    const reply = await geminiGenerate(apiKey, TEXT_MODEL, [{ text: `${specialtyPrompt}\n\nUser: ${userText}` }]);
+    return reply || 'I could not generate a response.';
 }

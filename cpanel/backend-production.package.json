@@ -3,11 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "dependencies": {
-    "@google/genai": "^1.52.0",
-    "google-auth-library": "^10.3.0",
-    "p-retry": "^4.6.2",
-    "protobufjs": "^7.5.4",
-    "ws": "^8.18.0",
     "bcryptjs": "2.4.3",
     "cors": "2.8.5",
     "dotenv": "16.4.7",

@@ -34,12 +34,11 @@ for f in facilities.js family.js healthFeatures.js medication.js; do
   curl -fsSL -o "$BACKEND/whatsapp/dist/features/$f" "$BASE/backend/whatsapp/dist/features/$f"
 done
 
-echo "=== Ensure backend deps (@google/genai + p-retry) ==="
-if [ ! -f "$BACKEND/node_modules/p-retry/package.json" ] || [ ! -f "$BACKEND/node_modules/@google/genai/package.json" ]; then
+echo "=== Ensure backend deps ==="
+if [ ! -f "$BACKEND/node_modules/express/package.json" ]; then
   bash "$APP/cpanel/install-backend-deps.sh"
 else
-  echo "Core npm deps present — quick verify"
-  cd "$BACKEND" && node -e "require('p-retry'); require('@google/genai');" 2>/dev/null || bash "$APP/cpanel/install-backend-deps.sh"
+  cd "$BACKEND" && node -e "require('./whatsapp/dist/index.js');" 2>/dev/null || bash "$APP/cpanel/install-backend-deps.sh"
 fi
 
 echo "=== Verify WhatsApp module loads ==="
