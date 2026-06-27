@@ -15,6 +15,7 @@ function createAdminRouter(deps) {
         try {
             const config = (0, config_1.getWhatsAppConfig)(deps);
             const connection = await (0, evolution_1.fetchConnectionState)(config);
+            const instanceInfo = await (0, evolution_1.fetchInstanceInfo)(config);
             const logCount = deps
                 .getDb()
                 .prepare('SELECT COUNT(*) AS c FROM whatsapp_logs')
@@ -34,6 +35,9 @@ function createAdminRouter(deps) {
                 connection: {
                     ok: connection.ok,
                     state: connection.state || null,
+                    phone: connection.phone || null,
+                    profileName: connection.profileName || null,
+                    instanceExists: instanceInfo.exists ?? null,
                     error: connection.error || null,
                 },
                 sync: {
@@ -102,6 +106,101 @@ function createAdminRouter(deps) {
         }
         catch (err) {
             res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Webhook info failed' } });
+        }
+    });
+    router.get('/connection', async (_req, res) => {
+        try {
+            const config = (0, config_1.getWhatsAppConfig)(deps);
+            const [connection, instanceInfo] = await Promise.all([
+                (0, evolution_1.fetchConnectionState)(config),
+                (0, evolution_1.fetchInstanceInfo)(config),
+            ]);
+            res.json({
+                configured: !!(config.baseUrl && config.apiKey && config.instanceName),
+                instanceName: config.instanceName || null,
+                instanceExists: instanceInfo.exists ?? false,
+                state: connection.state || instanceInfo.state || 'close',
+                phone: connection.phone || instanceInfo.phone || null,
+                profileName: connection.profileName || instanceInfo.profileName || null,
+                error: connection.error || instanceInfo.error || null,
+            });
+        }
+        catch (err) {
+            res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Connection failed' } });
+        }
+    });
+    router.post('/connection/create', async (_req, res) => {
+        try {
+            const config = (0, config_1.getWhatsAppConfig)(deps);
+            if (!config.baseUrl || !config.apiKey || !config.instanceName) {
+                res.status(400).json({ error: { message: 'Save Evolution URL, API key, and instance name first' } });
+                return;
+            }
+            const result = await (0, evolution_1.createEvolutionInstance)(config);
+            if (!result.ok) {
+                res.status(502).json({ error: { message: result.error || 'Create instance failed' } });
+                return;
+            }
+            res.json({
+                success: true,
+                created: result.created ?? false,
+                qrBase64: result.qrBase64 || null,
+                pairingCode: result.pairingCode || null,
+                state: result.state || 'connecting',
+            });
+        }
+        catch (err) {
+            res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Create instance failed' } });
+        }
+    });
+    router.post('/connection/connect', async (req, res) => {
+        try {
+            const config = (0, config_1.getWhatsAppConfig)(deps);
+            if (!config.baseUrl || !config.apiKey || !config.instanceName) {
+                res.status(400).json({ error: { message: 'Save Evolution URL, API key, and instance name first' } });
+                return;
+            }
+            const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : undefined;
+            let result = await (0, evolution_1.connectEvolutionInstance)(config, phone);
+            if (!result.ok && !phone) {
+                const info = await (0, evolution_1.fetchInstanceInfo)(config);
+                if (!info.exists) {
+                    result = await (0, evolution_1.createEvolutionInstance)(config);
+                }
+            }
+            if (!result.ok) {
+                res.status(502).json({ error: { message: result.error || 'Connect failed' } });
+                return;
+            }
+            const connection = await (0, evolution_1.fetchConnectionState)(config);
+            res.json({
+                success: true,
+                qrBase64: result.qrBase64 || null,
+                pairingCode: result.pairingCode || null,
+                state: connection.state || result.state || 'connecting',
+                phone: connection.phone || null,
+            });
+        }
+        catch (err) {
+            res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Connect failed' } });
+        }
+    });
+    router.post('/connection/logout', async (_req, res) => {
+        try {
+            const config = (0, config_1.getWhatsAppConfig)(deps);
+            if (!config.baseUrl || !config.apiKey || !config.instanceName) {
+                res.status(400).json({ error: { message: 'Evolution API not configured' } });
+                return;
+            }
+            const result = await (0, evolution_1.logoutEvolutionInstance)(config);
+            if (!result.ok) {
+                res.status(502).json({ error: { message: result.error || 'Logout failed' } });
+                return;
+            }
+            res.json({ success: true });
+        }
+        catch (err) {
+            res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Logout failed' } });
         }
     });
     router.post('/register-webhook', async (req, res) => {

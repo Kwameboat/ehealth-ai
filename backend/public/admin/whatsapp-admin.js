@@ -32,6 +32,109 @@ function waCopyWebhook(url) {
   navigator.clipboard.writeText(url).then(() => waToast('Webhook URL copied')).catch(() => waToast('Copy failed'));
 }
 
+let waConnectPollTimer = null;
+let waQrRefreshTimer = null;
+
+function waStopConnectPoll() {
+  if (waConnectPollTimer) {
+    clearInterval(waConnectPollTimer);
+    waConnectPollTimer = null;
+  }
+  if (waQrRefreshTimer) {
+    clearInterval(waQrRefreshTimer);
+    waQrRefreshTimer = null;
+  }
+}
+
+function waFormatPhone(phone) {
+  if (!phone) return '—';
+  const d = String(phone).replace(/\D/g, '');
+  if (d.startsWith('233') && d.length >= 12) return `+${d.slice(0, 3)} ${d.slice(3, 5)} ${d.slice(5, 8)} ${d.slice(8)}`;
+  return d.startsWith('+') ? d : `+${d}`;
+}
+
+function waUpdateConnectPanel(data) {
+  const stateEl = document.getElementById('wa-conn-state');
+  const phoneEl = document.getElementById('wa-conn-phone');
+  const qrEl = document.getElementById('wa-conn-qr');
+  const codeEl = document.getElementById('wa-conn-pairing');
+  const hintEl = document.getElementById('wa-conn-hint');
+  if (!stateEl) return;
+
+  const state = String(data.state || 'close').toLowerCase();
+  stateEl.textContent = state.toUpperCase();
+  stateEl.className = `wa-status-pill ${state === 'open' ? 'wa-status-success' : state === 'connecting' ? 'wa-status-warn' : 'wa-status-neutral'}`;
+
+  if (phoneEl) {
+    phoneEl.textContent = data.phone ? waFormatPhone(data.phone) : 'Not linked yet';
+  }
+
+  if (state === 'open') {
+    if (qrEl) qrEl.innerHTML = '<div class="wa-conn-success">✓ WhatsApp linked</div>';
+    if (codeEl) codeEl.textContent = '';
+    if (hintEl) hintEl.textContent = 'Your bot number is connected. Enable the bot and register the webhook.';
+    waStopConnectPoll();
+    return;
+  }
+
+  if (hintEl) {
+    hintEl.textContent =
+      state === 'connecting'
+        ? 'Scan the QR in WhatsApp → Linked devices → Link a device. QR refreshes every ~60s.'
+        : 'Save Evolution credentials, then click Connect to show a QR code here.';
+  }
+}
+
+async function waPollConnection() {
+  try {
+    const data = await api('/whatsapp/connection');
+    waUpdateConnectPanel(data);
+    if (String(data.state || '').toLowerCase() === 'open') {
+      waStopConnectPoll();
+      const status = await api('/whatsapp/status');
+      const conn = status.connection || {};
+      const phoneEl = document.getElementById('wa-conn-phone');
+      if (phoneEl && conn.phone) phoneEl.textContent = waFormatPhone(conn.phone);
+    }
+  } catch (_) {
+    /* ignore poll errors */
+  }
+}
+
+function waStartConnectPoll() {
+  waStopConnectPoll();
+  waConnectPollTimer = setInterval(waPollConnection, 4000);
+  waQrRefreshTimer = setInterval(() => {
+    const stateEl = document.getElementById('wa-conn-state');
+    if (stateEl && stateEl.textContent?.toLowerCase() === 'connecting') {
+      const phone = document.getElementById('wa-link-phone')?.value?.trim();
+      waRequestConnect(phone || undefined).catch(() => {});
+    }
+  }, 50000);
+}
+
+async function waRequestConnect(phone) {
+  waToast('Requesting QR from Evolution…');
+  const body = phone ? { phone } : {};
+  const result = await api('/whatsapp/connection/connect', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  const qrEl = document.getElementById('wa-conn-qr');
+  const codeEl = document.getElementById('wa-conn-pairing');
+  if (result.qrBase64 && qrEl) {
+    qrEl.innerHTML = `<img src="${result.qrBase64.replace(/"/g, '&quot;')}" alt="WhatsApp QR code" class="wa-qr-img" />`;
+  } else if (qrEl) {
+    qrEl.innerHTML = '<p class="muted">No QR yet — try again or create the instance first.</p>';
+  }
+  if (codeEl) {
+    codeEl.textContent = result.pairingCode ? `Pairing code: ${result.pairingCode}` : '';
+  }
+  waUpdateConnectPanel(result);
+  if (String(result.state || '').toLowerCase() !== 'open') waStartConnectPoll();
+  waToast(result.qrBase64 ? 'QR ready — scan with WhatsApp' : result.pairingCode ? 'Use pairing code on phone' : 'Connect request sent');
+}
+
 async function loadWhatsApp() {
   const el = document.getElementById('page-whatsapp');
   el.innerHTML = '<div class="wa-page"><p class="muted" style="padding:24px">Loading WhatsApp module…</p></div>';
@@ -52,6 +155,10 @@ async function loadWhatsApp() {
 
     const webhookMatched = webhookInfo?.matched;
     const remoteWebhook = webhookInfo?.remote;
+
+    const connPhone = conn.phone || null;
+    const connState = String(conn.state || 'close').toLowerCase();
+    const instanceExists = conn.instanceExists;
 
     const features = [
       'Medication reminders',
@@ -85,7 +192,7 @@ async function loadWhatsApp() {
           <div class="metric-card">
             <div class="metric-header"><span>Evolution instance</span><div class="metric-icon blue">🔗</div></div>
             <div class="metric-value" style="font-size:1.1rem">${evo.instanceName || '—'}</div>
-            <p class="metric-sub">API key: ${evo.apiKeyConfigured ? '✓ configured' : '✗ missing'}</p>
+            <p class="metric-sub">${connPhone ? 'Linked: ' + waFormatPhone(connPhone) : 'API key: ' + (evo.apiKeyConfigured ? '✓ configured' : '✗ missing')}</p>
           </div>
           <div class="metric-card">
             <div class="metric-header"><span>Registered phones</span><div class="metric-icon blue">👥</div></div>
@@ -96,6 +203,37 @@ async function loadWhatsApp() {
             <div class="metric-header"><span>Activity logs</span><div class="metric-icon orange">📊</div></div>
             <div class="metric-value">${sync.totalLogs ?? 0}</div>
             <p class="metric-sub">Messages processed via webhook</p>
+          </div>
+        </div>
+
+        <div class="wa-panel wa-connect-panel">
+          <div class="wa-panel-head">
+            <div>
+              <h3>Connect WhatsApp number</h3>
+              <p>Link your clinic/bot line via Evolution — scan QR from this admin panel</p>
+            </div>
+            <span id="wa-conn-state" class="wa-status-pill ${connState === 'open' ? 'wa-status-success' : connState === 'connecting' ? 'wa-status-warn' : 'wa-status-neutral'}">${connState.toUpperCase()}</span>
+          </div>
+          <div class="wa-connect-grid">
+            <div>
+              <p class="wa-field-hint" style="margin-bottom:8px">Connected number</p>
+              <p id="wa-conn-phone" style="font-size:1.15rem;font-weight:700;margin-bottom:16px">${connPhone ? waFormatPhone(connPhone) : 'Not linked yet'}</p>
+              <div class="wa-field" style="margin-bottom:12px">
+                <label for="wa-link-phone">Pair with phone (optional)</label>
+                <input type="tel" id="wa-link-phone" placeholder="233501234567" />
+                <p class="wa-field-hint">Ghana format without +. Leave blank to use QR only.</p>
+              </div>
+              <div class="wa-actions" style="margin-top:0">
+                <button type="button" class="wa-btn-whatsapp" id="wa-connect-btn">Connect / Show QR</button>
+                ${!instanceExists && evo.apiKeyConfigured ? '<button type="button" class="wa-btn-ghost" id="wa-create-instance">Create instance</button>' : ''}
+                <button type="button" class="wa-btn-ghost" id="wa-disconnect-btn">Disconnect</button>
+              </div>
+              <p id="wa-conn-hint" class="wa-field-hint" style="margin-top:14px">${connState === 'open' ? 'Number linked. Register webhook and enable the bot.' : 'Save Evolution credentials above, then connect here.'}</p>
+              <p id="wa-conn-pairing" class="wa-field-hint" style="margin-top:8px;color:var(--cyan)"></p>
+            </div>
+            <div id="wa-conn-qr" class="wa-qr-wrap">
+              ${connState === 'open' ? '<div class="wa-conn-success">✓ WhatsApp linked</div>' : '<p class="muted" style="color:#64748b">QR code appears here after you click Connect</p>'}
+            </div>
           </div>
         </div>
 
@@ -203,7 +341,7 @@ async function loadWhatsApp() {
               <li><span>1. CloudStation instance</span><span>${evo.instanceName ? '✓ ' + evo.instanceName : 'Create in CloudStation'}</span></li>
               <li><span>2. Save credentials below</span><span>${evo.apiKeyConfigured ? '✓ Saved' : 'Pending'}</span></li>
               <li><span>3. Register webhook</span><span>${webhookMatched ? '✓ Done' : 'Click button →'}</span></li>
-              <li><span>4. Scan QR in CloudStation</span><span>${conn.state === 'open' ? '✓ Connected' : 'Link WhatsApp'}</span></li>
+              <li><span>4. Connect WhatsApp number</span><span>${connState === 'open' ? '✓ Linked' : 'Use panel above'}</span></li>
               <li><span>5. Enable bot + link phones</span><span>Account screen</span></li>
             </ul>
           </div>
@@ -275,6 +413,44 @@ async function loadWhatsApp() {
         waToast('Secret generated — click Save configuration');
       }
     });
+    document.getElementById('wa-connect-btn')?.addEventListener('click', async () => {
+      try {
+        const phone = document.getElementById('wa-link-phone')?.value?.trim();
+        await waRequestConnect(phone || undefined);
+      } catch (err) {
+        waToast(err.message);
+      }
+    });
+    document.getElementById('wa-create-instance')?.addEventListener('click', async () => {
+      try {
+        waToast('Creating Evolution instance…');
+        const result = await api('/whatsapp/connection/create', { method: 'POST', body: '{}' });
+        const qrEl = document.getElementById('wa-conn-qr');
+        if (result.qrBase64 && qrEl) {
+          qrEl.innerHTML = `<img src="${result.qrBase64}" alt="WhatsApp QR code" class="wa-qr-img" />`;
+        }
+        waUpdateConnectPanel(result);
+        waStartConnectPoll();
+        waToast('Instance created — scan QR');
+      } catch (err) {
+        waToast(err.message);
+      }
+    });
+    document.getElementById('wa-disconnect-btn')?.addEventListener('click', async () => {
+      if (!confirm('Disconnect WhatsApp from Evolution?')) return;
+      try {
+        await api('/whatsapp/connection/logout', { method: 'POST', body: '{}' });
+        waStopConnectPoll();
+        waToast('Disconnected');
+        loadWhatsApp();
+      } catch (err) {
+        waToast(err.message);
+      }
+    });
+
+    if (connState === 'connecting') waStartConnectPoll();
+    else waStopConnectPoll();
+
     document.getElementById('wa-register-webhook')?.addEventListener('click', async () => {
       try {
         waToast('Registering webhook on Evolution…');
