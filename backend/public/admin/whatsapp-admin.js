@@ -33,16 +33,11 @@ function waCopyWebhook(url) {
 }
 
 let waConnectPollTimer = null;
-let waQrRefreshTimer = null;
 
 function waStopConnectPoll() {
   if (waConnectPollTimer) {
     clearInterval(waConnectPollTimer);
     waConnectPollTimer = null;
-  }
-  if (waQrRefreshTimer) {
-    clearInterval(waQrRefreshTimer);
-    waQrRefreshTimer = null;
   }
 }
 
@@ -80,8 +75,8 @@ function waUpdateConnectPanel(data) {
   if (hintEl) {
     hintEl.textContent =
       state === 'connecting'
-        ? 'Scan the QR in WhatsApp → Linked devices → Link a device. QR refreshes every ~60s.'
-        : 'Save Evolution credentials, then click Connect to show a QR code here.';
+        ? 'Phone is logging in — keep this page open. Do NOT click Refresh QR until it fails (wait up to 2 min).'
+        : 'Save Evolution credentials, then click Show QR. Leave phone field empty unless using pairing code.';
   }
 }
 
@@ -103,36 +98,44 @@ async function waPollConnection() {
 
 function waStartConnectPoll() {
   waStopConnectPoll();
-  waConnectPollTimer = setInterval(waPollConnection, 4000);
-  waQrRefreshTimer = setInterval(() => {
-    const stateEl = document.getElementById('wa-conn-state');
-    if (stateEl && stateEl.textContent?.toLowerCase() === 'connecting') {
-      const phone = document.getElementById('wa-link-phone')?.value?.trim();
-      waRequestConnect(phone || undefined).catch(() => {});
-    }
-  }, 50000);
+  waConnectPollTimer = setInterval(waPollConnection, 6000);
 }
 
-async function waRequestConnect(phone) {
-  waToast('Requesting QR from Evolution…');
-  const body = phone ? { phone } : {};
+async function waRequestConnect(phone, { forceRefresh = false, quiet = false } = {}) {
+  if (!quiet) waToast(forceRefresh ? 'Refreshing QR…' : 'Requesting QR from Evolution…');
+  const body = { ...(phone ? { phone } : {}), ...(forceRefresh ? { forceRefresh: true } : {}) };
   const result = await api('/whatsapp/connection/connect', {
     method: 'POST',
     body: JSON.stringify(body),
   });
   const qrEl = document.getElementById('wa-conn-qr');
   const codeEl = document.getElementById('wa-conn-pairing');
-  if (result.qrBase64 && qrEl) {
+  const state = String(result.state || '').toLowerCase();
+
+  if (result.pairingInProgress && !result.qrBase64) {
+    if (qrEl) {
+      qrEl.innerHTML =
+        '<div class="wa-conn-wait"><p style="font-weight:600;margin-bottom:8px">Pairing in progress…</p><p class="muted" style="font-size:0.85rem">Keep WhatsApp open on your phone. Do not refresh the QR.</p></div>';
+    }
+  } else if (result.qrBase64 && qrEl) {
     qrEl.innerHTML = `<img src="${result.qrBase64.replace(/"/g, '&quot;')}" alt="WhatsApp QR code" class="wa-qr-img" />`;
-  } else if (qrEl) {
-    qrEl.innerHTML = '<p class="muted">No QR yet — try again or create the instance first.</p>';
+  } else if (state === 'open' && qrEl) {
+    qrEl.innerHTML = '<div class="wa-conn-success">✓ WhatsApp linked</div>';
+  } else if (qrEl && !result.qrBase64) {
+    qrEl.innerHTML = '<p class="muted">No QR yet — click Show QR or Refresh QR.</p>';
   }
+
   if (codeEl) {
     codeEl.textContent = result.pairingCode ? `Pairing code: ${result.pairingCode}` : '';
   }
   waUpdateConnectPanel(result);
-  if (String(result.state || '').toLowerCase() !== 'open') waStartConnectPoll();
-  waToast(result.qrBase64 ? 'QR ready — scan with WhatsApp' : result.pairingCode ? 'Use pairing code on phone' : 'Connect request sent');
+  if (state !== 'open') waStartConnectPoll();
+  if (!quiet) {
+    if (result.pairingInProgress) waToast('Pairing in progress — wait on your phone');
+    else if (result.qrBase64) waToast('Scan QR now — do not refresh while logging in');
+    else if (state === 'open') waToast('WhatsApp connected');
+  }
+  return result;
 }
 
 async function loadWhatsApp() {
@@ -181,7 +184,7 @@ async function loadWhatsApp() {
           ${waConnectionPill(status.enabled, conn.ok, conn.state)}
         </div>
 
-        ${conn.error ? `<div class="wa-alert"><span class="wa-alert-icon">⚠</span><div><strong>Connection issue</strong><br>${conn.error}</div></div>` : ''}
+        ${conn.error ? `<div class="wa-alert"><span class="wa-alert-icon">⚠</span><div><strong>Connection issue</strong><br>${conn.error}${String(conn.error).includes('401') ? '<p style="margin-top:10px;font-size:0.85rem">Fix: In <strong>Evolution API key</strong>, paste the instance <strong>Token</strong> from CloudStation (e.g. 6BBEE79E-…) or your CloudStation <strong>global API key</strong>. Then Save and Refresh.</p>' : ''}</div></div>` : ''}
 
         <div class="wa-metrics">
           <div class="metric-card">
@@ -224,7 +227,8 @@ async function loadWhatsApp() {
                 <p class="wa-field-hint">Ghana format without +. Leave blank to use QR only.</p>
               </div>
               <div class="wa-actions" style="margin-top:0">
-                <button type="button" class="wa-btn-whatsapp" id="wa-connect-btn">Connect / Show QR</button>
+                <button type="button" class="wa-btn-whatsapp" id="wa-connect-btn">Show QR</button>
+                <button type="button" class="wa-btn-ghost" id="wa-refresh-qr">Refresh QR</button>
                 ${!instanceExists && evo.apiKeyConfigured ? '<button type="button" class="wa-btn-ghost" id="wa-create-instance">Create instance</button>' : ''}
                 <button type="button" class="wa-btn-ghost" id="wa-disconnect-btn">Disconnect</button>
               </div>
@@ -258,7 +262,7 @@ async function loadWhatsApp() {
               <div class="wa-form-grid">
                 <div class="wa-field">
                   <label for="wa-base-url">Evolution base URL</label>
-                  <input type="url" id="wa-base-url" placeholder="https://your-cloudstation.example.com" />
+                  <input type="url" id="wa-base-url" placeholder="https://cst-evolution-api-….usecloudstation.com" />
                 </div>
                 <div class="wa-field">
                   <label for="wa-instance">Instance name</label>
@@ -417,6 +421,15 @@ async function loadWhatsApp() {
       try {
         const phone = document.getElementById('wa-link-phone')?.value?.trim();
         await waRequestConnect(phone || undefined);
+      } catch (err) {
+        waToast(err.message);
+      }
+    });
+    document.getElementById('wa-refresh-qr')?.addEventListener('click', async () => {
+      if (!confirm('Refresh QR? Only do this if pairing failed — refreshing cancels an in-progress login.')) return;
+      try {
+        const phone = document.getElementById('wa-link-phone')?.value?.trim();
+        await waRequestConnect(phone || undefined, { forceRefresh: true });
       } catch (err) {
         waToast(err.message);
       }

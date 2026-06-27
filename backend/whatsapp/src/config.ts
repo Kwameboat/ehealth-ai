@@ -33,6 +33,16 @@ export function getWhatsAppConfig(deps: WhatsAppDeps): WhatsAppConfig {
   };
 }
 
+function isValidEvolutionBaseUrl(value: string): boolean {
+  if (!value || value.includes('\\') || /^[a-zA-Z]:/.test(value)) return false;
+  try {
+    const u = new URL(value);
+    return u.protocol === 'https:' || u.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
 export function updateWhatsAppConfig(
   deps: WhatsAppDeps,
   body: Record<string, unknown>
@@ -52,7 +62,13 @@ export function updateWhatsAppConfig(
       if (field === 'enabled') {
         deps.setSetting(key, val ? 'true' : 'false');
       } else if (typeof val === 'string') {
-        deps.setSetting(key, val.trim());
+        const trimmed = val.trim();
+        if (field === 'evolutionBaseUrl' && trimmed && !isValidEvolutionBaseUrl(trimmed)) {
+          throw new Error(
+            'Evolution base URL must be a valid https URL (e.g. https://cst-evolution-api-….usecloudstation.com), not a local file path.'
+          );
+        }
+        deps.setSetting(key, trimmed);
       }
     }
   }

@@ -22,6 +22,17 @@ function getWhatsAppConfig(deps) {
         systemPrompt: deps.getSetting(CONFIG_KEYS.systemPrompt, 'You are Agyenim, the eHealth AI assistant on WhatsApp. Give concise, caring health guidance in plain language. Not a doctor — advise seeing a clinician when needed.') || '',
     };
 }
+function isValidEvolutionBaseUrl(value) {
+    if (!value || value.includes('\\') || /^[a-zA-Z]:/.test(value))
+        return false;
+    try {
+        const u = new URL(value);
+        return u.protocol === 'https:' || u.protocol === 'http:';
+    }
+    catch {
+        return false;
+    }
+}
 function updateWhatsAppConfig(deps, body) {
     const map = {
         enabled: CONFIG_KEYS.enabled,
@@ -38,7 +49,11 @@ function updateWhatsAppConfig(deps, body) {
                 deps.setSetting(key, val ? 'true' : 'false');
             }
             else if (typeof val === 'string') {
-                deps.setSetting(key, val.trim());
+                const trimmed = val.trim();
+                if (field === 'evolutionBaseUrl' && trimmed && !isValidEvolutionBaseUrl(trimmed)) {
+                    throw new Error('Evolution base URL must be a valid https URL (e.g. https://cst-evolution-api-….usecloudstation.com), not a local file path.');
+                }
+                deps.setSetting(key, trimmed);
             }
         }
     }

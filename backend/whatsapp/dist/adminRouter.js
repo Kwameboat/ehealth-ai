@@ -161,6 +161,30 @@ function createAdminRouter(deps) {
                 return;
             }
             const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : undefined;
+            const forceRefresh = req.body?.forceRefresh === true;
+            const connection = await (0, evolution_1.fetchConnectionState)(config);
+            const state = String(connection.state || 'close').toLowerCase();
+            if (state === 'open') {
+                res.json({
+                    success: true,
+                    state: 'open',
+                    phone: connection.phone || null,
+                    qrBase64: null,
+                    pairingInProgress: false,
+                });
+                return;
+            }
+            if (state === 'connecting' && !forceRefresh) {
+                res.json({
+                    success: true,
+                    state: 'connecting',
+                    phone: connection.phone || null,
+                    qrBase64: null,
+                    pairingInProgress: true,
+                    message: 'Phone is pairing — wait up to 2 minutes. Do not refresh the QR.',
+                });
+                return;
+            }
             let result = await (0, evolution_1.connectEvolutionInstance)(config, phone);
             if (!result.ok && !phone) {
                 const info = await (0, evolution_1.fetchInstanceInfo)(config);
@@ -172,13 +196,14 @@ function createAdminRouter(deps) {
                 res.status(502).json({ error: { message: result.error || 'Connect failed' } });
                 return;
             }
-            const connection = await (0, evolution_1.fetchConnectionState)(config);
+            const after = await (0, evolution_1.fetchConnectionState)(config);
             res.json({
                 success: true,
                 qrBase64: result.qrBase64 || null,
                 pairingCode: result.pairingCode || null,
-                state: connection.state || result.state || 'connecting',
-                phone: connection.phone || null,
+                state: after.state || result.state || 'connecting',
+                phone: after.phone || null,
+                pairingInProgress: String(after.state || result.state || '').toLowerCase() === 'connecting',
             });
         }
         catch (err) {

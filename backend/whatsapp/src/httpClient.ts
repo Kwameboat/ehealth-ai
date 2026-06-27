@@ -26,8 +26,16 @@ export async function evolutionRequest(
 
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
-      const msg = typeof data.message === 'string' ? data.message : `HTTP ${res.status}`;
-      return { ok: false, status: res.status, data, error: msg };
+      const msg =
+        (typeof data.message === 'string' && data.message) ||
+        (typeof data.error === 'string' && data.error) ||
+        (typeof data.response === 'string' && data.response) ||
+        `HTTP ${res.status}`;
+      const hint =
+        res.status === 401
+          ? ' — use CloudStation global API key or this instance Token in Evolution API key field'
+          : '';
+      return { ok: false, status: res.status, data, error: `${msg}${hint}` };
     }
     return { ok: true, status: res.status, data };
   } catch (err: unknown) {

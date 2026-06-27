@@ -163,7 +163,35 @@ export function createAdminRouter(deps: WhatsAppDeps): Router {
         res.status(400).json({ error: { message: 'Save Evolution URL, API key, and instance name first' } });
         return;
       }
+
       const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : undefined;
+      const forceRefresh = req.body?.forceRefresh === true;
+      const connection = await fetchConnectionState(config);
+      const state = String(connection.state || 'close').toLowerCase();
+
+      if (state === 'open') {
+        res.json({
+          success: true,
+          state: 'open',
+          phone: connection.phone || null,
+          qrBase64: null,
+          pairingInProgress: false,
+        });
+        return;
+      }
+
+      if (state === 'connecting' && !forceRefresh) {
+        res.json({
+          success: true,
+          state: 'connecting',
+          phone: connection.phone || null,
+          qrBase64: null,
+          pairingInProgress: true,
+          message: 'Phone is pairing — wait up to 2 minutes. Do not refresh the QR.',
+        });
+        return;
+      }
+
       let result = await connectEvolutionInstance(config, phone);
       if (!result.ok && !phone) {
         const info = await fetchInstanceInfo(config);
@@ -175,13 +203,15 @@ export function createAdminRouter(deps: WhatsAppDeps): Router {
         res.status(502).json({ error: { message: result.error || 'Connect failed' } });
         return;
       }
-      const connection = await fetchConnectionState(config);
+
+      const after = await fetchConnectionState(config);
       res.json({
         success: true,
         qrBase64: result.qrBase64 || null,
         pairingCode: result.pairingCode || null,
-        state: connection.state || result.state || 'connecting',
-        phone: connection.phone || null,
+        state: after.state || result.state || 'connecting',
+        phone: after.phone || null,
+        pairingInProgress: String(after.state || result.state || '').toLowerCase() === 'connecting',
       });
     } catch (err: unknown) {
       res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Connect failed' } });

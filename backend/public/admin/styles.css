@@ -790,6 +790,9 @@ code { font-size: 0.8em; background: rgba(0,0,0,0.3); padding: 2px 6px; border-r
   color: #166534; font-weight: 700; font-size: 1rem;
   padding: 24px; text-align: center;
 }
+.wa-conn-wait {
+  padding: 24px; text-align: center; color: #64748b;
+}
 
 @media (max-width: 1200px) {
   .wa-connect-grid { grid-template-columns: 1fr; }
