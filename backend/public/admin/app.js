@@ -13,6 +13,7 @@ const PAGE_TITLES = {
   points: 'AI Logic Control',
   system: 'System Status',
   packages: 'Points Shop — Pricing',
+  whatsapp: 'WhatsApp Management',
   settings: 'Settings & API Keys',
 };
 
@@ -86,6 +87,7 @@ function showPage(name) {
     points: loadPointRules,
     system: loadSystem,
     packages: loadPackages,
+    whatsapp: () => (typeof loadWhatsApp === 'function' ? loadWhatsApp() : undefined),
     settings: loadSettings,
   };
   if (loaders[name]) loaders[name]();

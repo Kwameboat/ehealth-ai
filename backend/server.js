@@ -27,6 +27,8 @@ const adminRoutes = require('./routes/admin');
 const paymentRoutes = require('./routes/payments');
 const emergencyRoutes = require('./routes/emergency');
 const { paystackWebhookHandler } = require('./routes/payments');
+const { adminRouter: whatsappAdminRouter, webhookRouter: whatsappWebhookRouter } = require('./routes/whatsapp-bridge');
+const { requireAdminAuth } = require('./middleware/adminAuth');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -119,7 +121,11 @@ app.post(
 app.use(express.json({ limit: '20mb' }));
 
 app.use(async (req, res, next) => {
-  if (!req.path.startsWith('/api') && !req.path.startsWith('/admin/api')) {
+  if (
+    !req.path.startsWith('/api') &&
+    !req.path.startsWith('/admin/api') &&
+    req.path !== '/whatsapp-webhook'
+  ) {
     return next();
   }
   if (req.path === '/api/health') return next();
@@ -140,6 +146,8 @@ app.use(async (req, res, next) => {
     });
   }
 });
+
+app.use('/whatsapp-webhook', whatsappWebhookRouter);
 
 app.use('/admin', express.static(path.join(__dirname, 'public', 'admin')));
 app.use('/payment', express.static(path.join(__dirname, 'public', 'payment')));
@@ -162,6 +170,7 @@ if (webDistPath && fs.existsSync(webDistPath)) {
 }
 
 app.use('/admin/api', adminRoutes);
+app.use('/api/admin/whatsapp', requireAdminAuth, whatsappAdminRouter);
 
 app.use('/api/auth', requireAppAuth, authRoutes);
 app.use('/api', requireAppAuth, userRoutes);
@@ -180,7 +189,8 @@ if (webDistPath && fs.existsSync(webDistPath)) {
       req.path.startsWith('/api') ||
       req.path.startsWith('/admin') ||
       req.path.startsWith('/payment') ||
-      req.path.startsWith('/assets')
+      req.path.startsWith('/assets') ||
+      req.path === '/whatsapp-webhook'
     ) {
       return next();
     }

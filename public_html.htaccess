@@ -19,6 +19,7 @@
   # Let Node/Passenger handle API + runtime PWA config + Paystack callback
   RewriteRule ^api(/|$) - [L]
   RewriteRule ^admin/api(/|$) - [L]
+  RewriteRule ^whatsapp-webhook$ - [L]
   RewriteRule ^payment(/|$) - [L]
   RewriteRule ^app-config\.js$ - [L]
 

@@ -25,7 +25,7 @@ cp "$PKG_SRC" "$TMP/package.json"
 echo "=== npm install (isolated) ==="
 (cd "$TMP" && "$NPM_BIN" install --omit=dev --install-strategy=nested --no-audit)
 
-for pkg in express bcryptjs sql.js; do
+for pkg in express bcryptjs sql.js axios @google/genai; do
   [ -f "$TMP/node_modules/$pkg/package.json" ] || { echo "ERROR: missing $pkg"; exit 1; }
 done
 

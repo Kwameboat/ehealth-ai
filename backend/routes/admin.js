@@ -20,6 +20,7 @@ const {
   deletePackage,
   formatPackage,
 } = require('../services/packages');
+const { adminRouter: whatsappAdminRouter } = require('./whatsapp-bridge');
 
 const router = express.Router();
 
@@ -49,6 +50,8 @@ router.post('/login', async (req, res) => {
 });
 
 router.use(requireAdminAuth);
+
+router.use('/whatsapp', whatsappAdminRouter);
 
 router.get('/dashboard', (req, res) => {
   const db = getDb();
@@ -144,7 +147,7 @@ router.get('/users/:id', (req, res) => {
 });
 
 router.patch('/users/:id', (req, res) => {
-  const { isActive, fullName } = req.body || {};
+  const { isActive, fullName, phone } = req.body || {};
   const user = getDb().prepare('SELECT id FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: { message: 'User not found' } });
 
@@ -153,6 +156,14 @@ router.patch('/users/:id', (req, res) => {
   }
   if (fullName !== undefined) {
     getDb().prepare('UPDATE users SET full_name = ?, updated_at = ? WHERE id = ?').run(fullName, now(), req.params.id);
+  }
+  if (phone !== undefined) {
+    const digits = String(phone || '').replace(/\D/g, '') || null;
+    if (digits) {
+      const taken = getDb().prepare('SELECT id FROM users WHERE phone = ? AND id != ?').get(digits, req.params.id);
+      if (taken) return res.status(409).json({ error: { message: 'Phone already linked to another user' } });
+    }
+    getDb().prepare('UPDATE users SET phone = ?, updated_at = ? WHERE id = ?').run(digits, now(), req.params.id);
   }
   const updated = getDb().prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   res.json({

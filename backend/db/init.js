@@ -121,7 +121,41 @@ function initSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id);
     CREATE INDEX IF NOT EXISTS idx_payments_ref ON payments(paystack_reference);
+
+    CREATE TABLE IF NOT EXISTS whatsapp_logs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      phone TEXT NOT NULL,
+      message_type TEXT NOT NULL,
+      feature_key TEXT,
+      points_charged INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL,
+      payload_preview TEXT,
+      response_preview TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_whatsapp_logs_phone ON whatsapp_logs(phone);
+    CREATE INDEX IF NOT EXISTS idx_whatsapp_logs_created ON whatsapp_logs(created_at);
   `);
+
+  migrateWhatsAppColumns(database);
+}
+
+function migrateWhatsAppColumns(database) {
+  try {
+    database.exec(`ALTER TABLE users ADD COLUMN phone TEXT`);
+  } catch {
+    /* column exists */
+  }
+  try {
+    database.exec(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone) WHERE phone IS NOT NULL AND phone != ''`
+    );
+  } catch {
+    /* ignore */
+  }
 }
 
 function seedPointRules() {
@@ -136,6 +170,9 @@ function seedPointRules() {
     ['emergency_lookup', 'Emergency lookup', 4, 'Emergency hospital lookup'],
     ['medicine_scan', 'Medicine recognition', 6, 'Medicine image scan (when enabled)'],
     ['lab_report', 'Lab results analysis', 10, 'Lab report photo or PDF interpretation'],
+    ['wa_text', 'WhatsApp text chat', 1, 'WhatsApp standard text message via Agyenim'],
+    ['wa_audio', 'WhatsApp voice note', 2, 'WhatsApp audio/voice note analysis'],
+    ['wa_image', 'WhatsApp lab/medicine image', 5, 'WhatsApp image — lab or medicine packaging'],
   ];
 
   const insert = database.prepare(`
@@ -161,6 +198,29 @@ function seedSettings() {
   upsert.run('app_name', 'eHealth AI', ts);
   upsert.run('app_tagline', 'AI Health Assistance — Not a Doctor', ts);
   upsert.run('payment_currency', 'GHS', ts);
+}
+
+function seedWhatsAppSettings() {
+  const database = getDb();
+  const upsert = database.prepare(`
+    INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(key) DO NOTHING
+  `);
+  const ts = now();
+  const defaults = [
+    ['whatsapp_evolution_base_url', process.env.EVOLUTION_API_URL || ''],
+    ['whatsapp_evolution_api_key', process.env.EVOLUTION_API_KEY || ''],
+    ['whatsapp_instance_name', process.env.EVOLUTION_INSTANCE_NAME || ''],
+    ['whatsapp_webhook_secret', process.env.WHATSAPP_WEBHOOK_SECRET || ''],
+    [
+      'whatsapp_system_prompt',
+      'You are Agyenim, the eHealth AI assistant on WhatsApp. Give concise, caring health guidance in plain language. Not a doctor — advise seeing a clinician when needed.',
+    ],
+    ['whatsapp_enabled', 'false'],
+  ];
+  for (const [key, value] of defaults) {
+    upsert.run(key, value, ts);
+  }
 }
 
 function syncEnvSecrets() {
@@ -235,6 +295,7 @@ async function initDatabase() {
     seedPointRules();
     seedPointPackages();
     seedSettings();
+    seedWhatsAppSettings();
     seedAdmin();
     syncEnvSecrets();
     const { migrateLegacyGeminiModel } = require('../services/settings');

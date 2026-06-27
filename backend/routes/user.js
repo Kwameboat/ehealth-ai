@@ -12,6 +12,7 @@ function sanitizeUser(row) {
     id: row.id,
     email: row.email,
     fullName: row.full_name,
+    phone: row.phone || null,
     pointsBalance: row.points_balance,
     isActive: !!row.is_active,
     createdAt: row.created_at,
@@ -26,6 +27,7 @@ router.get('/me', requireUserAuth, (req, res) => {
       id: user.id,
       email: user.email,
       fullName: user.full_name,
+      phone: user.phone || null,
       pointsBalance: user.points_balance,
       isActive: !!user.is_active,
     },
@@ -47,7 +49,7 @@ router.get('/points/rules', requireUserAuth, (req, res) => {
 
 router.patch('/me', requireUserAuth, (req, res) => {
   try {
-    const { fullName, email, password, currentPassword } = req.body || {};
+    const { fullName, email, phone, password, currentPassword } = req.body || {};
     const db = getDb();
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId);
     if (!user) return res.status(404).json({ error: { message: 'User not found' } });
@@ -72,6 +74,21 @@ router.patch('/me', requireUserAuth, (req, res) => {
       }
       updates.push('email = ?');
       params.push(normalized);
+    }
+
+    if (phone !== undefined) {
+      const digits = String(phone || '').replace(/\D/g, '');
+      if (digits && digits.length < 9) {
+        return res.status(400).json({ error: { message: 'Enter a valid phone number with country code' } });
+      }
+      if (digits) {
+        const taken = db.prepare('SELECT id FROM users WHERE phone = ? AND id != ?').get(digits, req.userId);
+        if (taken) {
+          return res.status(409).json({ error: { message: 'Phone number is already linked to another account' } });
+        }
+      }
+      updates.push('phone = ?');
+      params.push(digits || null);
     }
 
     if (password) {

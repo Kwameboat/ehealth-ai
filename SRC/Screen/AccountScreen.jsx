@@ -28,6 +28,7 @@ export default function AccountScreen() {
 
   const [fullName, setFullName] = useState(user?.fullName || '');
   const [email, setEmail] = useState(user?.email || '');
+  const [phone, setPhone] = useState(user?.phone || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [deletePassword, setDeletePassword] = useState('');
@@ -43,6 +44,7 @@ export default function AccountScreen() {
       const payload = {
         fullName: fullName.trim(),
         email: email.trim(),
+        phone: phone.trim(),
       };
       if (newPassword) {
         payload.password = newPassword;
@@ -132,6 +134,15 @@ export default function AccountScreen() {
             value={email}
             onChangeText={setEmail}
           />
+          <TextInput
+            style={styles.input}
+            placeholder="WhatsApp number (e.g. 233501234567)"
+            placeholderTextColor={med.textMuted}
+            keyboardType="phone-pad"
+            value={phone}
+            onChangeText={setPhone}
+          />
+          <Text style={styles.hint}>Link your WhatsApp number to chat with Agyenim on WhatsApp.</Text>
 
           <Text style={styles.sectionLabel}>Change password (optional)</Text>
           <PasswordInput
@@ -246,6 +257,13 @@ const createStyles = (med) =>
       color: med.text,
       marginBottom: 12,
       fontSize: 16,
+    },
+    hint: {
+      color: med.textMuted,
+      fontSize: 12,
+      lineHeight: 18,
+      marginTop: -4,
+      marginBottom: 12,
     },
     primaryBtn: {
       backgroundColor: med.primary,
