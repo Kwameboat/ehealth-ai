@@ -86,6 +86,10 @@ function syncEnvToDatabase() {
     ['paystack_secret_key', process.env.PAYSTACK_SECRET_KEY],
     ['paystack_public_key', process.env.PAYSTACK_PUBLIC_KEY],
     ['gemini_model', process.env.GEMINI_MODEL],
+    ['whatsapp_evolution_base_url', process.env.EVOLUTION_API_URL],
+    ['whatsapp_evolution_api_key', process.env.EVOLUTION_API_KEY],
+    ['whatsapp_instance_name', process.env.EVOLUTION_INSTANCE_NAME],
+    ['whatsapp_webhook_secret', process.env.WHATSAPP_WEBHOOK_SECRET],
   ];
   for (const [key, val] of pairs) {
     if (val && !getSetting(key)) setSetting(key, val);

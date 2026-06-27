@@ -86,6 +86,49 @@ function createAdminRouter(deps) {
             res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Config update failed' } });
         }
     });
+    router.get('/webhook-info', async (_req, res) => {
+        try {
+            const config = (0, config_1.getWhatsAppConfig)(deps);
+            const expectedUrl = `${String(process.env.PUBLIC_APP_URL || 'https://www.ehealthaigh.com').replace(/\/$/, '')}/whatsapp-webhook`;
+            const remote = await (0, evolution_1.findEvolutionWebhook)(config);
+            res.json({
+                expectedUrl,
+                remote: remote.ok
+                    ? { enabled: remote.enabled, url: remote.url, events: remote.events }
+                    : null,
+                error: remote.error || null,
+                matched: remote.ok && remote.url === expectedUrl,
+            });
+        }
+        catch (err) {
+            res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Webhook info failed' } });
+        }
+    });
+    router.post('/register-webhook', async (req, res) => {
+        try {
+            const config = (0, config_1.getWhatsAppConfig)(deps);
+            if (!config.baseUrl || !config.apiKey || !config.instanceName) {
+                res.status(400).json({ error: { message: 'Save Evolution URL, API key, and instance name first' } });
+                return;
+            }
+            const origin = (typeof req.body?.webhookUrl === 'string' && req.body.webhookUrl.trim()) ||
+                `${String(process.env.PUBLIC_APP_URL || 'https://www.ehealthaigh.com').replace(/\/$/, '')}/whatsapp-webhook`;
+            const result = await (0, evolution_1.setEvolutionWebhook)(config, origin);
+            if (!result.ok) {
+                res.status(502).json({ error: { message: result.error || 'Evolution rejected webhook registration' } });
+                return;
+            }
+            const remote = await (0, evolution_1.findEvolutionWebhook)(config);
+            res.json({
+                success: true,
+                webhookUrl: origin,
+                remote: remote.ok ? { enabled: remote.enabled, url: remote.url, events: remote.events } : null,
+            });
+        }
+        catch (err) {
+            res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Register webhook failed' } });
+        }
+    });
     router.post('/broadcast', async (req, res) => {
         try {
             const { message } = req.body || {};

@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import type { WhatsAppDeps } from './deps';
 import { getWhatsAppConfig, updateWhatsAppConfig } from './config';
-import { fetchConnectionState } from './evolution';
+import { fetchConnectionState, findEvolutionWebhook, setEvolutionWebhook } from './evolution';
 import { listWhatsAppLogs } from './logs';
 import { broadcastMessage } from './processor';
 
@@ -86,6 +86,50 @@ export function createAdminRouter(deps: WhatsAppDeps): Router {
       });
     } catch (err: unknown) {
       res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Config update failed' } });
+    }
+  });
+
+  router.get('/webhook-info', async (_req: Request, res: Response) => {
+    try {
+      const config = getWhatsAppConfig(deps);
+      const expectedUrl = `${String(process.env.PUBLIC_APP_URL || 'https://www.ehealthaigh.com').replace(/\/$/, '')}/whatsapp-webhook`;
+      const remote = await findEvolutionWebhook(config);
+      res.json({
+        expectedUrl,
+        remote: remote.ok
+          ? { enabled: remote.enabled, url: remote.url, events: remote.events }
+          : null,
+        error: remote.error || null,
+        matched: remote.ok && remote.url === expectedUrl,
+      });
+    } catch (err: unknown) {
+      res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Webhook info failed' } });
+    }
+  });
+
+  router.post('/register-webhook', async (req: Request, res: Response) => {
+    try {
+      const config = getWhatsAppConfig(deps);
+      if (!config.baseUrl || !config.apiKey || !config.instanceName) {
+        res.status(400).json({ error: { message: 'Save Evolution URL, API key, and instance name first' } });
+        return;
+      }
+      const origin =
+        (typeof req.body?.webhookUrl === 'string' && req.body.webhookUrl.trim()) ||
+        `${String(process.env.PUBLIC_APP_URL || 'https://www.ehealthaigh.com').replace(/\/$/, '')}/whatsapp-webhook`;
+      const result = await setEvolutionWebhook(config, origin);
+      if (!result.ok) {
+        res.status(502).json({ error: { message: result.error || 'Evolution rejected webhook registration' } });
+        return;
+      }
+      const remote = await findEvolutionWebhook(config);
+      res.json({
+        success: true,
+        webhookUrl: origin,
+        remote: remote.ok ? { enabled: remote.enabled, url: remote.url, events: remote.events } : null,
+      });
+    } catch (err: unknown) {
+      res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Register webhook failed' } });
     }
   });
 

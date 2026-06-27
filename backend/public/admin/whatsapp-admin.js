@@ -22,6 +22,12 @@ function waConnectionPill(enabled, ok, state) {
   return '<span class="pill pill-critical">OFFLINE</span>';
 }
 
+function waGenSecret() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 function waCopyWebhook(url) {
   navigator.clipboard.writeText(url).then(() => waToast('Webhook URL copied')).catch(() => waToast('Copy failed'));
 }
@@ -31,9 +37,10 @@ async function loadWhatsApp() {
   el.innerHTML = '<div class="wa-page"><p class="muted" style="padding:24px">Loading WhatsApp module…</p></div>';
 
   try {
-    const [status, logs] = await Promise.all([
+    const [status, logs, webhookInfo] = await Promise.all([
       api('/whatsapp/status'),
       api('/whatsapp/logs?limit=50'),
+      api('/whatsapp/webhook-info').catch(() => null),
     ]);
 
     const conn = status.connection || {};
@@ -42,6 +49,9 @@ async function loadWhatsApp() {
     const webhookUrl = `${location.origin}/whatsapp-webhook`;
     const models = status.models || {};
     const costs = status.pointCosts || {};
+
+    const webhookMatched = webhookInfo?.matched;
+    const remoteWebhook = webhookInfo?.remote;
 
     const features = [
       'Medication reminders',
@@ -123,7 +133,11 @@ async function loadWhatsApp() {
                 </div>
                 <div class="wa-field">
                   <label for="wa-webhook-secret">Webhook secret</label>
-                  <input type="password" id="wa-webhook-secret" placeholder="Leave blank to keep current" autocomplete="off" />
+                  <div style="display:flex;gap:8px">
+                    <input type="password" id="wa-webhook-secret" placeholder="Leave blank to keep current" autocomplete="off" style="flex:1" />
+                    <button type="button" class="wa-btn-ghost" id="wa-gen-secret">Generate</button>
+                  </div>
+                  <p class="wa-field-hint">Evolution sends this in x-webhook-secret header</p>
                 </div>
                 <div class="wa-field full">
                   <label for="wa-prompt">Agyenim system prompt</label>
@@ -150,12 +164,16 @@ async function loadWhatsApp() {
             </div>
 
             <div class="wa-panel">
-              <div class="wa-panel-head"><div><h3>Webhook URL</h3><p>Set this in Evolution API dashboard</p></div></div>
+              <div class="wa-panel-head"><div><h3>Webhook URL</h3><p>Evolution → eHealth AI</p></div></div>
               <div class="wa-webhook-box">
                 <code id="wa-webhook-url">${webhookUrl}</code>
                 <button type="button" class="wa-btn-ghost" id="wa-copy-webhook">Copy</button>
               </div>
+              <div class="wa-actions" style="margin-top:12px">
+                <button type="button" class="wa-btn-whatsapp" id="wa-register-webhook">Register webhook on Evolution</button>
+              </div>
               <ul class="wa-stat-list" style="margin-top:16px">
+                <li><span>Evolution webhook</span><span>${webhookMatched ? '✓ Linked' : remoteWebhook?.url ? '⚠ Wrong URL' : '— Not registered'}</span></li>
                 <li><span>Webhook secret</span><span>${evo.webhookSecretConfigured ? '✓ Set' : '— Not set'}</span></li>
                 <li><span>Connection</span><span>${conn.state || '—'}</span></li>
               </ul>
@@ -182,10 +200,11 @@ async function loadWhatsApp() {
               <div><h3>Quick setup</h3><p>Evolution API checklist</p></div>
             </div>
             <ul class="wa-stat-list">
-              <li><span>1. Create instance</span><span>CloudStation</span></li>
-              <li><span>2. Paste webhook URL</span><span>↑ Copy above</span></li>
-              <li><span>3. Save config here</span><span>Enable bot</span></li>
-              <li><span>4. Link user phones</span><span>Account screen</span></li>
+              <li><span>1. CloudStation instance</span><span>${evo.instanceName ? '✓ ' + evo.instanceName : 'Create in CloudStation'}</span></li>
+              <li><span>2. Save credentials below</span><span>${evo.apiKeyConfigured ? '✓ Saved' : 'Pending'}</span></li>
+              <li><span>3. Register webhook</span><span>${webhookMatched ? '✓ Done' : 'Click button →'}</span></li>
+              <li><span>4. Scan QR in CloudStation</span><span>${conn.state === 'open' ? '✓ Connected' : 'Link WhatsApp'}</span></li>
+              <li><span>5. Enable bot + link phones</span><span>Account screen</span></li>
             </ul>
           </div>
         </div>
@@ -249,6 +268,26 @@ async function loadWhatsApp() {
     });
 
     document.getElementById('wa-copy-webhook')?.addEventListener('click', () => waCopyWebhook(webhookUrl));
+    document.getElementById('wa-gen-secret')?.addEventListener('click', () => {
+      const el = document.getElementById('wa-webhook-secret');
+      if (el) {
+        el.value = waGenSecret();
+        waToast('Secret generated — click Save configuration');
+      }
+    });
+    document.getElementById('wa-register-webhook')?.addEventListener('click', async () => {
+      try {
+        waToast('Registering webhook on Evolution…');
+        const result = await api('/whatsapp/register-webhook', {
+          method: 'POST',
+          body: JSON.stringify({ webhookUrl }),
+        });
+        waToast(result.remote?.url ? 'Webhook registered on Evolution' : 'Webhook request sent');
+        loadWhatsApp();
+      } catch (err) {
+        waToast(err.message);
+      }
+    });
     document.getElementById('wa-reload-btn')?.addEventListener('click', () => loadWhatsApp());
     document.getElementById('wa-refresh-logs')?.addEventListener('click', () => loadWhatsApp());
 

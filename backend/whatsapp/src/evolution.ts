@@ -7,7 +7,7 @@ export async function fetchConnectionState(config: WhatsAppConfig): Promise<{
   instance?: string;
   error?: string;
 }> {
-  if (!config.instanceName) {
+  if (!config.baseUrl || !config.apiKey || !config.instanceName) {
     return { ok: false, error: 'Evolution API URL, key, or instance name not configured' };
   }
 
@@ -24,6 +24,85 @@ export async function fetchConnectionState(config: WhatsAppConfig): Promise<{
     res.data.connectionStatus ||
     'unknown';
   return { ok: true, state: String(state), instance: config.instanceName };
+}
+
+export async function findEvolutionWebhook(config: WhatsAppConfig): Promise<{
+  ok: boolean;
+  enabled?: boolean;
+  url?: string;
+  events?: string[];
+  error?: string;
+}> {
+  if (!config.baseUrl || !config.apiKey || !config.instanceName) {
+    return { ok: false, error: 'Evolution API not configured' };
+  }
+
+  const res = await evolutionRequest(
+    config,
+    `/webhook/find/${encodeURIComponent(config.instanceName)}`
+  );
+  if (!res.ok) return { ok: false, error: res.error || 'Webhook lookup failed' };
+
+  const nested = res.data.webhook as Record<string, unknown> | undefined;
+  const enabled = Boolean(res.data.enabled ?? nested?.enabled);
+  const url = String(res.data.url ?? nested?.url ?? '');
+  const events = (res.data.events ?? nested?.events) as string[] | undefined;
+  return { ok: true, enabled, url: url || undefined, events };
+}
+
+export async function setEvolutionWebhook(
+  config: WhatsAppConfig,
+  webhookUrl: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!config.baseUrl || !config.apiKey || !config.instanceName) {
+    return { ok: false, error: 'Evolution API not configured' };
+  }
+
+  const headers: Record<string, string> = {};
+  if (config.webhookSecret) {
+    headers['x-webhook-secret'] = config.webhookSecret;
+  }
+
+  const body: Record<string, unknown> = {
+    enabled: true,
+    url: webhookUrl,
+    webhookByEvents: false,
+    webhookBase64: true,
+    events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE'],
+  };
+
+  if (Object.keys(headers).length) {
+    body.headers = headers;
+  }
+
+  const res = await evolutionRequest(
+    config,
+    `/webhook/set/${encodeURIComponent(config.instanceName)}`,
+    { method: 'POST', body }
+  );
+
+  if (!res.ok) {
+    const alt = await evolutionRequest(
+      config,
+      `/webhook/set/${encodeURIComponent(config.instanceName)}`,
+      {
+        method: 'POST',
+        body: {
+          webhook: {
+            enabled: true,
+            url: webhookUrl,
+            byEvents: false,
+            base64: true,
+            headers,
+            events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE'],
+          },
+        },
+      }
+    );
+    if (!alt.ok) return { ok: false, error: alt.error || res.error || 'Webhook registration failed' };
+  }
+
+  return { ok: true };
 }
 
 export async function sendTextMessage(
