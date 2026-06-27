@@ -34,17 +34,32 @@ for f in facilities.js family.js healthFeatures.js medication.js; do
   curl -fsSL -o "$BACKEND/whatsapp/dist/features/$f" "$BASE/backend/whatsapp/dist/features/$f"
 done
 
-echo "=== Ensure backend deps (axios, @google/genai) ==="
-if [ ! -f "$BACKEND/node_modules/@google/genai/package.json" ] || [ ! -f "$BACKEND/node_modules/axios/package.json" ]; then
+echo "=== Ensure backend deps (axios, form-data, @google/genai) ==="
+NEED_INSTALL=0
+for pkg in axios form-data @google/genai; do
+  if [ ! -f "$BACKEND/node_modules/$pkg/package.json" ]; then
+    NEED_INSTALL=1
+  fi
+done
+if [ "$NEED_INSTALL" = "1" ]; then
   bash "$APP/cpanel/install-backend-deps.sh"
 else
-  echo "WhatsApp npm deps already present"
+  echo "Core npm deps present"
+fi
+
+# axios requires form-data at runtime — install if missing without full reinstall
+if [ ! -f "$BACKEND/node_modules/form-data/package.json" ]; then
+  echo "Installing form-data..."
+  NPM_BIN="$(command -v npm)"
+  (cd "$BACKEND" && "$NPM_BIN" install form-data@4 --omit=dev --no-audit --no-fund --no-package-lock) || true
 fi
 
 echo "=== Verify WhatsApp module loads ==="
 cd "$BACKEND"
 node -e "
 try {
+  require('form-data');
+  require('axios');
   const m = require('./whatsapp/dist/index.js');
   if (typeof m.createWhatsAppRouters !== 'function') throw new Error('createWhatsAppRouters missing');
   console.log('WhatsApp module OK');
