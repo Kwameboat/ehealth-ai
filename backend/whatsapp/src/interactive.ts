@@ -1,4 +1,5 @@
 import type { WhatsAppConfig } from './config';
+import { evolutionRequest } from './httpClient';
 
 export interface WaButton {
   id: string;
@@ -16,14 +17,16 @@ export async function sendButtonsMessage(
   phone: string,
   opts: { title: string; description: string; footer?: string; buttons: WaButton[] }
 ): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const axios = (await import('axios')).default;
-    if (!config.baseUrl || !config.apiKey || !config.instanceName) {
-      return { ok: false, error: 'Evolution API not configured' };
-    }
-    await axios.post(
-      `${config.baseUrl}/message/sendButtons/${encodeURIComponent(config.instanceName)}`,
-      {
+  if (!config.instanceName) {
+    return { ok: false, error: 'Evolution API not configured' };
+  }
+
+  const res = await evolutionRequest(
+    config,
+    `/message/sendButtons/${encodeURIComponent(config.instanceName)}`,
+    {
+      method: 'POST',
+      body: {
         number: phone.replace(/\D/g, ''),
         title: opts.title.slice(0, 60),
         description: opts.description.slice(0, 1024),
@@ -34,12 +37,9 @@ export async function sendButtonsMessage(
           id: b.id.slice(0, 128),
         })),
       },
-      { headers: { apikey: config.apiKey }, timeout: 45000 }
-    );
-    return { ok: true };
-  } catch (err: unknown) {
-    return { ok: false, error: err instanceof Error ? err.message : 'Buttons send failed' };
-  }
+    }
+  );
+  return res.ok ? { ok: true } : { ok: false, error: res.error || 'Buttons send failed' };
 }
 
 export async function sendListMessage(
@@ -47,14 +47,16 @@ export async function sendListMessage(
   phone: string,
   opts: { title: string; description: string; buttonText: string; rows: WaListRow[] }
 ): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const axios = (await import('axios')).default;
-    if (!config.baseUrl || !config.apiKey || !config.instanceName) {
-      return { ok: false, error: 'Evolution API not configured' };
-    }
-    await axios.post(
-      `${config.baseUrl}/message/sendList/${encodeURIComponent(config.instanceName)}`,
-      {
+  if (!config.instanceName) {
+    return { ok: false, error: 'Evolution API not configured' };
+  }
+
+  const res = await evolutionRequest(
+    config,
+    `/message/sendList/${encodeURIComponent(config.instanceName)}`,
+    {
+      method: 'POST',
+      body: {
         number: phone.replace(/\D/g, ''),
         title: opts.title.slice(0, 60),
         description: opts.description.slice(0, 1024),
@@ -71,10 +73,7 @@ export async function sendListMessage(
           },
         ],
       },
-      { headers: { apikey: config.apiKey }, timeout: 45000 }
-    );
-    return { ok: true };
-  } catch (err: unknown) {
-    return { ok: false, error: err instanceof Error ? err.message : 'List send failed' };
-  }
+    }
+  );
+  return res.ok ? { ok: true } : { ok: false, error: res.error || 'List send failed' };
 }

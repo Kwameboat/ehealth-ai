@@ -25,7 +25,7 @@ cp "$PKG_SRC" "$TMP/package.json"
 echo "=== npm install (isolated) ==="
 (cd "$TMP" && "$NPM_BIN" install --omit=dev --install-strategy=nested --no-audit)
 
-for pkg in express bcryptjs sql.js axios form-data @google/genai; do
+for pkg in express bcryptjs sql.js @google/genai; do
   [ -f "$TMP/node_modules/$pkg/package.json" ] || { echo "ERROR: missing $pkg"; exit 1; }
 done
 
@@ -35,7 +35,7 @@ trap - EXIT
 
 cd "$BACKEND"
 unset NODE_PATH
-"$NODE_BIN" -e "require('axios'); require('form-data'); require('@google/genai'); console.log('npm deps OK')"
+"$NODE_BIN" -e "require('@google/genai'); console.log('npm deps OK')"
 "$NODE_BIN" -e "require('./db/init').initDatabase().then(() => console.log('DB OK')).catch(e => { console.error(e); process.exit(1); })"
 
 echo "SUCCESS — RESTART Node.js app in cPanel"

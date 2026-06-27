@@ -24,7 +24,7 @@ curl -fsSL -o "$BACKEND/routes/whatsapp-bridge.js" "$BASE/backend/routes/whatsap
 DIST_FILES=(
   index.js processor.js adminRouter.js webhookRouter.js messageRouter.js
   scheduler.js buttonHandler.js sessionStore.js interactive.js intents.js
-  config.js deps.js evolution.js gemini.js logs.js phone.js
+  config.js deps.js evolution.js gemini.js logs.js phone.js httpClient.js
 )
 for f in "${DIST_FILES[@]}"; do
   curl -fsSL -o "$BACKEND/whatsapp/dist/$f" "$BASE/backend/whatsapp/dist/$f"
@@ -34,32 +34,21 @@ for f in facilities.js family.js healthFeatures.js medication.js; do
   curl -fsSL -o "$BACKEND/whatsapp/dist/features/$f" "$BASE/backend/whatsapp/dist/features/$f"
 done
 
-echo "=== Ensure backend deps (axios, form-data, @google/genai) ==="
+echo "=== Ensure backend deps (@google/genai) ==="
 NEED_INSTALL=0
-for pkg in axios form-data @google/genai; do
-  if [ ! -f "$BACKEND/node_modules/$pkg/package.json" ]; then
-    NEED_INSTALL=1
-  fi
-done
+if [ ! -f "$BACKEND/node_modules/@google/genai/package.json" ]; then
+  NEED_INSTALL=1
+fi
 if [ "$NEED_INSTALL" = "1" ]; then
   bash "$APP/cpanel/install-backend-deps.sh"
 else
   echo "Core npm deps present"
 fi
 
-# axios requires form-data at runtime — install if missing without full reinstall
-if [ ! -f "$BACKEND/node_modules/form-data/package.json" ]; then
-  echo "Installing form-data..."
-  NPM_BIN="$(command -v npm)"
-  (cd "$BACKEND" && "$NPM_BIN" install form-data@4 --omit=dev --no-audit --no-fund --no-package-lock) || true
-fi
-
 echo "=== Verify WhatsApp module loads ==="
 cd "$BACKEND"
 node -e "
 try {
-  require('form-data');
-  require('axios');
   const m = require('./whatsapp/dist/index.js');
   if (typeof m.createWhatsAppRouters !== 'function') throw new Error('createWhatsAppRouters missing');
   console.log('WhatsApp module OK');
