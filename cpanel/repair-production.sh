@@ -86,8 +86,13 @@ if [ ! -d "$BACKEND/node_modules/express" ] || [ ! -f "$BACKEND/node_modules/@go
 fi
 
 echo "=== WhatsApp module ==="
+mkdir -p "$APP/cpanel"
+if [ ! -x "$APP/cpanel/sync-whatsapp.sh" ]; then
+  curl -fsSL -o "$APP/cpanel/sync-whatsapp.sh" "$BASE/cpanel/sync-whatsapp.sh" || true
+  chmod +x "$APP/cpanel/sync-whatsapp.sh" 2>/dev/null || true
+fi
 chmod +x "$APP/cpanel/sync-whatsapp.sh" 2>/dev/null || true
-bash "$APP/cpanel/sync-whatsapp.sh" || echo "WARN: WhatsApp sync failed — run: bash ~/ehealth-ai/cpanel/sync-whatsapp.sh"
+bash "$APP/cpanel/sync-whatsapp.sh" || echo "WARN: WhatsApp sync failed — run: curl -fsSL $BASE/cpanel/fix-whatsapp-live.sh | bash"
 
 echo "=== Database check ==="
 cd "$BACKEND"

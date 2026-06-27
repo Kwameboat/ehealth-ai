@@ -128,6 +128,13 @@ fi
 
 if [ -x "$SRC/cpanel/sync-whatsapp.sh" ]; then
   bash "$SRC/cpanel/sync-whatsapp.sh" || echo "WARN: sync-whatsapp failed"
+elif curl -fsSL "$SRC/cpanel/sync-whatsapp.sh" -o /dev/null 2>/dev/null; then
+  :
+else
+  echo "=== WhatsApp module (curl from GitHub — no git on server) ==="
+  curl -fsSL -o "$SRC/cpanel/sync-whatsapp.sh" "https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main/cpanel/sync-whatsapp.sh" 2>/dev/null || true
+  chmod +x "$SRC/cpanel/sync-whatsapp.sh" 2>/dev/null || true
+  bash "$SRC/cpanel/sync-whatsapp.sh" 2>/dev/null || echo "WARN: run: curl -fsSL https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main/cpanel/fix-whatsapp-live.sh | bash"
 fi
 
 mkdir -p "$PUBLIC/tmp" "$SRC/tmp" 2>/dev/null || true
