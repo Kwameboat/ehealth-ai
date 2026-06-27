@@ -30,6 +30,9 @@ curl -fsSL -o "$APP/cpanel/install-backend-deps.sh" "$BASE/cpanel/install-backen
 curl -fsSL -o "$APP/cpanel/backend-production.package.json" "$BASE/cpanel/backend-production.package.json"
 chmod +x "$APP/cpanel/sync-whatsapp.sh" "$APP/cpanel/install-backend-deps.sh"
 
+echo "=== Reinstall backend npm (fixes p-retry / @google/genai) ==="
+bash "$APP/cpanel/install-backend-deps.sh"
+
 echo "=== Sync WhatsApp dist + admin UI ==="
 bash "$APP/cpanel/sync-whatsapp.sh"
 

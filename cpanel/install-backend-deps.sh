@@ -1,5 +1,5 @@
 #!/bin/bash
-# Isolated install — sql.js only (no better-sqlite3 / GLIBC)
+# Production npm install for cPanel — hoisted deps so @google/genai finds p-retry etc.
 set -e
 HOME_DIR="${HOME:-/home/ehealtha}"
 APP="$HOME_DIR/ehealth-ai"
@@ -16,16 +16,17 @@ NPM_BIN="$(command -v npm)"
 NODE_BIN="$(command -v node)"
 
 [ -f "$PKG_SRC" ] || PKG_SRC="$BACKEND/package.json"
-rm -f "$APP/package-lock.json" 2>/dev/null || true
+rm -f "$APP/package-lock.json" "$BACKEND/package-lock.json" 2>/dev/null || true
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 cp "$PKG_SRC" "$TMP/package.json"
 
-echo "=== npm install (isolated) ==="
-(cd "$TMP" && "$NPM_BIN" install --omit=dev --install-strategy=nested --no-audit)
+echo "=== npm install (production, hoisted) ==="
+(cd "$TMP" && "$NPM_BIN" install --omit=dev --no-audit --no-fund)
 
-for pkg in express bcryptjs sql.js @google/genai; do
+REQUIRED=(express bcryptjs sql.js @google/genai p-retry google-auth-library protobufjs ws)
+for pkg in "${REQUIRED[@]}"; do
   [ -f "$TMP/node_modules/$pkg/package.json" ] || { echo "ERROR: missing $pkg"; exit 1; }
 done
 
@@ -35,7 +36,21 @@ trap - EXIT
 
 cd "$BACKEND"
 unset NODE_PATH
-"$NODE_BIN" -e "require('@google/genai'); console.log('npm deps OK')"
+
+echo "=== Verify npm packages ==="
+"$NODE_BIN" -e "
+require('p-retry');
+require('@google/genai');
+console.log('genai deps OK');
+"
+
+if [ -f "$BACKEND/whatsapp/dist/index.js" ]; then
+  "$NODE_BIN" -e "
+require('./whatsapp/dist/index.js');
+console.log('WhatsApp module OK');
+"
+fi
+
 "$NODE_BIN" -e "require('./db/init').initDatabase().then(() => console.log('DB OK')).catch(e => { console.error(e); process.exit(1); })"
 
 echo "SUCCESS — RESTART Node.js app in cPanel"
