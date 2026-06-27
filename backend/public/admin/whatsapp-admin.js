@@ -1,6 +1,34 @@
+function waToast(msg) {
+  const existing = document.querySelector('.wa-toast');
+  if (existing) existing.remove();
+  const t = document.createElement('div');
+  t.className = 'wa-toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
+
+function waStatusClass(status) {
+  const s = String(status || '').toLowerCase();
+  if (s.includes('success') || s.includes('sent') || s.includes('taken')) return 'wa-status-success';
+  if (s.includes('error') || s.includes('fail') || s.includes('insufficient')) return 'wa-status-error';
+  if (s.includes('warn') || s.includes('snooze') || s.includes('pending')) return 'wa-status-warn';
+  return 'wa-status-neutral';
+}
+
+function waConnectionPill(enabled, ok, state) {
+  if (!enabled) return '<span class="pill pill-warn">DISABLED</span>';
+  if (ok && state && state !== 'unknown') return `<span class="pill pill-stable">${String(state).toUpperCase()}</span>`;
+  return '<span class="pill pill-critical">OFFLINE</span>';
+}
+
+function waCopyWebhook(url) {
+  navigator.clipboard.writeText(url).then(() => waToast('Webhook URL copied')).catch(() => waToast('Copy failed'));
+}
+
 async function loadWhatsApp() {
   const el = document.getElementById('page-whatsapp');
-  el.innerHTML = '<p class="muted">Loading WhatsApp module…</p>';
+  el.innerHTML = '<div class="wa-page"><p class="muted" style="padding:24px">Loading WhatsApp module…</p></div>';
 
   try {
     const [status, logs] = await Promise.all([
@@ -11,57 +39,168 @@ async function loadWhatsApp() {
     const conn = status.connection || {};
     const evo = status.evolution || {};
     const sync = status.sync || {};
+    const webhookUrl = `${location.origin}/whatsapp-webhook`;
+    const models = status.models || {};
+    const costs = status.pointCosts || {};
+
+    const features = [
+      'Medication reminders',
+      'NHIS assistant',
+      'Ghana diet coach',
+      'Location finder',
+      'Family profiles',
+      'MoMo delivery',
+      'BP tracker',
+    ];
 
     el.innerHTML = `
-      <div class="grid-2">
-        <div class="card">
-          <h3>Connection</h3>
-          <p><strong>Enabled:</strong> ${status.enabled ? 'Yes' : 'No'}</p>
-          <p><strong>State:</strong> ${conn.state || '—'} ${conn.ok ? '✓' : '⚠'}</p>
-          <p><strong>Instance:</strong> ${evo.instanceName || '—'}</p>
-          <p><strong>API key:</strong> ${evo.apiKeyConfigured ? 'Configured' : 'Missing'}</p>
-          <p><strong>Registered phones:</strong> ${sync.registeredPhones ?? 0}</p>
-          <p><strong>Total logs:</strong> ${sync.totalLogs ?? 0}</p>
-          ${conn.error ? `<p class="error-msg">${conn.error}</p>` : ''}
+      <div class="wa-page">
+        <div class="wa-hero">
+          <div class="wa-hero-icon" aria-hidden="true">💬</div>
+          <div class="wa-hero-text">
+            <h2>Agyenim on WhatsApp</h2>
+            <p>Manage Evolution API connection, AI routing, health alerts, and broadcast messages to registered patients in Ghana.</p>
+          </div>
+          ${waConnectionPill(status.enabled, conn.ok, conn.state)}
         </div>
-        <div class="card">
-          <h3>AI models & points</h3>
-          <p>Text / audio: <code>${status.models?.text || 'gemini-2.5-flash'}</code> (${status.pointCosts?.text ?? 1} pt)</p>
-          <p>Vision: <code>${status.models?.vision || 'gemini-2.5-pro'}</code> (${status.pointCosts?.image ?? 5} pt)</p>
-          <p>Voice: ${status.pointCosts?.audio ?? 2} pt · NHIS/Diet: 1 pt · Facility: 2 pt</p>
-          <p class="muted"><strong>Features:</strong> Medication reminders · NHIS · Ghana diet coach · Location finder · Family profiles · MoMo delivery · BP tracker</p>
-          <p class="muted">Webhook URL: <code>${location.origin}/whatsapp-webhook</code></p>
+
+        ${conn.error ? `<div class="wa-alert"><span class="wa-alert-icon">⚠</span><div><strong>Connection issue</strong><br>${conn.error}</div></div>` : ''}
+
+        <div class="wa-metrics">
+          <div class="metric-card">
+            <div class="metric-header"><span>Bot status</span><div class="metric-icon green">📱</div></div>
+            <div class="metric-value" style="font-size:1.5rem">${status.enabled ? 'Live' : 'Off'}</div>
+            <p class="metric-sub">${status.enabled ? 'Accepting WhatsApp messages' : 'Enable below to go live'}</p>
+          </div>
+          <div class="metric-card">
+            <div class="metric-header"><span>Evolution instance</span><div class="metric-icon blue">🔗</div></div>
+            <div class="metric-value" style="font-size:1.1rem">${evo.instanceName || '—'}</div>
+            <p class="metric-sub">API key: ${evo.apiKeyConfigured ? '✓ configured' : '✗ missing'}</p>
+          </div>
+          <div class="metric-card">
+            <div class="metric-header"><span>Registered phones</span><div class="metric-icon blue">👥</div></div>
+            <div class="metric-value">${sync.registeredPhones ?? 0}</div>
+            <p class="metric-sub">Users linked in Account settings</p>
+          </div>
+          <div class="metric-card">
+            <div class="metric-header"><span>Activity logs</span><div class="metric-icon orange">📊</div></div>
+            <div class="metric-value">${sync.totalLogs ?? 0}</div>
+            <p class="metric-sub">Messages processed via webhook</p>
+          </div>
         </div>
-      </div>
 
-      <div class="card" style="margin-top:1rem">
-        <h3>Configuration</h3>
-        <form id="wa-config-form" class="form-grid">
-          <label class="field-label"><input type="checkbox" id="wa-enabled" ${status.enabled ? 'checked' : ''} /> Enable WhatsApp bot</label>
-          <label class="field-label">Evolution base URL<input type="url" id="wa-base-url" placeholder="https://your-cloudstation.example.com" /></label>
-          <label class="field-label">Instance name<input type="text" id="wa-instance" placeholder="ehealth-ai" /></label>
-          <label class="field-label">Evolution API key<input type="password" id="wa-api-key" placeholder="Leave blank to keep current" autocomplete="off" /></label>
-          <label class="field-label">Webhook secret<input type="password" id="wa-webhook-secret" placeholder="Leave blank to keep current" autocomplete="off" /></label>
-          <label class="field-label">System prompt<textarea id="wa-prompt" rows="4"></textarea></label>
-          <button type="submit" class="btn btn-primary">Save configuration</button>
-        </form>
-      </div>
+        <div class="wa-layout">
+          <div class="wa-panel">
+            <div class="wa-panel-head">
+              <div><h3>Configuration</h3><p>CloudStation Evolution API v2 credentials</p></div>
+            </div>
 
-      <div class="card" style="margin-top:1rem">
-        <h3>Broadcast</h3>
-        <form id="wa-broadcast-form">
-          <label class="field-label">Message to all registered numbers<textarea id="wa-broadcast-msg" rows="3" required placeholder="Health alert or promotion…"></textarea></label>
-          <button type="submit" class="btn btn-primary">Send broadcast</button>
-        </form>
-      </div>
+            <form id="wa-config-form">
+              <div class="wa-toggle-row">
+                <div>
+                  <strong>Enable WhatsApp bot</strong>
+                  <span>When off, users receive a maintenance message</span>
+                </div>
+                <label class="wa-switch">
+                  <input type="checkbox" id="wa-enabled" ${status.enabled ? 'checked' : ''} />
+                  <span class="wa-switch-slider"></span>
+                </label>
+              </div>
 
-      <div class="card" style="margin-top:1rem">
-        <h3>Activity logs</h3>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead><tr><th>Time</th><th>Phone</th><th>Type</th><th>Points</th><th>Status</th><th>Preview</th></tr></thead>
-            <tbody id="wa-logs-body"></tbody>
-          </table>
+              <div class="wa-form-grid">
+                <div class="wa-field">
+                  <label for="wa-base-url">Evolution base URL</label>
+                  <input type="url" id="wa-base-url" placeholder="https://your-cloudstation.example.com" />
+                </div>
+                <div class="wa-field">
+                  <label for="wa-instance">Instance name</label>
+                  <input type="text" id="wa-instance" placeholder="ehealth-ai" />
+                </div>
+                <div class="wa-field">
+                  <label for="wa-api-key">Evolution API key</label>
+                  <input type="password" id="wa-api-key" placeholder="Leave blank to keep current" autocomplete="off" />
+                  <p class="wa-field-hint">Stored securely in system settings</p>
+                </div>
+                <div class="wa-field">
+                  <label for="wa-webhook-secret">Webhook secret</label>
+                  <input type="password" id="wa-webhook-secret" placeholder="Leave blank to keep current" autocomplete="off" />
+                </div>
+                <div class="wa-field full">
+                  <label for="wa-prompt">Agyenim system prompt</label>
+                  <textarea id="wa-prompt" placeholder="You are Agyenim, the eHealth AI assistant on WhatsApp…"></textarea>
+                </div>
+              </div>
+
+              <div class="wa-actions">
+                <button type="submit" class="wa-btn-whatsapp">Save configuration</button>
+                <button type="button" class="wa-btn-ghost" id="wa-reload-btn">Refresh status</button>
+              </div>
+            </form>
+          </div>
+
+          <div>
+            <div class="wa-panel" style="margin-bottom:18px">
+              <div class="wa-panel-head"><div><h3>AI models & points</h3><p>Per-message costs</p></div></div>
+              <div class="wa-model-row"><span>Text / audio</span><span><code>${models.text || 'gemini-2.5-flash'}</code> · ${costs.text ?? 1} pt</span></div>
+              <div class="wa-model-row"><span>Vision (lab / medicine)</span><span><code>${models.vision || 'gemini-2.5-pro'}</code> · ${costs.image ?? 5} pt</span></div>
+              <div class="wa-model-row"><span>Voice notes</span><span>${costs.audio ?? 2} pt</span></div>
+              <div class="wa-model-row"><span>NHIS / Diet / Facility</span><span>1–2 pt</span></div>
+              <p style="font-size:0.75rem;color:var(--text-muted);margin-top:14px">Features enabled</p>
+              <div class="wa-feature-grid">${features.map((f) => `<span class="wa-chip">${f}</span>`).join('')}</div>
+            </div>
+
+            <div class="wa-panel">
+              <div class="wa-panel-head"><div><h3>Webhook URL</h3><p>Set this in Evolution API dashboard</p></div></div>
+              <div class="wa-webhook-box">
+                <code id="wa-webhook-url">${webhookUrl}</code>
+                <button type="button" class="wa-btn-ghost" id="wa-copy-webhook">Copy</button>
+              </div>
+              <ul class="wa-stat-list" style="margin-top:16px">
+                <li><span>Webhook secret</span><span>${evo.webhookSecretConfigured ? '✓ Set' : '— Not set'}</span></li>
+                <li><span>Connection</span><span>${conn.state || '—'}</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="wa-layout">
+          <div class="wa-panel">
+            <div class="wa-panel-head">
+              <div><h3>Broadcast alert</h3><p>Send to ${sync.registeredPhones ?? 0} registered numbers</p></div>
+            </div>
+            <form id="wa-broadcast-form" class="wa-broadcast-area">
+              <textarea id="wa-broadcast-msg" maxlength="1000" required placeholder="Health alert, vaccination reminder, or promotion…"></textarea>
+              <div class="wa-char-count"><span id="wa-char-n">0</span> / 1000</div>
+              <div class="wa-actions">
+                <button type="submit" class="wa-btn-whatsapp">Send broadcast</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="wa-panel">
+            <div class="wa-panel-head">
+              <div><h3>Quick setup</h3><p>Evolution API checklist</p></div>
+            </div>
+            <ul class="wa-stat-list">
+              <li><span>1. Create instance</span><span>CloudStation</span></li>
+              <li><span>2. Paste webhook URL</span><span>↑ Copy above</span></li>
+              <li><span>3. Save config here</span><span>Enable bot</span></li>
+              <li><span>4. Link user phones</span><span>Account screen</span></li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="wa-panel">
+          <div class="wa-panel-head">
+            <div><h3>Activity logs</h3><p>Recent WhatsApp webhook events</p></div>
+            <button type="button" class="panel-link" id="wa-refresh-logs">Refresh</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>Time</th><th>Phone</th><th>Type</th><th>Pts</th><th>Status</th><th>Preview</th></tr></thead>
+              <tbody id="wa-logs-body"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     `;
@@ -80,10 +219,10 @@ async function loadWhatsApp() {
       if (webhookSecret) body.webhookSecret = webhookSecret;
       try {
         await api('/whatsapp/config', { method: 'POST', body: JSON.stringify(body) });
-        alert('WhatsApp configuration saved');
+        waToast('Configuration saved');
         loadWhatsApp();
       } catch (err) {
-        alert(err.message);
+        waToast(err.message);
       }
     });
 
@@ -96,27 +235,37 @@ async function loadWhatsApp() {
           method: 'POST',
           body: JSON.stringify({ message }),
         });
-        alert(`Broadcast complete: ${result.sent} sent, ${result.failed} failed`);
+        waToast(`Sent: ${result.sent} · Failed: ${result.failed}`);
         loadWhatsApp();
       } catch (err) {
-        alert(err.message);
+        waToast(err.message);
       }
     });
+
+    const broadcastEl = document.getElementById('wa-broadcast-msg');
+    const charN = document.getElementById('wa-char-n');
+    broadcastEl?.addEventListener('input', () => {
+      if (charN) charN.textContent = String(broadcastEl.value.length);
+    });
+
+    document.getElementById('wa-copy-webhook')?.addEventListener('click', () => waCopyWebhook(webhookUrl));
+    document.getElementById('wa-reload-btn')?.addEventListener('click', () => loadWhatsApp());
+    document.getElementById('wa-refresh-logs')?.addEventListener('click', () => loadWhatsApp());
 
     const tbody = document.getElementById('wa-logs-body');
     const rows = logs.logs || [];
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="muted">No WhatsApp activity yet</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="6"><div class="wa-empty"><div class="wa-empty-icon">📭</div><p>No WhatsApp activity yet</p><p style="font-size:0.8rem;margin-top:8px">Messages appear here once users chat with Agyenim</p></div></td></tr>`;
     } else {
       tbody.innerHTML = rows
         .map(
           (l) => `<tr>
             <td>${new Date(l.createdAt).toLocaleString()}</td>
-            <td>${l.phone}</td>
+            <td><code>${l.phone}</code></td>
             <td>${l.messageType}</td>
             <td>${l.pointsCharged}</td>
-            <td>${l.status}</td>
-            <td>${(l.payloadPreview || '').slice(0, 60)}</td>
+            <td><span class="wa-status-pill ${waStatusClass(l.status)}">${l.status}</span></td>
+            <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(l.payloadPreview || '').replace(/</g, '&lt;')}</td>
           </tr>`
         )
         .join('');
@@ -125,16 +274,23 @@ async function loadWhatsApp() {
     api('/settings')
       .then(({ settings }) => {
         const s = settings || {};
-        const url = s.whatsapp_evolution_base_url?.value || '';
-        const inst = s.whatsapp_instance_name?.value || '';
-        const prompt = s.whatsapp_system_prompt?.value || '';
-        document.getElementById('wa-base-url').value = url;
-        document.getElementById('wa-instance').value = inst;
-        document.getElementById('wa-prompt').value = prompt;
+        document.getElementById('wa-base-url').value = s.whatsapp_evolution_base_url?.value || '';
+        document.getElementById('wa-instance').value = s.whatsapp_instance_name?.value || '';
+        document.getElementById('wa-prompt').value = s.whatsapp_system_prompt?.value || '';
       })
       .catch(() => {});
   } catch (err) {
-    el.innerHTML = `<div class="card"><p class="error-msg">${err.message}</p><p class="muted">${err.detail || ''}</p><p class="muted">Fix: <code>bash ~/ehealth-ai/cpanel/sync-whatsapp.sh</code> then RESTART Node.js app.</p></div>`;
+    el.innerHTML = `
+      <div class="wa-page">
+        <div class="wa-alert" style="margin-top:0">
+          <span class="wa-alert-icon">✕</span>
+          <div>
+            <strong>${err.message}</strong>
+            ${err.detail ? `<p style="margin-top:8px;font-size:0.85rem">${err.detail}</p>` : ''}
+            <p style="margin-top:12px;font-size:0.8rem;opacity:0.9">Fix: <code>curl -fsSL https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main/cpanel/fix-whatsapp-live.sh | bash</code> then RESTART Node.js</p>
+          </div>
+        </div>
+      </div>`;
   }
 }
 
