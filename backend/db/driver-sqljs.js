@@ -24,25 +24,40 @@ function findWasmPath() {
   );
 }
 
+function removeIfExists(filePath) {
+  try {
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch {
+    /* ignore */
+  }
+}
+
 function writeFileSafe(filePath, buf) {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const tmp = `${filePath}.tmp`;
-  try {
+
+  const attempt = () => {
+    removeIfExists(tmp);
     fs.writeFileSync(tmp, buf);
     try {
       fs.renameSync(tmp, filePath);
     } catch (_) {
       fs.writeFileSync(filePath, buf);
-      try {
-        fs.unlinkSync(tmp);
-      } catch (_) {
-        /* ignore */
-      }
+      removeIfExists(tmp);
     }
+  };
+
+  try {
+    attempt();
   } catch (err) {
-    const msg = err.code ? `${err.code}: ${err.message}` : err.message;
-    throw new Error(`Cannot write database file ${filePath} (${msg}). Use ~/ehealth-ai/data/ and chmod 775`);
+    removeIfExists(tmp);
+    try {
+      attempt();
+    } catch (retryErr) {
+      const msg = retryErr.code ? `${retryErr.code}: ${retryErr.message}` : retryErr.message;
+      throw new Error(`Cannot write database file ${filePath} (${msg}). Use ~/ehealth-ai/data/ and chmod 775`);
+    }
   }
 }
 
@@ -51,8 +66,11 @@ function createWrapper(SQL, dbPath) {
   let deferPersist = false;
   let dirty = false;
   let txnDepth = 0;
+  let persistTimer = null;
+  const persistDelayMs = Number(process.env.DB_PERSIST_DELAY_MS) || 350;
 
   function loadFromDisk() {
+    removeIfExists(`${dbPath}.tmp`);
     if (fs.existsSync(dbPath)) {
       rawDb = new SQL.Database(fs.readFileSync(dbPath));
     } else {
@@ -60,7 +78,7 @@ function createWrapper(SQL, dbPath) {
     }
   }
 
-  function persist() {
+  function persistNow() {
     if (deferPersist || txnDepth > 0) {
       dirty = true;
       return;
@@ -69,10 +87,41 @@ function createWrapper(SQL, dbPath) {
     dirty = false;
   }
 
+  function persist() {
+    if (deferPersist || txnDepth > 0) {
+      dirty = true;
+      return;
+    }
+    if (persistTimer) return;
+    persistTimer = setTimeout(() => {
+      persistTimer = null;
+      try {
+        persistNow();
+      } catch (err) {
+        console.error('[db] persist failed:', err.message);
+        dirty = true;
+      }
+    }, persistDelayMs);
+    if (typeof persistTimer.unref === 'function') persistTimer.unref();
+  }
+
   function flush() {
-    if (!dirty) return;
-    writeFileSafe(dbPath, Buffer.from(rawDb.export()));
-    dirty = false;
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+    }
+    if (!dirty && !deferPersist && txnDepth === 0) {
+      try {
+        persistNow();
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    if (dirty || deferPersist || txnDepth > 0) {
+      writeFileSafe(dbPath, Buffer.from(rawDb.export()));
+      dirty = false;
+    }
   }
 
   loadFromDisk();
@@ -81,6 +130,7 @@ function createWrapper(SQL, dbPath) {
     flush,
     setDeferPersist(value) {
       deferPersist = !!value;
+      if (!deferPersist && dirty) persist();
     },
     exec(sql) {
       rawDb.exec(sql);

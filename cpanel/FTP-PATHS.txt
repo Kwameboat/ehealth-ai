@@ -1,0 +1,28 @@
+FTP UPLOAD — exact remote folders on StormerHost
+================================================
+
+Home folder: /home/ehealtha/
+
+FASTEST FIX — upload directly to public_html/admin/:
+
+  PC file                                              Remote folder
+  ----------------------------------------------------------------
+  backend/public/admin/index.html                      public_html/admin/
+  backend/public/admin/whatsapp-admin.js               public_html/admin/
+  backend/public/admin/styles.css                      public_html/admin/
+  backend/public/admin/app.js                          public_html/admin/
+
+Also upload backend (for pairing API + QR):
+
+  backend/whatsapp/dist/adminRouter.js                 ehealth-ai/backend/whatsapp/dist/
+  backend/whatsapp/dist/evolution.js                   ehealth-ai/backend/whatsapp/dist/
+  backend/whatsapp/dist/phone.js                       ehealth-ai/backend/whatsapp/dist/
+
+File size check after upload:
+  NEW whatsapp-admin.js = 32,603 bytes (has "Get link code")
+  OLD whatsapp-admin.js = 24,985 bytes (what live site has now)
+
+Then in cPanel Terminal run:
+  bash ~/ehealth-ai/cpanel/PASTE-IN-TERMINAL.sh
+
+Then RESTART Node.js and Ctrl+Shift+R on admin.

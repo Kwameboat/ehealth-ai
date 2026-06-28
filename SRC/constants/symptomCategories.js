@@ -18,6 +18,14 @@ export const SYMPTOM_CATEGORIES = [
 
 export const QUICK_ACTIONS = [
   {
+    id: 'health-hub',
+    title: 'Health Services',
+    desc: 'NHIS, diet, BP, reminders, video doctors & more',
+    icon: 'medical-bag',
+    color: '#10B981',
+    screen: 'HealthHub',
+  },
+  {
     id: 'cardiac',
     title: 'Check Cardiac Symptoms',
     desc: 'Analyze heart rate irregularities or chest discomfort patterns',

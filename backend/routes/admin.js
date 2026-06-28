@@ -390,4 +390,184 @@ router.get('/payments', (req, res) => {
   res.json({ payments: rows });
 });
 
+function mapDoctorRow(r) {
+  return {
+    id: r.id,
+    fullName: r.full_name,
+    specialty: r.specialty,
+    bio: r.bio,
+    photoUrl: r.photo_url,
+    licenseNumber: r.license_number,
+    hospitalAffiliation: r.hospital_affiliation,
+    videoProvider: r.video_provider,
+    videoRoomSlug: r.video_room_slug,
+    meetUrl: r.meet_url,
+    consultationFeeKobo: r.consultation_fee_kobo,
+    pointsCost: r.points_cost,
+    slotDurationMin: r.slot_duration_min,
+    isActive: !!r.is_active,
+    sortOrder: r.sort_order,
+    createdAt: r.created_at,
+  };
+}
+
+router.get('/doctors', (req, res) => {
+  const rows = getDb()
+    .prepare(`SELECT * FROM doctors ORDER BY sort_order, full_name`)
+    .all();
+  res.json({ doctors: rows.map(mapDoctorRow) });
+});
+
+router.post('/doctors', (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!b.fullName || !b.specialty) {
+      return res.status(400).json({ error: { message: 'fullName and specialty required' } });
+    }
+    const id = uuid();
+    const ts = now();
+    getDb()
+      .prepare(
+        `INSERT INTO doctors (id, full_name, specialty, bio, photo_url, license_number, hospital_affiliation,
+         video_provider, video_room_slug, meet_url, consultation_fee_kobo, points_cost, slot_duration_min,
+         is_active, sort_order, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        id,
+        String(b.fullName).trim(),
+        String(b.specialty).trim(),
+        b.bio || null,
+        b.photoUrl || null,
+        b.licenseNumber || null,
+        b.hospitalAffiliation || null,
+        b.videoProvider || 'jitsi',
+        b.videoRoomSlug || null,
+        b.meetUrl || null,
+        Number(b.consultationFeeKobo) || 5000,
+        Number(b.pointsCost) || 15,
+        Number(b.slotDurationMin) || 30,
+        b.isActive !== false ? 1 : 0,
+        Number(b.sortOrder) || 0,
+        ts,
+        ts
+      );
+    const row = getDb().prepare(`SELECT * FROM doctors WHERE id = ?`).get(id);
+    res.status(201).json({ doctor: mapDoctorRow(row) });
+  } catch (e) {
+    res.status(400).json({ error: { message: e.message } });
+  }
+});
+
+router.patch('/doctors/:id', (req, res) => {
+  const row = getDb().prepare(`SELECT * FROM doctors WHERE id = ?`).get(req.params.id);
+  if (!row) return res.status(404).json({ error: { message: 'Doctor not found' } });
+  const b = req.body || {};
+  const fields = [];
+  const params = [];
+  const map = {
+    fullName: 'full_name',
+    specialty: 'specialty',
+    bio: 'bio',
+    photoUrl: 'photo_url',
+    licenseNumber: 'license_number',
+    hospitalAffiliation: 'hospital_affiliation',
+    videoProvider: 'video_provider',
+    videoRoomSlug: 'video_room_slug',
+    meetUrl: 'meet_url',
+    consultationFeeKobo: 'consultation_fee_kobo',
+    pointsCost: 'points_cost',
+    slotDurationMin: 'slot_duration_min',
+    sortOrder: 'sort_order',
+  };
+  for (const [k, col] of Object.entries(map)) {
+    if (b[k] !== undefined) {
+      fields.push(`${col} = ?`);
+      params.push(b[k]);
+    }
+  }
+  if (b.isActive !== undefined) {
+    fields.push('is_active = ?');
+    params.push(b.isActive ? 1 : 0);
+  }
+  if (!fields.length) return res.status(400).json({ error: { message: 'No changes' } });
+  fields.push('updated_at = ?');
+  params.push(now(), req.params.id);
+  getDb().prepare(`UPDATE doctors SET ${fields.join(', ')} WHERE id = ?`).run(...params);
+  const updated = getDb().prepare(`SELECT * FROM doctors WHERE id = ?`).get(req.params.id);
+  res.json({ doctor: mapDoctorRow(updated) });
+});
+
+router.delete('/doctors/:id', (req, res) => {
+  const row = getDb().prepare(`SELECT id FROM doctors WHERE id = ?`).get(req.params.id);
+  if (!row) return res.status(404).json({ error: { message: 'Doctor not found' } });
+  getDb().prepare(`UPDATE doctors SET is_active = 0, updated_at = ? WHERE id = ?`).run(now(), req.params.id);
+  res.json({ success: true });
+});
+
+router.get('/doctors/:id/availability', (req, res) => {
+  const rows = getDb()
+    .prepare(`SELECT * FROM doctor_availability WHERE doctor_id = ? ORDER BY day_of_week, start_time`)
+    .all(req.params.id);
+  res.json({
+    availability: rows.map((a) => ({
+      id: a.id,
+      dayOfWeek: a.day_of_week,
+      startTime: a.start_time,
+      endTime: a.end_time,
+      isActive: !!a.is_active,
+    })),
+  });
+});
+
+router.post('/doctors/:id/availability', (req, res) => {
+  const { dayOfWeek, startTime, endTime } = req.body || {};
+  if (dayOfWeek === undefined || !startTime || !endTime) {
+    return res.status(400).json({ error: { message: 'dayOfWeek, startTime, endTime required' } });
+  }
+  const doctor = getDb().prepare(`SELECT id FROM doctors WHERE id = ?`).get(req.params.id);
+  if (!doctor) return res.status(404).json({ error: { message: 'Doctor not found' } });
+  const id = uuid();
+  getDb()
+    .prepare(
+      `INSERT INTO doctor_availability (id, doctor_id, day_of_week, start_time, end_time, is_active)
+       VALUES (?, ?, ?, ?, ?, 1)`
+    )
+    .run(id, req.params.id, Number(dayOfWeek), startTime, endTime);
+  res.status(201).json({ id, dayOfWeek: Number(dayOfWeek), startTime, endTime });
+});
+
+router.delete('/doctors/:doctorId/availability/:slotId', (req, res) => {
+  getDb()
+    .prepare(`UPDATE doctor_availability SET is_active = 0 WHERE id = ? AND doctor_id = ?`)
+    .run(req.params.slotId, req.params.doctorId);
+  res.json({ success: true });
+});
+
+router.get('/consultations', (req, res) => {
+  const rows = getDb()
+    .prepare(
+      `SELECT c.*, u.email, u.full_name AS patient_name, d.full_name AS doctor_name, d.specialty
+       FROM consultations c
+       JOIN users u ON u.id = c.user_id
+       JOIN doctors d ON d.id = c.doctor_id
+       ORDER BY c.scheduled_at DESC LIMIT 100`
+    )
+    .all();
+  res.json({ consultations: rows });
+});
+
+router.post('/broadcasts', (req, res) => {
+  const { title, message } = req.body || {};
+  if (!message || !String(message).trim()) {
+    return res.status(400).json({ error: { message: 'message required' } });
+  }
+  const id = uuid();
+  const ts = now();
+  getDb()
+    .prepare(`INSERT INTO health_broadcasts (id, title, message, recipient_count, created_at) VALUES (?, ?, ?, 0, ?)`)
+    .run(id, title || 'Health alert', String(message).trim(), ts);
+  res.status(201).json({ success: true, id });
+});
+
 module.exports = router;

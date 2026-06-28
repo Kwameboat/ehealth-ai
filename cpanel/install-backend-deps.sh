@@ -24,7 +24,9 @@ rm -rf node_modules package-lock.json 2>/dev/null || true
   sql.js@1.12.0 \
   cors@2.8.5 \
   dotenv@16.4.7 \
-  jsonwebtoken@9.0.2
+  jsonwebtoken@9.0.2 \
+  qrcode@1.5.4 \
+  axios@1.7.9
 
 unset NODE_PATH
 

@@ -793,6 +793,22 @@ code { font-size: 0.8em; background: rgba(0,0,0,0.3); padding: 2px 6px; border-r
 .wa-conn-wait {
   padding: 24px; text-align: center; color: #64748b;
 }
+.wa-pairing-panel { padding: 12px 8px; text-align: center; width: 100%; }
+.wa-pairing-label { font-size: 0.8rem; color: #64748b; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+.wa-pairing-code {
+  font-size: 2rem; font-weight: 800; letter-spacing: 0.2em; color: #0f766e;
+  margin: 8px 0 12px; font-family: ui-monospace, monospace;
+}
+.wa-pairing-steps {
+  text-align: left; font-size: 0.82rem; color: #475569; margin: 16px 0 0;
+  padding-left: 18px; line-height: 1.55;
+}
+.wa-pairing-steps li { margin-bottom: 6px; }
+.wa-copy-code { margin-bottom: 4px; font-size: 0.85rem; }
+.wa-version-tag {
+  font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+  background: rgba(15, 118, 110, 0.15); color: #0f766e; vertical-align: middle;
+}
 
 @media (max-width: 1200px) {
   .wa-connect-grid { grid-template-columns: 1fr; }

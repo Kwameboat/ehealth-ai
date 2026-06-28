@@ -39,6 +39,8 @@ PassengerNodejs \"$NODE_BIN\"
 PassengerAppType node
 PassengerStartupFile server.js
 PassengerAppEnv production
+PassengerMaxPoolSize 1
+PassengerMinInstances 1
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END"
     echo "Injected Passenger block (AppRoot=$SRC)"
   fi

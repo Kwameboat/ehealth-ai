@@ -16,7 +16,17 @@ const express = require('express');
 const fs = require('fs');
 
 const { getDb } = require('./db/init');
-const { ensureDbReady, getDbStatus } = require('./db/ensureDb');
+const {
+  ensureDbReady,
+  ensureDbReadyWithRecovery,
+  recoverDatabase,
+  getDbStatus,
+  clearDbArtifacts,
+  startDbMaintenance,
+} = require('./db/ensureDb');
+
+// Clear stale lock files before any worker tries to open the DB (Passenger multi-worker fix)
+clearDbArtifacts({ aggressive: true });
 
 const { requireAppAuth } = require('./middleware/appSecret');
 
@@ -25,7 +35,8 @@ const userRoutes = require('./routes/user');
 const aiRoutes = require('./routes/ai');
 const adminRoutes = require('./routes/admin');
 const paymentRoutes = require('./routes/payments');
-const emergencyRoutes = require('./routes/emergency');
+const healthRoutes = require('./routes/health');
+const consultationRoutes = require('./routes/consultations');
 const { paystackWebhookHandler } = require('./routes/payments');
 const { adminRouter: whatsappAdminRouter, webhookRouter: whatsappWebhookRouter } = require('./routes/whatsapp-bridge');
 const { requireAdminAuth } = require('./middleware/adminAuth');
@@ -89,13 +100,21 @@ app.get('/app-config.js', (req, res) => {
 });
 
 app.get('/api/health', async (req, res) => {
+  const tryRecover = req.query.recover === '1' || req.query.recover === 'true';
   try {
-    await ensureDbReady();
+    if (tryRecover) {
+      await recoverDatabase('health-check');
+    }
+    const result = tryRecover ? await ensureDbReadyWithRecovery() : await ensureDbReady().then(() => ({ ok: true }));
+    if (!result.ok) {
+      throw new Error(result.error || 'Database not ready');
+    }
     getDb().prepare('SELECT 1 AS ok').get();
     res.json({
       status: 'ok',
       service: 'eHealth AI API',
       db: true,
+      recovered: !!result.recovered,
       time: new Date().toISOString(),
     });
   } catch (err) {
@@ -107,7 +126,7 @@ app.get('/api/health', async (req, res) => {
       error: err.message,
       wasm: diag.wasmPath,
       dbPath: diag.dbPath,
-      hint: 'Set DATABASE_PATH to ~/ehealth-ai/data/medassistant.db, chmod 775 ~/ehealth-ai/data, RESTART',
+      hint: 'Database auto-recovery failed — bash ~/ehealth-ai/cpanel/repair-production.sh then RESTART Node.js',
       time: new Date().toISOString(),
     });
   }
@@ -130,7 +149,10 @@ app.use(async (req, res, next) => {
   }
   if (req.path === '/api/health') return next();
   try {
-    await ensureDbReady();
+    const result = await ensureDbReadyWithRecovery();
+    if (!result.ok) {
+      throw new Error(result.error || 'Database not ready');
+    }
     next();
   } catch (err) {
     const diag = getDbStatus();
@@ -141,7 +163,8 @@ app.use(async (req, res, next) => {
         detail: err.message,
         wasm: diag.wasmPath,
         dbPath: diag.dbPath,
-        hint: 'Use DATABASE_PATH=/home/ehealtha/ehealth-ai/data/medassistant.db and chmod 775 ~/ehealth-ai/data',
+        hint: 'Auto-recovery failed. Open /api/health?recover=1 or run: bash ~/ehealth-ai/cpanel/repair-production.sh',
+        recoverUrl: '/api/health?recover=1',
       },
     });
   }
@@ -149,7 +172,13 @@ app.use(async (req, res, next) => {
 
 app.use('/whatsapp-webhook', whatsappWebhookRouter);
 
-app.use('/admin', express.static(path.join(__dirname, 'public', 'admin')));
+app.use('/admin', express.static(path.join(__dirname, 'public', 'admin'), {
+  setHeaders(res, filePath) {
+    if (/\.(js|css|html)$/.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    }
+  },
+}));
 app.use('/payment', express.static(path.join(__dirname, 'public', 'payment')));
 app.use('/assets', express.static(path.join(__dirname, '..', 'assets')));
 
@@ -177,6 +206,8 @@ app.use('/api', requireAppAuth, userRoutes);
 app.use('/api', requireAppAuth, aiRoutes);
 app.use('/api/payments', requireAppAuth, paymentRoutes);
 app.use('/api/emergency', requireAppAuth, emergencyRoutes);
+app.use('/api', requireAppAuth, healthRoutes);
+app.use('/api', requireAppAuth, consultationRoutes);
 
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'admin', 'index.html'));
@@ -213,13 +244,36 @@ app.use((req, res) => {
   res.status(404).end();
 });
 
+function flushDbSync() {
+  try {
+    const db = getDb();
+    if (typeof db.flush === 'function') db.flush();
+  } catch {
+    /* ignore */
+  }
+}
+
 function onListen() {
   const listenPort = Number(process.env.PORT) || PORT;
   console.log(`eHealth AI API on ${HOST}:${listenPort}`);
-  ensureDbReady().catch((err) => console.error('Startup DB init:', err.message));
+  startDbMaintenance();
+  ensureDbReadyWithRecovery()
+    .then((r) => {
+      if (r.recovered) console.warn('[db] recovered during startup');
+      console.log('Startup database check: OK');
+    })
+    .catch((err) => console.error('Startup DB init (will retry per request):', err.message));
   if (!process.env.GEMINI_API_KEY) console.warn('WARNING: GEMINI_API_KEY missing');
   if (!process.env.APP_API_SECRET) console.warn('WARNING: APP_API_SECRET missing');
 }
+
+for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
+  process.on(sig, () => {
+    flushDbSync();
+    clearDbArtifacts();
+  });
+}
+process.on('beforeExit', flushDbSync);
 
 module.exports = app;
 

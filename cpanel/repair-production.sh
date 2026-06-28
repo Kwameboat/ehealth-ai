@@ -55,7 +55,8 @@ curl -fsSL -o "$APP/public_html.htaccess" "$BASE/public_html.htaccess"
 curl -fsSL -o "$APP/cpanel/activate-nodevenv.sh" "$BASE/cpanel/activate-nodevenv.sh"
 curl -fsSL -o "$APP/cpanel/merge-htaccess.sh" "$BASE/cpanel/merge-htaccess.sh"
 curl -fsSL -o "$APP/cpanel/fix-api-404.sh" "$BASE/cpanel/fix-api-404.sh"
-curl -fsSL -o "$APP/cpanel/publish-icon-fonts.sh" "$BASE/cpanel/publish-icon-fonts.sh"
+curl -fsSL -o "$APP/cpanel/publish-admin.sh" "$BASE/cpanel/publish-admin.sh"
+chmod +x "$APP/cpanel/publish-admin.sh" 2>/dev/null || true
 curl -fsSL -o "$APP/scripts/copy-icon-fonts.mjs" "$BASE/scripts/copy-icon-fonts.mjs"
 chmod +x "$APP/cpanel/activate-nodevenv.sh" "$APP/cpanel/merge-htaccess.sh" "$APP/cpanel/fix-api-404.sh" "$APP/cpanel/publish-icon-fonts.sh" 2>/dev/null || true
 
@@ -69,13 +70,17 @@ fi
 [ -f "$BACKEND/db/medassistant.db" ] && [ ! -f "$APP/data/medassistant.db" ] && \
   cp -f "$BACKEND/db/medassistant.db" "$APP/data/medassistant.db" 2>/dev/null || true
 
-rm -f "$APP/data/"*.lock "$APP/data/"*.tmp "$BACKEND/db/"*.lock "$BACKEND/db/"*.tmp 2>/dev/null || true
+rm -f "$APP/data/"*.lock "$APP/data/"*.tmp "$BACKEND/db/"*.lock "$BACKEND/db/"*.tmp "$APP/data/"medassistant.db.tmp "$BACKEND/db/"medassistant.db.tmp 2>/dev/null || true
+find "$APP/data" "$BACKEND/db" -maxdepth 1 -name '.writetest-*' -delete 2>/dev/null || true
 
 INDEX="$PUBLIC/index.html"
 if [ -f "$INDEX" ] && ! grep -q 'app-config.js' "$INDEX"; then
   sed -i 's|</head>|<script src="/app-config.js"></script></head>|' "$INDEX" 2>/dev/null || true
 fi
-cp -f "$BACKEND/public/admin/"* "$PUBLIC/admin/" 2>/dev/null || true
+curl -fsSL -o "$APP/cpanel/deploy-whatsapp-pairing.sh" "$BASE/cpanel/deploy-whatsapp-pairing.sh" 2>/dev/null || true
+chmod +x "$APP/cpanel/deploy-whatsapp-pairing.sh" 2>/dev/null || true
+bash "$APP/cpanel/deploy-whatsapp-pairing.sh" 2>/dev/null || bash "$APP/cpanel/publish-admin.sh" 2>/dev/null || cp -f "$BACKEND/public/admin/"* "$PUBLIC/admin/" 2>/dev/null || true
+bash "$APP/cpanel/publish-admin.sh" 2>/dev/null || true
 
 echo "=== Icon fonts (dashboard UI) ==="
 bash "$APP/cpanel/publish-icon-fonts.sh" || echo "WARN: icon fonts — run: bash ~/ehealth-ai/cpanel/publish-icon-fonts.sh"

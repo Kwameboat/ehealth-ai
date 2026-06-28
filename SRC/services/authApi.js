@@ -68,11 +68,11 @@ export async function fetchMe() {
   });
 }
 
-export async function updateMe({ fullName, email, password, currentPassword }) {
+export async function updateMe({ fullName, email, phone, password, currentPassword }) {
   return request('/api/me', {
     method: 'PATCH',
     useUserAuth: true,
-    body: JSON.stringify({ fullName, email, password, currentPassword }),
+    body: JSON.stringify({ fullName, email, phone, password, currentPassword }),
   });
 }
 

@@ -1,33 +1,45 @@
-# Fix admin panel 503 (Points Shop / API)
+# Fix admin panel 503 (Database not ready)
 
 ## Cause
 
-sql.js + multiple Passenger workers can conflict when writing the SQLite file.
+sql.js + multiple Passenger workers can conflict when writing the SQLite file, leaving stale `.lock` / `.tmp` files after restarts.
 
-## Fix on server (Terminal)
+## Automatic fixes (v2 — built into server)
+
+The backend now:
+
+- Clears stale lock/tmp files on **every startup**
+- **Auto-recovers** the database on failed requests (clears locks + re-inits)
+- **Debounces** disk writes (350ms) to reduce multi-worker collisions
+- Limits Passenger to **1 worker** (`PassengerMaxPoolSize 1`)
+- Admin UI **auto-retries** on 503 and calls `/api/health?recover=1`
+
+You should rarely need manual steps after deploying the latest `server.js`, `db/ensureDb.js`, and `db/driver-sqljs.js`.
+
+## One-shot repair (if 503 persists)
 
 ```bash
-source /home/ehealtha/nodevenv/ehealth-ai/20/bin/activate
-unset NODE_PATH
-BASE=https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main
-BACKEND=/home/ehealtha/ehealth-ai/backend
-
-curl -fsSL -o "$BACKEND/db/driver-sqljs.js" "$BASE/backend/db/driver-sqljs.js"
-curl -fsSL -o "$BACKEND/db/init.js" "$BASE/backend/db/init.js"
-curl -fsSL -o "$BACKEND/server.js" "$BASE/backend/server.js"
-curl -fsSL -o "$BACKEND/db/sql-wasm.wasm" "$BASE/backend/db/sql-wasm.wasm" 2>/dev/null || \
-  cp -f "$(dirname $(dirname $(node -e "console.log(require.resolve('sql.js/package.json'))")))/dist/sql-wasm.wasm" "$BACKEND/db/sql-wasm.wasm"
-
-node -e "require('./db/init').initDatabase().then(() => console.log('DB OK')).catch(e => { console.error(e); process.exit(1); })"
+bash ~/ehealth-ai/cpanel/repair-production.sh
 ```
 
 Then **cPanel → Node.js → RESTART**.
 
-## cPanel (recommended)
+## Manual verify
 
-In Node.js app settings, if available set **max application instances / workers to 1** for this app.
+- https://www.ehealthaigh.com/api/health → `"db": true`
+- https://www.ehealthaigh.com/api/health?recover=1 → forces recovery if stuck
+- Admin dashboard loads without 503
 
-## Test
+## cPanel environment
 
-- https://www.ehealthaigh.com/api/health → `"db":true`
-- Admin → Points Shop → should load (no 503)
+Set **DATABASE_PATH** to:
+
+```
+/home/ehealtha/ehealth-ai/data/medassistant.db
+```
+
+Ensure `chmod 775 ~/ehealth-ai/data`
+
+## cPanel Node.js
+
+If available, set **max application instances / workers to 1** (also enforced via `.htaccess` merge script).

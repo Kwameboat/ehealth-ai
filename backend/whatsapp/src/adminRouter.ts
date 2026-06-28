@@ -1,7 +1,8 @@
 import { Router, type Request, type Response } from 'express';
 import type { WhatsAppDeps } from './deps';
 import { getWhatsAppConfig, updateWhatsAppConfig } from './config';
-import { fetchConnectionState, findEvolutionWebhook, setEvolutionWebhook, createEvolutionInstance, connectEvolutionInstance, logoutEvolutionInstance, fetchInstanceInfo } from './evolution';
+import { fetchConnectionState, findEvolutionWebhook, setEvolutionWebhook, createEvolutionInstance, fetchEvolutionQrWithRetry, fetchEvolutionPairingWithRetry, logoutEvolutionInstance, fetchInstanceInfo } from './evolution';
+import { normalizePhone } from './phone';
 import { listWhatsAppLogs } from './logs';
 import { broadcastMessage } from './processor';
 
@@ -139,20 +140,77 @@ export function createAdminRouter(deps: WhatsAppDeps): Router {
         res.status(400).json({ error: { message: 'Save Evolution URL, API key, and instance name first' } });
         return;
       }
-      const result = await createEvolutionInstance(config);
+      let result = await createEvolutionInstance(config);
       if (!result.ok) {
         res.status(502).json({ error: { message: result.error || 'Create instance failed' } });
         return;
+      }
+      if (!result.qrBase64 && !result.qrCode && !result.pairingCode) {
+        const retry = await fetchEvolutionQrWithRetry(config);
+        if (retry.qrBase64 || retry.qrCode || retry.pairingCode) {
+          result = { ...result, ...retry };
+        }
       }
       res.json({
         success: true,
         created: result.created ?? false,
         qrBase64: result.qrBase64 || null,
+        qrCode: result.qrCode || null,
         pairingCode: result.pairingCode || null,
         state: result.state || 'connecting',
       });
     } catch (err: unknown) {
       res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Create instance failed' } });
+    }
+  });
+
+  router.post('/connection/pair', async (req: Request, res: Response) => {
+    try {
+      const config = getWhatsAppConfig(deps);
+      if (!config.baseUrl || !config.apiKey || !config.instanceName) {
+        res.status(400).json({ error: { message: 'Save Evolution URL, API key, and instance name first' } });
+        return;
+      }
+
+      const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : '';
+      if (!phone) {
+        res.status(400).json({ error: { message: 'WhatsApp phone number is required' } });
+        return;
+      }
+
+      const connection = await fetchConnectionState(config);
+      if (String(connection.state || '').toLowerCase() === 'open') {
+        res.json({
+          success: true,
+          state: 'open',
+          phone: connection.phone || normalizePhone(phone),
+          pairingCode: null,
+        });
+        return;
+      }
+
+      const pairResult = await fetchEvolutionPairingWithRetry(config, phone);
+      if (!pairResult.ok || !pairResult.pairingCode) {
+        res.status(502).json({
+          error: {
+            message: pairResult.error || 'Could not get WhatsApp link code from Evolution',
+            hint: 'Use Ghana format 0501234567 or 233501234567. Confirm Evolution API key and instance name.',
+          },
+        });
+        return;
+      }
+
+      const after = await fetchConnectionState(config);
+      res.json({
+        success: true,
+        pairingCode: pairResult.pairingCode,
+        linkPhone: pairResult.phone || normalizePhone(phone),
+        state: after.state || pairResult.state || 'connecting',
+        phone: after.phone || null,
+        message: 'Enter this code in WhatsApp within 60 seconds',
+      });
+    } catch (err: unknown) {
+      res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Pair failed' } });
     }
   });
 
@@ -166,6 +224,7 @@ export function createAdminRouter(deps: WhatsAppDeps): Router {
 
       const phone = typeof req.body?.phone === 'string' ? req.body.phone.trim() : undefined;
       const forceRefresh = req.body?.forceRefresh === true;
+      const mode = req.body?.mode === 'pair' ? 'pair' : 'qr';
       const connection = await fetchConnectionState(config);
       const state = String(connection.state || 'close').toLowerCase();
 
@@ -180,38 +239,58 @@ export function createAdminRouter(deps: WhatsAppDeps): Router {
         return;
       }
 
-      if (state === 'connecting' && !forceRefresh) {
+      if (forceRefresh && state === 'connecting') {
+        await logoutEvolutionInstance(config);
+      }
+
+      if (mode === 'pair') {
+        if (!phone) {
+          res.status(400).json({ error: { message: 'Enter your WhatsApp phone number to get a link code' } });
+          return;
+        }
+        const pairResult = await fetchEvolutionPairingWithRetry(config, phone);
+        if (!pairResult.ok) {
+          res.status(502).json({ error: { message: pairResult.error || 'Link code request failed' } });
+          return;
+        }
+        const after = await fetchConnectionState(config);
         res.json({
           success: true,
-          state: 'connecting',
-          phone: connection.phone || null,
+          mode: 'pair',
+          pairingCode: pairResult.pairingCode || null,
           qrBase64: null,
-          pairingInProgress: true,
-          message: 'Phone is pairing — wait up to 2 minutes. Do not refresh the QR.',
+          qrCode: null,
+          linkPhone: pairResult.phone || normalizePhone(phone),
+          state: after.state || pairResult.state || 'connecting',
+          phone: after.phone || null,
+          pairingInProgress: !pairResult.pairingCode,
+          message: pairResult.pairingCode
+            ? 'Enter this code in WhatsApp within 60 seconds'
+            : pairResult.error || null,
         });
         return;
       }
 
-      let result = await connectEvolutionInstance(config, phone);
-      if (!result.ok && !phone) {
-        const info = await fetchInstanceInfo(config);
-        if (!info.exists) {
-          result = await createEvolutionInstance(config);
-        }
-      }
+      const result = await fetchEvolutionQrWithRetry(config, phone);
       if (!result.ok) {
         res.status(502).json({ error: { message: result.error || 'Connect failed' } });
         return;
       }
 
       const after = await fetchConnectionState(config);
+      const hasQr = !!(result.qrBase64 || result.qrCode);
       res.json({
         success: true,
         qrBase64: result.qrBase64 || null,
+        qrCode: result.qrCode || null,
         pairingCode: result.pairingCode || null,
         state: after.state || result.state || 'connecting',
         phone: after.phone || null,
-        pairingInProgress: String(after.state || result.state || '').toLowerCase() === 'connecting',
+        pairingInProgress: !hasQr && String(after.state || result.state || '').toLowerCase() === 'connecting',
+        message: hasQr
+          ? null
+          : result.error ||
+            'No QR from Evolution yet — verify instance name and API key (CloudStation instance Token).',
       });
     } catch (err: unknown) {
       res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Connect failed' } });
@@ -275,7 +354,15 @@ export function createAdminRouter(deps: WhatsAppDeps): Router {
         return;
       }
       const result = await broadcastMessage(deps, config, message.trim());
-      res.json({ success: true, ...result });
+      const broadcastId = deps.uuid();
+      deps
+        .getDb()
+        .prepare(
+          `INSERT INTO health_broadcasts (id, title, message, recipient_count, created_at)
+           VALUES (?, ?, ?, ?, ?)`
+        )
+        .run(broadcastId, 'Health alert', message.trim(), result.sent, deps.now());
+      res.json({ success: true, broadcastId, ...result });
     } catch (err: unknown) {
       res.status(500).json({ error: { message: err instanceof Error ? err.message : 'Broadcast failed' } });
     }

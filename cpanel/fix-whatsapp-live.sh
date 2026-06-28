@@ -48,14 +48,15 @@ if (typeof m.createWhatsAppRouters !== 'function') throw new Error('createWhatsA
 console.log('WhatsApp module OK');
 "
 
-curl -fsSL -o "$BACKEND/public/admin/whatsapp-admin.js" "$BASE/backend/public/admin/whatsapp-admin.js"
-curl -fsSL -o "$BACKEND/public/admin/styles.css" "$BASE/backend/public/admin/styles.css"
-curl -fsSL -o "$BACKEND/public/admin/index.html" "$BASE/backend/public/admin/index.html"
-curl -fsSL -o "$BACKEND/public/admin/app.js" "$BASE/backend/public/admin/app.js"
-cp -f "$BACKEND/public/admin/whatsapp-admin.js" "$PUBLIC/admin/" 2>/dev/null || true
-cp -f "$BACKEND/public/admin/styles.css" "$PUBLIC/admin/" 2>/dev/null || true
-cp -f "$BACKEND/public/admin/index.html" "$PUBLIC/admin/" 2>/dev/null || true
-cp -f "$BACKEND/public/admin/app.js" "$PUBLIC/admin/" 2>/dev/null || true
+curl -fsSL -o "$APP/cpanel/deploy-whatsapp-pairing.sh" "$BASE/cpanel/deploy-whatsapp-pairing.sh" 2>/dev/null || true
+chmod +x "$APP/cpanel/deploy-whatsapp-pairing.sh" 2>/dev/null || true
+bash "$APP/cpanel/deploy-whatsapp-pairing.sh" 2>/dev/null || {
+  curl -fsSL -o "$BACKEND/public/admin/whatsapp-connect.js" "$BASE/backend/public/admin/whatsapp-connect.js" 2>/dev/null || \
+    cp -f "$BACKEND/public/admin/whatsapp-admin.js" "$BACKEND/public/admin/whatsapp-connect.js" 2>/dev/null || true
+  curl -fsSL -o "$BACKEND/public/admin/index.html" "$BASE/backend/public/admin/index.html" 2>/dev/null || true
+  curl -fsSL -o "$BACKEND/public/admin/styles.css" "$BASE/backend/public/admin/styles.css" 2>/dev/null || true
+  bash "$APP/cpanel/publish-admin.sh" 2>/dev/null || cp -f "$BACKEND/public/admin/"* "$PUBLIC/admin/" 2>/dev/null || true
+}
 
 echo ""
 echo "=== DONE ==="

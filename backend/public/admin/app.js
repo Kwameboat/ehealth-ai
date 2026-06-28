@@ -14,6 +14,7 @@ const PAGE_TITLES = {
   system: 'System Status',
   packages: 'Points Shop — Pricing',
   whatsapp: 'WhatsApp Management',
+  doctors: 'Doctor Management',
   settings: 'Settings & API Keys',
 };
 
@@ -31,7 +32,17 @@ function clearSession() {
   localStorage.removeItem(ADMIN_KEY);
 }
 
-async function api(path, options = {}) {
+async function tryRecoverDb() {
+  try {
+    const res = await fetch('/api/health?recover=1', { cache: 'no-store' });
+    const data = await res.json().catch(() => ({}));
+    return res.ok && data.db === true;
+  } catch {
+    return false;
+  }
+}
+
+async function api(path, options = {}, attempt = 0) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -39,6 +50,9 @@ async function api(path, options = {}) {
   try {
     res = await fetch(`${API}${path}`, { ...options, headers });
   } catch {
+    if (attempt < 2 && (await tryRecoverDb())) {
+      return api(path, options, attempt + 1);
+    }
     throw new Error('Failed to fetch');
   }
   const isJson = (res.headers.get('content-type') || '').includes('application/json');
@@ -49,15 +63,21 @@ async function api(path, options = {}) {
     throw new Error('Session expired');
   }
   if (!res.ok) {
+    if (res.status === 503 && attempt < 2 && path !== '/login') {
+      if (await tryRecoverDb()) {
+        return api(path, options, attempt + 1);
+      }
+    }
     if (res.status === 404) {
       throw new Error(
         'API not found (404). cPanel → Setup Node.js App → RESTART, then test /api/health in the browser.'
       );
     }
-    const detail = data?.error?.detail || data?.error?.wasm;
+    const detail = data?.error?.detail || data?.error?.wasm || data?.error;
+    const hint = data?.error?.hint || data?.hint;
     const fix = data?.error?.fix;
     const base = data?.error?.message || `Request failed (${res.status})`;
-    throw new Error([base, detail, fix].filter(Boolean).join(' — '));
+    throw new Error([base, typeof detail === 'string' ? detail : null, hint, fix].filter(Boolean).join(' — '));
   }
   return data;
 }
@@ -89,6 +109,7 @@ function showPage(name) {
     system: loadSystem,
     packages: loadPackages,
     whatsapp: () => (typeof loadWhatsApp === 'function' ? loadWhatsApp() : undefined),
+    doctors: loadDoctors,
     settings: loadSettings,
   };
   if (loaders[name]) loaders[name]();
@@ -113,10 +134,10 @@ function escapeHtml(s) {
 
 function showPageError(el, err, retry) {
   const msg = escapeHtml(err.message || 'Request failed');
-  const hint =
-    msg.includes('Database not ready') || msg.includes('503')
-      ? '<p class="muted">Terminal: <code>rm -f ~/ehealth-ai/backend/db/*.lock</code> then cPanel → Node.js → RESTART.</p>'
-      : '<p class="muted">cPanel → Node.js → RESTART, then check <a href="/api/health" target="_blank">/api/health</a>.</p>';
+  const isDb = msg.includes('Database not ready') || msg.includes('503') || msg.includes('Cannot write database');
+  const hint = isDb
+    ? '<p class="muted">The server is attempting automatic database recovery. Click <strong>Retry</strong> or wait a moment.<br>If this persists: <code>bash ~/ehealth-ai/cpanel/repair-production.sh</code> then cPanel → Node.js → RESTART.</p>'
+    : '<p class="muted">cPanel → Node.js → RESTART, then check <a href="/api/health?recover=1" target="_blank">/api/health?recover=1</a>.</p>';
   el.innerHTML = `<motion class="panel"><p class="error-msg">${msg}</p>${hint}<button type="button" class="btn btn-primary btn-sm page-retry">Retry</button></div>`.replace(
     '<motion class',
     '<div class'
@@ -808,6 +829,129 @@ document.getElementById('emergency-btn').onclick = async () => {
 };
 
 document.getElementById('fab-btn').onclick = () => showPage('users');
+
+async function loadDoctors() {
+  const el = document.getElementById('page-doctors');
+  try {
+    const [docRes, consultRes] = await Promise.all([api('/doctors'), api('/consultations')]);
+    const doctors = docRes.doctors || [];
+    const consultations = consultRes.consultations || [];
+    el.innerHTML = `
+      <div class="page-header-row">
+        <div>
+          <h2 class="page-heading">Doctor Management</h2>
+          <p class="muted">Add doctors for video consultation booking in the PWA</p>
+        </div>
+        <button type="button" class="btn btn-primary" id="doc-add-btn">Add doctor</button>
+      </div>
+      <div class="table-wrap" style="margin-bottom:24px">
+        <table class="data-table">
+          <thead><tr><th>Name</th><th>Specialty</th><th>Hospital</th><th>Points</th><th>Active</th><th></th></tr></thead>
+          <tbody>
+            ${doctors.map((d) => `
+              <tr>
+                <td><strong>${escapeHtml(d.fullName)}</strong></td>
+                <td>${escapeHtml(d.specialty)}</td>
+                <td>${escapeHtml(d.hospitalAffiliation || '—')}</td>
+                <td>${d.pointsCost}</td>
+                <td>${d.isActive ? '✓' : '—'}</td>
+                <td>
+                  <button type="button" class="panel-link doc-edit" data-id="${d.id}">Edit</button>
+                  ${d.isActive ? `<button type="button" class="panel-link doc-del" data-id="${d.id}">Deactivate</button>` : ''}
+                </td>
+              </tr>
+            `).join('') || '<tr><td colspan="6">No doctors — click Add doctor</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+      <h3 style="margin-bottom:12px">Recent consultations</h3>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>When</th><th>Patient</th><th>Doctor</th><th>Status</th></tr></thead>
+          <tbody>
+            ${consultations.slice(0, 20).map((c) => `
+              <tr>
+                <td>${escapeHtml(String(c.scheduled_at || '').slice(0, 16).replace('T', ' '))}</td>
+                <td>${escapeHtml(c.patient_name || c.email || '—')}</td>
+                <td>${escapeHtml(c.doctor_name || '—')}</td>
+                <td>${escapeHtml(c.status || '—')}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="4">No bookings yet</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    document.getElementById('doc-add-btn')?.addEventListener('click', () => {
+      openModal('Add doctor', `
+        <label class="field-label">Full name<input id="doc-name" /></label>
+        <label class="field-label">Specialty<input id="doc-spec" placeholder="General Practice" /></label>
+        <label class="field-label">Hospital<input id="doc-hospital" /></label>
+        <label class="field-label">Bio<textarea id="doc-bio" rows="3"></textarea></label>
+        <label class="field-label">Video room slug<input id="doc-slug" placeholder="ehealth-consult" /></label>
+        <label class="field-label">Custom meet URL (optional)<input id="doc-meet" placeholder="https://meet.jit.si/..." /></label>
+        <label class="field-label">Points cost<input id="doc-points" type="number" value="15" /></label>
+        <label class="field-label">Fee (pesewas/kobo)<input id="doc-fee" type="number" value="5000" /></label>
+      `, async () => {
+        await api('/doctors', {
+          method: 'POST',
+          body: JSON.stringify({
+            fullName: document.getElementById('doc-name').value.trim(),
+            specialty: document.getElementById('doc-spec').value.trim(),
+            hospitalAffiliation: document.getElementById('doc-hospital').value.trim() || undefined,
+            bio: document.getElementById('doc-bio').value.trim() || undefined,
+            videoRoomSlug: document.getElementById('doc-slug').value.trim() || undefined,
+            meetUrl: document.getElementById('doc-meet').value.trim() || undefined,
+            pointsCost: Number(document.getElementById('doc-points').value) || 15,
+            consultationFeeKobo: Number(document.getElementById('doc-fee').value) || 5000,
+          }),
+        });
+        closeModal();
+        loadDoctors();
+      }, 'Create');
+    });
+
+    el.querySelectorAll('.doc-edit').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const d = doctors.find((x) => x.id === id);
+        if (!d) return;
+        openModal('Edit doctor', `
+          <label class="field-label">Full name<input id="doc-name" value="${escapeHtml(d.fullName)}" /></label>
+          <label class="field-label">Specialty<input id="doc-spec" value="${escapeHtml(d.specialty)}" /></label>
+          <label class="field-label">Hospital<input id="doc-hospital" value="${escapeHtml(d.hospitalAffiliation || '')}" /></label>
+          <label class="field-label">Bio<textarea id="doc-bio" rows="3">${escapeHtml(d.bio || '')}</textarea></label>
+          <label class="field-label">Meet URL<input id="doc-meet" value="${escapeHtml(d.meetUrl || '')}" /></label>
+          <label class="field-label">Points cost<input id="doc-points" type="number" value="${d.pointsCost}" /></label>
+        `, async () => {
+          await api(`/doctors/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+              fullName: document.getElementById('doc-name').value.trim(),
+              specialty: document.getElementById('doc-spec').value.trim(),
+              hospitalAffiliation: document.getElementById('doc-hospital').value.trim() || undefined,
+              bio: document.getElementById('doc-bio').value.trim() || undefined,
+              meetUrl: document.getElementById('doc-meet').value.trim() || undefined,
+              pointsCost: Number(document.getElementById('doc-points').value) || 15,
+            }),
+          });
+          closeModal();
+          loadDoctors();
+        });
+      });
+    });
+
+    el.querySelectorAll('.doc-del').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Deactivate this doctor?')) return;
+        await api(`/doctors/${btn.dataset.id}`, { method: 'DELETE' });
+        loadDoctors();
+      });
+    });
+  } catch (err) {
+    el.innerHTML = `<div class="wa-alert"><strong>Error</strong><br>${escapeHtml(err.message)}</div>`;
+  }
+}
 
 document.getElementById('modal-cancel').onclick = closeModal;
 document.querySelector('.modal-backdrop').onclick = closeModal;

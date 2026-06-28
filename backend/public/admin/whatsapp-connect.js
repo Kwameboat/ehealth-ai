@@ -395,7 +395,7 @@ async function loadWhatsApp() {
           ${waConnectionPill(status.enabled, conn.ok, conn.state)}
         </div>
 
-        ${conn.error ? `<div class="wa-alert"><span class="wa-alert-icon">⚠</span><div><strong>Connection issue</strong><br>${conn.error}${String(conn.error).includes('401') ? '<p style="margin-top:10px;font-size:0.85rem">Fix: In <strong>Evolution API key</strong>, paste the instance <strong>Token</strong> from CloudStation (e.g. 6BBEE79E-…) or your CloudStation <strong>global API key</strong>. Then Save and Refresh.</p>' : ''}</div></div>` : ''}
+        ${conn.error ? `<div class="wa-alert"><span class="wa-alert-icon">⚠</span><div><strong>Connection issue</strong><br>${conn.error}${String(conn.error).includes('401') ? '<p style="margin-top:10px;font-size:0.85rem">Fix: In <strong>Evolution API key</strong>, paste the instance <strong>Token</strong> from CloudStation (e.g. 6BBEE79E-…) or your CloudStation <strong>global API key</strong>. Then Save and Refresh.</p>' : ''}${/not found/i.test(String(conn.error)) ? '<p style="margin-top:10px;font-size:0.85rem">Fix: In <strong>Configuration</strong> below, set <strong>Instance name</strong> to match Evolution Manager exactly (e.g. <code>agyenim-assistant</code>) and paste that instance&apos;s API token. Save → Refresh status.</p>' : ''}</div></div>` : ''}
 
         <div class="wa-metrics">
           <div class="metric-card">
@@ -478,7 +478,7 @@ async function loadWhatsApp() {
                 </div>
                 <div class="wa-field">
                   <label for="wa-instance">Instance name</label>
-                  <input type="text" id="wa-instance" placeholder="ehealth-ai" />
+                  <input type="text" id="wa-instance" placeholder="agyenim-assistant" />
                 </div>
                 <div class="wa-field">
                   <label for="wa-api-key">Evolution API key</label>

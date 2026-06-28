@@ -1,15 +1,18 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.fetchConnectionState = fetchConnectionState;
 exports.fetchInstanceInfo = fetchInstanceInfo;
 exports.createEvolutionInstance = createEvolutionInstance;
 exports.connectEvolutionInstance = connectEvolutionInstance;
+exports.fetchEvolutionQrWithRetry = fetchEvolutionQrWithRetry;
+exports.fetchEvolutionPairingWithRetry = fetchEvolutionPairingWithRetry;
 exports.logoutEvolutionInstance = logoutEvolutionInstance;
+exports.fetchConnectionState = fetchConnectionState;
 exports.findEvolutionWebhook = findEvolutionWebhook;
 exports.setEvolutionWebhook = setEvolutionWebhook;
 exports.sendTextMessage = sendTextMessage;
 exports.fetchMediaBase64 = fetchMediaBase64;
 const httpClient_1 = require("./httpClient");
+const phone_1 = require("./phone");
 function requireEvolutionConfig(config) {
     if (!config.baseUrl || !config.apiKey || !config.instanceName) {
         return 'Evolution API URL, key, or instance name not configured';
@@ -22,22 +25,135 @@ function extractPhoneFromJid(jid) {
     const digits = jid.split('@')[0]?.replace(/\D/g, '');
     return digits || undefined;
 }
-function parseConnectPayload(data) {
-    const qrcode = data.qrcode;
-    const instance = data.instance;
-    const base64 = (typeof data.base64 === 'string' && data.base64) ||
-        (typeof qrcode?.base64 === 'string' && qrcode.base64) ||
-        (typeof data.qr === 'string' && data.qr) ||
+function unwrapEvolutionPayload(data) {
+    const nested = data.data;
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+        return { ...data, ...nested };
+    }
+    const response = data.response;
+    if (response && typeof response === 'object' && !Array.isArray(response)) {
+        return { ...data, ...response };
+    }
+    return data;
+}
+function looksLikePairingCode(value) {
+    const v = value.trim();
+    if (/^[A-Z0-9]{4}-[A-Z0-9]{4}$/i.test(v))
+        return true;
+    const clean = v.replace(/\W/g, '');
+    if (/^[A-Z0-9]{8}$/i.test(clean))
+        return true;
+    if (/^\d{8}$/.test(clean))
+        return true;
+    return false;
+}
+function formatPairingCode(value) {
+    const clean = value.replace(/\W/g, '').toUpperCase();
+    if (clean.length === 8)
+        return `${clean.slice(0, 4)}-${clean.slice(4)}`;
+    return value.trim().toUpperCase();
+}
+function asPairingString(value) {
+    if (value === null || value === undefined)
+        return undefined;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return formatPairingCode(String(Math.trunc(value)).padStart(8, '0'));
+    }
+    if (typeof value === 'string' && looksLikePairingCode(value)) {
+        return formatPairingCode(value);
+    }
+    return undefined;
+}
+function extractPairingCode(root, qrcode) {
+    const candidates = [
+        root.pairingCode,
+        root.linkCode,
+        root.pairing_code,
+        root.pin,
+        root.connectionCode,
+        typeof qrcode === 'object' && qrcode ? qrcode.pairingCode : undefined,
+        typeof qrcode === 'object' && qrcode ? qrcode.linkCode : undefined,
+        typeof qrcode === 'object' && qrcode ? qrcode.code : undefined,
+    ];
+    if (typeof root.code === 'string' && looksLikePairingCode(root.code)) {
+        candidates.push(root.code);
+    }
+    for (const c of candidates) {
+        const formatted = asPairingString(c);
+        if (formatted)
+            return formatted;
+    }
+    return undefined;
+}
+function deepFindPairingCode(value, depth = 0) {
+    if (depth > 8 || value === null || value === undefined)
+        return undefined;
+    if (typeof value === 'string' || typeof value === 'number') {
+        return asPairingString(value);
+    }
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            const found = deepFindPairingCode(item, depth + 1);
+            if (found)
+                return found;
+        }
+        return undefined;
+    }
+    if (typeof value === 'object') {
+        const obj = value;
+        for (const [key, val] of Object.entries(obj)) {
+            if (/pair|link|pin|code/i.test(key)) {
+                const formatted = asPairingString(val);
+                if (formatted)
+                    return formatted;
+            }
+        }
+        for (const val of Object.values(obj)) {
+            const found = deepFindPairingCode(val, depth + 1);
+            if (found)
+                return found;
+        }
+    }
+    return undefined;
+}
+function looksLikeWhatsAppQrCode(value) {
+    return value.startsWith('2@') || value.length > 40;
+}
+async function qrDataUrlFromCode(rawCode) {
+    try {
+        // Lazy load — optional on cPanel when install-backend-deps.sh omits qrcode
+        const QRCode = require('qrcode');
+        return await QRCode.toDataURL(rawCode, { width: 280, margin: 1 });
+    }
+    catch {
+        return undefined;
+    }
+}
+async function parseConnectPayload(data) {
+    const root = unwrapEvolutionPayload(data);
+    const qrcode = root.qrcode;
+    const instance = root.instance;
+    let base64 = (typeof root.base64 === 'string' && root.base64) ||
+        (typeof root.base64Image === 'string' && root.base64Image) ||
+        (typeof qrcode === 'object' && qrcode && typeof qrcode.base64 === 'string' && qrcode.base64) ||
+        (typeof qrcode === 'object' && qrcode && typeof qrcode.base64Image === 'string' && qrcode.base64Image) ||
+        (typeof root.qr === 'string' && root.qr) ||
         undefined;
-    const pairingCode = (typeof data.pairingCode === 'string' && data.pairingCode) ||
-        (typeof data.code === 'string' && data.code) ||
+    const rawCode = (typeof root.code === 'string' && looksLikeWhatsAppQrCode(root.code) && root.code) ||
+        (typeof qrcode === 'object' && qrcode && typeof qrcode.code === 'string' && qrcode.code) ||
+        (typeof qrcode === 'string' && qrcode) ||
         undefined;
+    if (!base64 && rawCode) {
+        base64 = await qrDataUrlFromCode(rawCode);
+    }
+    const pairingCode = extractPairingCode(root, qrcode) || deepFindPairingCode(root);
     const state = (typeof instance?.status === 'string' && instance.status) ||
         (typeof instance?.state === 'string' && instance.state) ||
-        (typeof data.state === 'string' && data.state) ||
+        (typeof root.state === 'string' && root.state) ||
         undefined;
     return {
         qrBase64: base64 ? normalizeQrBase64(base64) : undefined,
+        qrCode: rawCode,
         pairingCode,
         state,
     };
@@ -46,6 +162,32 @@ function normalizeQrBase64(value) {
     if (value.startsWith('data:image'))
         return value;
     return `data:image/png;base64,${value.replace(/^data:image\/[a-z]+;base64,/, '')}`;
+}
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+async function requestEvolutionConnect(config, method, phone) {
+    const digits = phone ? (0, phone_1.normalizePhone)(phone) : undefined;
+    const path = `/instance/connect/${encodeURIComponent(config.instanceName)}`;
+    if (method === 'GET') {
+        const query = digits ? `?number=${encodeURIComponent(digits)}` : '';
+        const res = await (0, httpClient_1.evolutionRequest)(config, `${path}${query}`);
+        return res.ok ? { ok: true, data: res.data } : { ok: false, data: res.data, error: res.error };
+    }
+    const res = await (0, httpClient_1.evolutionRequest)(config, path, {
+        method: 'POST',
+        body: digits
+            ? {
+                number: digits,
+                instanceName: config.instanceName,
+                phoneNumber: digits,
+            }
+            : {},
+    });
+    return res.ok ? { ok: true, data: res.data } : { ok: false, data: res.data, error: res.error };
+}
+function hasQrPayload(parsed) {
+    return !!(parsed.qrBase64 || parsed.qrCode || parsed.pairingCode);
 }
 function parseInstanceRow(row) {
     const instance = row.instance || row;
@@ -97,39 +239,167 @@ async function fetchInstanceInfo(config) {
     const parsed = parseInstanceRow(list[0]);
     return { ok: true, exists: true, ...parsed };
 }
-async function createEvolutionInstance(config) {
+async function createEvolutionInstance(config, phone) {
     const missing = requireEvolutionConfig(config);
     if (missing)
         return { ok: false, error: missing };
+    const digits = phone ? (0, phone_1.normalizePhone)(phone) : undefined;
     const res = await (0, httpClient_1.evolutionRequest)(config, '/instance/create', {
         method: 'POST',
         body: {
             instanceName: config.instanceName,
             integration: 'WHATSAPP-BAILEYS',
             qrcode: true,
+            ...(digits ? { number: digits } : {}),
         },
     });
     if (!res.ok) {
         const msg = (res.error || '').toLowerCase();
         if (msg.includes('already') || msg.includes('exist')) {
-            return connectEvolutionInstance(config);
+            return connectEvolutionInstance(config, phone);
         }
         return { ok: false, error: res.error || 'Instance creation failed' };
     }
-    const parsed = parseConnectPayload(res.data);
+    const parsed = await parseConnectPayload(res.data);
     return { ok: true, created: true, ...parsed };
 }
 async function connectEvolutionInstance(config, phone) {
     const missing = requireEvolutionConfig(config);
     if (missing)
         return { ok: false, error: missing };
-    const digits = phone?.replace(/\D/g, '');
-    const query = digits ? `?number=${encodeURIComponent(digits)}` : '';
-    const res = await (0, httpClient_1.evolutionRequest)(config, `/instance/connect/${encodeURIComponent(config.instanceName)}${query}`);
-    if (!res.ok)
-        return { ok: false, error: res.error || 'Connect failed' };
-    const parsed = parseConnectPayload(res.data);
-    return { ok: true, ...parsed };
+    let lastError;
+    let best = {};
+    for (const method of ['GET', 'POST']) {
+        const res = await requestEvolutionConnect(config, method, phone);
+        if (!res.ok) {
+            lastError = res.error;
+            continue;
+        }
+        const parsed = await parseConnectPayload(res.data);
+        if (hasQrPayload(parsed))
+            return { ok: true, ...parsed };
+        best = parsed;
+    }
+    if (best.qrBase64 || best.qrCode || best.pairingCode || best.state) {
+        return { ok: true, ...best };
+    }
+    return { ok: false, error: lastError || 'Connect failed — Evolution returned no QR code' };
+}
+async function fetchEvolutionQrWithRetry(config, phone, opts = {}) {
+    const maxAttempts = opts.maxAttempts ?? 8;
+    const delayMs = opts.delayMs ?? 1500;
+    let lastError;
+    let lastState;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        let result = await connectEvolutionInstance(config, phone);
+        if (!result.ok && !phone) {
+            const info = await fetchInstanceInfo(config);
+            if (!info.exists) {
+                const created = await createEvolutionInstance(config);
+                if (created.ok) {
+                    if (hasQrPayload(created))
+                        return created;
+                    result = created;
+                }
+                else {
+                    lastError = created.error;
+                }
+            }
+        }
+        if (result.ok) {
+            lastState = result.state;
+            if (hasQrPayload(result))
+                return result;
+            lastError = result.error;
+        }
+        else {
+            lastError = result.error;
+        }
+        if (phone)
+            break;
+        if (attempt < maxAttempts - 1)
+            await sleep(delayMs);
+    }
+    return {
+        ok: true,
+        state: lastState || 'connecting',
+        error: lastError || 'Evolution did not return a QR code — check API key and instance name',
+    };
+}
+async function fetchEvolutionPairingWithRetry(config, phone, opts = {}) {
+    const missing = requireEvolutionConfig(config);
+    if (missing)
+        return { ok: false, error: missing };
+    const digits = (0, phone_1.normalizePhone)(phone);
+    if (!digits || digits.length < 11) {
+        return {
+            ok: false,
+            error: 'Enter a valid Ghana number (e.g. 0501234567 or 233501234567)',
+        };
+    }
+    const maxAttempts = opts.maxAttempts ?? 8;
+    const delayMs = opts.delayMs ?? 2000;
+    let lastError;
+    const conn = await fetchConnectionState(config);
+    const connState = String(conn.state || 'close').toLowerCase();
+    if (connState === 'connecting') {
+        await logoutEvolutionInstance(config);
+        await sleep(1500);
+    }
+    const info = await fetchInstanceInfo(config);
+    if (!info.exists) {
+        const created = await createEvolutionInstance(config, digits);
+        if (created.ok && created.pairingCode) {
+            return { ok: true, pairingCode: created.pairingCode, state: created.state, phone: digits };
+        }
+        if (!created.ok)
+            lastError = created.error;
+        await sleep(1000);
+    }
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        const method = attempt < 5 ? 'GET' : 'POST';
+        const res = await requestEvolutionConnect(config, method, digits);
+        if (res.ok) {
+            const parsed = await parseConnectPayload(res.data);
+            if (parsed.pairingCode) {
+                return {
+                    ok: true,
+                    pairingCode: parsed.pairingCode,
+                    qrBase64: parsed.qrBase64,
+                    state: parsed.state,
+                    phone: digits,
+                };
+            }
+            lastError = `Evolution responded but no link code (attempt ${attempt + 1}/${maxAttempts})`;
+        }
+        else {
+            lastError = res.error;
+        }
+        if (attempt === 2 && !info.exists) {
+            const alt = await (0, httpClient_1.evolutionRequest)(config, '/instance/create', {
+                method: 'POST',
+                body: {
+                    instanceName: config.instanceName,
+                    integration: 'WHATSAPP-BAILEYS',
+                    number: digits,
+                    qrcode: false,
+                },
+            });
+            if (alt.ok) {
+                const parsed = await parseConnectPayload(alt.data);
+                if (parsed.pairingCode) {
+                    return { ok: true, pairingCode: parsed.pairingCode, state: parsed.state, phone: digits };
+                }
+            }
+        }
+        if (attempt < maxAttempts - 1)
+            await sleep(delayMs);
+    }
+    return {
+        ok: false,
+        error: lastError ||
+            'Could not get WhatsApp link code — confirm number is on WhatsApp and Evolution API key is correct',
+    };
 }
 async function logoutEvolutionInstance(config) {
     const missing = requireEvolutionConfig(config);

@@ -331,7 +331,7 @@ const MedicalHomeScreen = ({ navigation }) => {
                   active="chat"
                   onChat={() => goToChat()}
                   onVoice={() => navigation.navigate('MedicalVoiceAgent')}
-                  onRecords={() => setMenuOpen(true)}
+                  onRecords={() => navigation.navigate('HealthHub')}
                 />
               )}
             </ResponsiveContainer>

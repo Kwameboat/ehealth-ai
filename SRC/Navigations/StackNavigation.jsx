@@ -11,22 +11,32 @@ import ChestPainScreen from '../Screen/ChestPainScreen';
 import CoughColdScreen from '../Screen/CoughColdScreen';
 import DentalPainScreen from '../Screen/DentalPainScreen';
 import DiarrheaConstipationScreen from '../Screen/DiarrheaConstipationScreen';
+import DoctorConsultScreen from '../Screen/DoctorConsultScreen';
 import EmergencyScreen from '../Screen/EmergencyScreen';
 import EyeProblems from '../Screen/EyeProblems';
+import FacilityFinderScreen from '../Screen/FacilityFinderScreen';
+import FamilyProfilesScreen from '../Screen/FamilyProfilesScreen';
 import FeverChillsScreen from '../Screen/FeverChillsScreen';
 import GeneralFatigueScreen from '../Screen/GeneralFatigueScreen';
 import HeadacheMigraineScreen from '../Screen/HeadacheMigraineScreen';
+import HealthAlertsScreen from '../Screen/HealthAlertsScreen';
+import HealthChatFeatureScreen from '../Screen/HealthChatFeatureScreen';
+import HealthHubScreen from '../Screen/HealthHubScreen';
 import JointMusclePainScreen from '../Screen/JointMusclePainScreen';
 import AccountScreen from '../Screen/AccountScreen';
 import AuthScreen from '../Screen/AuthScreen';
 import BuyPointsScreen from '../Screen/BuyPointsScreen';
+import BpTrackerScreen from '../Screen/BpTrackerScreen';
 import MedicalHomeScreen from '../Screen/MedicalHomeScreen';
 import { useAuth } from '../Context/AuthContext';
 import MedicalChatScreen from '../Screen/MedicalChatScreen';
 import MedicalVoiceAgentScreen from '../Screen/MedicalVoiceAgentScreen';
 import LabResultsScreen from '../Screen/LabResultsScreen';
+import MedicineDeliveryScreen from '../Screen/MedicineDeliveryScreen';
 import MedicineRecognitionScreen from '../Screen/MedicineRecognitionScreen';
+import MedicationRemindersScreen from '../Screen/MedicationRemindersScreen';
 import MedicalHealth from '../Screen/MentalHealthScreen';
+import PointsHistoryScreen from '../Screen/PointsHistoryScreen';
 import SkinProblems from '../Screen/SkinIssuesScreen';
 import StomachPain from '../Screen/StomachPain';
 import VomitingNauseaScreen from '../Screen/VomitingNauseaScreen';
@@ -104,6 +114,16 @@ const StackNavigation = () => {
       <Stack.Screen name="LabResults" component={LabResultsScreen} />
       <Stack.Screen name="MedicalVoiceAgent" component={MedicalVoiceAgentScreen} />
       <Stack.Screen name="MedicalChat" component={MedicalChatScreen} />
+      <Stack.Screen name="HealthHub" component={HealthHubScreen} />
+      <Stack.Screen name="HealthChatFeature" component={HealthChatFeatureScreen} />
+      <Stack.Screen name="BpTracker" component={BpTrackerScreen} />
+      <Stack.Screen name="FamilyProfiles" component={FamilyProfilesScreen} />
+      <Stack.Screen name="MedicationReminders" component={MedicationRemindersScreen} />
+      <Stack.Screen name="FacilityFinder" component={FacilityFinderScreen} />
+      <Stack.Screen name="MedicineDelivery" component={MedicineDeliveryScreen} />
+      <Stack.Screen name="HealthAlerts" component={HealthAlertsScreen} />
+      <Stack.Screen name="PointsHistory" component={PointsHistoryScreen} />
+      <Stack.Screen name="DoctorConsult" component={DoctorConsultScreen} />
 
      
     </Stack.Navigator>

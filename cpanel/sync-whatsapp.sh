@@ -45,7 +45,11 @@ echo "=== Ensure backend deps ==="
 if [ ! -f "$BACKEND/node_modules/express/package.json" ]; then
   bash "$APP/cpanel/install-backend-deps.sh"
 else
-  cd "$BACKEND" && node -e "require('./whatsapp/dist/index.js');" 2>/dev/null || bash "$APP/cpanel/install-backend-deps.sh"
+  cd "$BACKEND"
+  node -e "require('qrcode'); require('./whatsapp/dist/index.js');" 2>/dev/null || {
+    echo "Installing missing deps (qrcode, axios)…"
+    npm install --omit=dev --no-audit --no-fund qrcode@1.5.4 axios@1.7.9 2>/dev/null || bash "$APP/cpanel/install-backend-deps.sh"
+  }
 fi
 
 echo "=== Verify WhatsApp module loads ==="

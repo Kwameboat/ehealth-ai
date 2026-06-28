@@ -6,7 +6,7 @@ import { useMedTheme } from '../hooks/useMedTheme';
 const TABS = [
   { id: 'chat', label: 'Chat', icon: 'chatbubbles', lib: 'ion' },
   { id: 'voice', label: 'Voice', icon: 'mic', lib: 'ion' },
-  { id: 'records', label: 'Records', icon: 'folder-outline', lib: 'ion' },
+  { id: 'records', label: 'Services', icon: 'folder-outline', lib: 'ion' },
 ];
 
 export default function AppBottomNav({ active = 'chat', onChat, onVoice, onRecords }) {

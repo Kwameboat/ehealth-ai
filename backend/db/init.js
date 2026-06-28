@@ -234,6 +234,93 @@ function migrateWhatsAppFeatureTables(database) {
     CREATE INDEX IF NOT EXISTS idx_wa_sessions_phone ON wa_sessions(phone);
     CREATE INDEX IF NOT EXISTS idx_tracker_user ON health_tracker_logs(user_id);
   `);
+
+  migrateDoctorsAndConsultations(database);
+  migrateUserBroadcasts(database);
+}
+
+function migrateDoctorsAndConsultations(database) {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS doctors (
+      id TEXT PRIMARY KEY,
+      full_name TEXT NOT NULL,
+      specialty TEXT NOT NULL,
+      bio TEXT,
+      photo_url TEXT,
+      license_number TEXT,
+      hospital_affiliation TEXT,
+      video_provider TEXT NOT NULL DEFAULT 'jitsi',
+      video_room_slug TEXT,
+      meet_url TEXT,
+      consultation_fee_kobo INTEGER NOT NULL DEFAULT 5000,
+      points_cost INTEGER NOT NULL DEFAULT 15,
+      slot_duration_min INTEGER NOT NULL DEFAULT 30,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS doctor_availability (
+      id TEXT PRIMARY KEY,
+      doctor_id TEXT NOT NULL,
+      day_of_week INTEGER NOT NULL,
+      start_time TEXT NOT NULL,
+      end_time TEXT NOT NULL,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      FOREIGN KEY (doctor_id) REFERENCES doctors(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS consultations (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      doctor_id TEXT NOT NULL,
+      scheduled_at TEXT NOT NULL,
+      duration_min INTEGER NOT NULL DEFAULT 30,
+      status TEXT NOT NULL DEFAULT 'pending',
+      chief_complaint TEXT,
+      video_url TEXT,
+      meeting_id TEXT,
+      points_charged INTEGER NOT NULL DEFAULT 0,
+      amount_kobo INTEGER NOT NULL DEFAULT 0,
+      paystack_reference TEXT,
+      notes TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      FOREIGN KEY (doctor_id) REFERENCES doctors(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_doctors_active ON doctors(is_active);
+    CREATE INDEX IF NOT EXISTS idx_consultations_user ON consultations(user_id);
+    CREATE INDEX IF NOT EXISTS idx_consultations_doctor ON consultations(doctor_id);
+    CREATE INDEX IF NOT EXISTS idx_consultations_scheduled ON consultations(scheduled_at);
+  `);
+}
+
+function migrateUserBroadcasts(database) {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS health_broadcasts (
+      id TEXT PRIMARY KEY,
+      title TEXT,
+      message TEXT NOT NULL,
+      sent_by_admin_id TEXT,
+      recipient_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS health_broadcast_reads (
+      id TEXT PRIMARY KEY,
+      broadcast_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      read_at TEXT NOT NULL,
+      FOREIGN KEY (broadcast_id) REFERENCES health_broadcasts(id),
+      FOREIGN KEY (user_id) REFERENCES users(id),
+      UNIQUE(broadcast_id, user_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_broadcast_reads_user ON health_broadcast_reads(user_id);
+  `);
 }
 
 function migrateWhatsAppColumns(database) {
@@ -269,6 +356,12 @@ function seedPointRules() {
     ['wa_facility', 'WhatsApp facility finder', 2, 'Find nearby pharmacy, lab, or clinic via location'],
     ['wa_nhis', 'WhatsApp NHIS assistant', 1, 'NHIS coverage guidance on WhatsApp'],
     ['wa_diet', 'WhatsApp diet coaching', 1, 'Ghanaian diet & chronic disease coaching'],
+    ['pwa_nhis', 'NHIS assistant (app)', 1, 'NHIS coverage guidance in PWA'],
+    ['pwa_diet', 'Ghana diet coach (app)', 1, 'Diet coaching in PWA'],
+    ['pwa_bp_log', 'BP tracker log', 0, 'Log blood pressure reading'],
+    ['pwa_facility', 'Facility finder (app)', 2, 'Find pharmacy, lab, clinic, hospital'],
+    ['pwa_delivery', 'Medicine delivery (app)', 0, 'MoMo medicine delivery order'],
+    ['video_consultation', 'Video consultation booking', 15, 'Book video call with doctor'],
   ];
 
   const insert = database.prepare(`
@@ -361,6 +454,42 @@ function seedAdmin() {
   console.log(`Admin seeded: username="${username}" (change ADMIN_PASSWORD in production)`);
 }
 
+function seedSampleDoctors() {
+  const database = getDb();
+  const count = database.prepare('SELECT COUNT(*) AS c FROM doctors').get().c;
+  if (count > 0) return;
+  const ts = now();
+  const doctorId = uuid();
+  database
+    .prepare(
+      `INSERT INTO doctors (id, full_name, specialty, bio, hospital_affiliation, video_room_slug,
+       consultation_fee_kobo, points_cost, slot_duration_min, is_active, sort_order, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)`
+    )
+    .run(
+      doctorId,
+      'Dr. Yaw Mensah',
+      'General Practice',
+      'Telehealth consultations for general health, follow-ups, and chronic disease management.',
+      'Korle Bu Teaching Hospital',
+      'ehealth-consult',
+      5000,
+      15,
+      30,
+      ts,
+      ts
+    );
+  const days = [1, 2, 3, 4, 5];
+  for (const d of days) {
+    database
+      .prepare(
+        `INSERT INTO doctor_availability (id, doctor_id, day_of_week, start_time, end_time, is_active)
+         VALUES (?, ?, ?, '09:00', '17:00', 1)`
+      )
+      .run(uuid(), doctorId, d);
+  }
+}
+
 function migratePackagesToGhs() {
   const database = getDb();
   const row = database.prepare('SELECT id, currency, amount_kobo FROM point_packages WHERE points = 100 ORDER BY sort_order LIMIT 1').get();
@@ -397,6 +526,7 @@ async function initDatabase() {
     const { migrateLegacyGeminiModel } = require('../services/settings');
     migrateLegacyGeminiModel();
     migratePackagesToGhs();
+    seedSampleDoctors();
     if (typeof db.setDeferPersist === 'function') {
       db.setDeferPersist(false);
       db.flush();
