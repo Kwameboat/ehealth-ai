@@ -64,6 +64,14 @@ echo ""
 echo "=== Verify ==="
 curl -s "https://www.ehealthaigh.com/api/health" | head -c 200 || true
 echo ""
+BC=$(curl -s -o /dev/null -w "%{http_code}" "https://www.ehealthaigh.com/admin/api/broadcasts" 2>/dev/null || echo "000")
+if [ "$BC" = "401" ] || [ "$BC" = "200" ]; then
+  echo "Admin broadcasts API: OK (HTTP $BC)"
+elif [ "$BC" = "404" ]; then
+  echo "Admin broadcasts API: 404 — run repair again or RESTART Node.js"
+else
+  echo "Admin broadcasts API: HTTP $BC"
+fi
 grep -q 'wa-pair-btn' "$PUBLIC/admin/whatsapp-admin.js" 2>/dev/null && echo "Admin WhatsApp UI: OK" || echo "Admin WhatsApp UI: check publish-admin"
 grep -q 'HealthHub' "$PUBLIC/_expo/static/js/web/"*.js 2>/dev/null && echo "PWA Health Services: OK" || echo "PWA: upload dist/ then re-run this script"
 

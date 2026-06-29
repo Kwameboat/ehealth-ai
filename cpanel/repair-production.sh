@@ -44,6 +44,7 @@ curl -fsSL -o "$BACKEND/services/symptomClinicalPrompt.js" "$BASE/backend/servic
 curl -fsSL -o "$BACKEND/routes/ai.js" "$BASE/backend/routes/ai.js"
 curl -fsSL -o "$BACKEND/routes/user.js" "$BASE/backend/routes/user.js"
 curl -fsSL -o "$BACKEND/routes/emergency.js" "$BASE/backend/routes/emergency.js"
+curl -fsSL -o "$BACKEND/routes/admin.js" "$BASE/backend/routes/admin.js"
 curl -fsSL -o "$BACKEND/public/admin/index.html" "$BASE/backend/public/admin/index.html"
 curl -fsSL -o "$BACKEND/public/admin/app.js" "$BASE/backend/public/admin/app.js"
 curl -fsSL -o "$BACKEND/routes/health.js" "$BASE/backend/routes/health.js"
