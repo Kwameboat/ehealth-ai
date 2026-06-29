@@ -59,12 +59,23 @@ else
   bash "$APP/cpanel/fix-api-404.sh"
 fi
 
-# --- 6. Try starting server manually (5s) — shows crash reason ---
+# --- 6. Module load (catches missing imports / syntax errors) ---
 echo ""
-echo "=== Test server startup (5 second smoke test) ==="
+echo "=== Test require(server.js) ==="
 cd "$BACKEND"
 export DATABASE_PATH="${DATABASE_PATH:-$APP/data/medassistant.db}"
 export NODE_ENV=production
+if ! timeout 10 node -e "require('./server.js'); console.log('MODULE OK');" 2>&1; then
+  echo "FAIL: server.js failed to load — sync backend and fix errors above"
+  curl -fsSL -o "$APP/backend/server.js" "$BASE/backend/server.js" 2>/dev/null || true
+  echo "Re-test after GitHub sync..."
+  timeout 10 node -e "require('./server.js'); console.log('MODULE OK');" 2>&1 || {
+    echo "Still failing — paste output to support"
+    exit 1
+  }
+fi
+
+# --- 7. DB smoke test ---
 timeout 5 node -e "
 require('./db/ensureDb').ensureDbReady()
   .then(() => { console.log('DB OK'); process.exit(0); })

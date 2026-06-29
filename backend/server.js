@@ -37,6 +37,7 @@ const adminRoutes = require('./routes/admin');
 const paymentRoutes = require('./routes/payments');
 const healthRoutes = require('./routes/health');
 const consultationRoutes = require('./routes/consultations');
+const emergencyRoutes = require('./routes/emergency');
 const { paystackWebhookHandler } = require('./routes/payments');
 const { adminRouter: whatsappAdminRouter, webhookRouter: whatsappWebhookRouter } = require('./routes/whatsapp-bridge');
 const { requireAdminAuth } = require('./middleware/adminAuth');
