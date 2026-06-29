@@ -52,7 +52,7 @@ function releaseLock(lockPath) {
  */
 async function withFileLock(lockPath, fn, { timeoutMs = 25_000, staleMs = DEFAULT_STALE_MS } = {}) {
   const start = Date.now();
-  while Date.now() - start < timeoutMs) {
+  while (Date.now() - start < timeoutMs) {
     try {
       const fd = fs.openSync(lockPath, 'wx');
       try {

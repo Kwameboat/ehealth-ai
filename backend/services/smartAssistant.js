@@ -36,6 +36,8 @@ function getPwaSystemPrompt() {
 }
 
 const { sanitizePwaReply } = require('./replySanitizer');
+
+function getChatText(data) {
   return (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
 }
 
