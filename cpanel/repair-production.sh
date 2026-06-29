@@ -113,7 +113,7 @@ bash "$APP/cpanel/sync-whatsapp.sh" || echo "WARN: WhatsApp sync failed — run:
 echo "=== Database check ==="
 cd "$BACKEND"
 node -e "
-require('./db/ensureDb').ensureDbReady().then(() => {
+require('./db/ensureDb').startupDatabase(45000).then(() => {
   const s = require('./services/settings');
   const { PWA_SYSTEM_PROMPT } = require('./services/smartAssistant');
   s.migrateLegacyGeminiModel();

@@ -24,6 +24,9 @@ curl -fsSL -o "$APP/cpanel/repair-production.sh" "$BASE/cpanel/repair-production
 curl -fsSL -o "$APP/cpanel/deploy-live.sh" "$BASE/cpanel/deploy-live.sh"
 chmod +x "$APP/cpanel/repair-production.sh" "$APP/cpanel/deploy-live.sh" 2>/dev/null || true
 
+curl -fsSL -o "$APP/cpanel/db-watchdog.sh" "$BASE/cpanel/db-watchdog.sh"
+chmod +x "$APP/cpanel/db-watchdog.sh" 2>/dev/null || true
+
 bash "$APP/cpanel/repair-production.sh"
 
 echo ""
@@ -75,6 +78,9 @@ fi
 grep -q 'wa-pair-btn' "$PUBLIC/admin/whatsapp-admin.js" 2>/dev/null && echo "Admin WhatsApp UI: OK" || echo "Admin WhatsApp UI: check publish-admin"
 grep -q 'HealthHub' "$PUBLIC/_expo/static/js/web/"*.js 2>/dev/null && echo "PWA Health Services: OK" || echo "PWA: upload dist/ then re-run this script"
 
+echo ""
+echo "=== Optional: cron watchdog (every 5 min) ==="
+echo "  */5 * * * * bash ~/ehealth-ai/cpanel/db-watchdog.sh >> ~/ehealth-ai/data/watchdog.log 2>&1"
 echo ""
 echo "=== REQUIRED: cPanel -> Node.js -> RESTART ==="
 echo "Then hard-refresh: Ctrl+Shift+R on admin and PWA"

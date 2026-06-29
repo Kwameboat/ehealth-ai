@@ -35,14 +35,20 @@ function clearSession() {
   localStorage.removeItem(ADMIN_KEY);
 }
 
-async function tryRecoverDb() {
-  try {
-    const res = await fetch('/api/health?recover=1', { cache: 'no-store' });
-    const data = await res.json().catch(() => ({}));
-    return res.ok && data.db === true;
-  } catch {
-    return false;
+async function tryRecoverDb(maxAttempts = 5) {
+  for (let i = 0; i < maxAttempts; i += 1) {
+    try {
+      const res = await fetch('/api/health?recover=1', { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.db === true) return true;
+    } catch {
+      /* retry */
+    }
+    if (i < maxAttempts - 1) {
+      await new Promise((r) => setTimeout(r, 700 * (i + 1)));
+    }
   }
+  return false;
 }
 
 async function api(path, options = {}, attempt = 0) {
@@ -53,7 +59,7 @@ async function api(path, options = {}, attempt = 0) {
   try {
     res = await fetch(`${API}${path}`, { ...options, headers });
   } catch {
-    if (attempt < 2 && (await tryRecoverDb())) {
+    if (attempt < 4 && (await tryRecoverDb())) {
       return api(path, options, attempt + 1);
     }
     throw new Error('Failed to fetch');
@@ -66,7 +72,7 @@ async function api(path, options = {}, attempt = 0) {
     throw new Error('Session expired');
   }
   if (!res.ok) {
-    if (res.status === 503 && attempt < 2 && path !== '/login') {
+    if (res.status === 503 && attempt < 4 && path !== '/login') {
       if (await tryRecoverDb()) {
         return api(path, options, attempt + 1);
       }

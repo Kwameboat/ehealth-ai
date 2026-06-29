@@ -19,6 +19,8 @@ const { getDb } = require('./db/init');
 const {
   ensureDbReady,
   ensureDbReadyWithRecovery,
+  ensureDbForRequest,
+  startupDatabase,
   recoverDatabase,
   getDbStatus,
   clearDbArtifacts,
@@ -27,6 +29,12 @@ const {
 
 // Clear stale lock files before any worker tries to open the DB (Passenger multi-worker fix)
 clearDbArtifacts({ aggressive: true });
+
+/** Shared startup — middleware waits on this so early requests never hit a cold DB. */
+const dbStartupPromise = startupDatabase(60000).catch((err) => {
+  console.error('[db] startupDatabase failed (middleware will keep retrying):', err.message);
+  return { ok: false, error: err.message };
+});
 
 const { requireAppAuth } = require('./middleware/appSecret');
 
@@ -101,14 +109,24 @@ app.get('/app-config.js', (req, res) => {
 });
 
 app.get('/api/health', async (req, res) => {
-  const tryRecover = req.query.recover === '1' || req.query.recover === 'true';
+  const forceRecover = req.query.recover === '1' || req.query.recover === 'true';
   try {
-    if (tryRecover) {
+    if (forceRecover) {
       await recoverDatabase('health-check');
     }
-    const result = tryRecover ? await ensureDbReadyWithRecovery() : await ensureDbReady().then(() => ({ ok: true }));
+    const result = await ensureDbReadyWithRecovery(forceRecover ? 4 : 3);
     if (!result.ok) {
-      throw new Error(result.error || 'Database not ready');
+      await recoverDatabase('health-auto');
+      const retry = await ensureDbReadyWithRecovery(4);
+      if (!retry.ok) throw new Error(retry.error || result.error || 'Database not ready');
+      probeOk();
+      return res.json({
+        status: 'ok',
+        service: 'eHealth AI API',
+        db: true,
+        recovered: true,
+        time: new Date().toISOString(),
+      });
     }
     getDb().prepare('SELECT 1 AS ok').get();
     res.json({
@@ -127,11 +145,16 @@ app.get('/api/health', async (req, res) => {
       error: err.message,
       wasm: diag.wasmPath,
       dbPath: diag.dbPath,
-      hint: 'Database auto-recovery failed — bash ~/ehealth-ai/cpanel/repair-production.sh then RESTART Node.js',
+      hint: 'Auto-recovery in progress — retry in a few seconds or run deploy-live.sh',
+      recoverUrl: '/api/health?recover=1',
       time: new Date().toISOString(),
     });
   }
 });
+
+function probeOk() {
+  getDb().prepare('SELECT 1 AS ok').get();
+}
 app.post(
   '/api/payments/webhook',
   express.raw({ type: 'application/json' }),
@@ -150,7 +173,8 @@ app.use(async (req, res, next) => {
   }
   if (req.path === '/api/health') return next();
   try {
-    const result = await ensureDbReadyWithRecovery();
+    await dbStartupPromise;
+    const result = await ensureDbForRequest(5);
     if (!result.ok) {
       throw new Error(result.error || 'Database not ready');
     }
@@ -164,7 +188,7 @@ app.use(async (req, res, next) => {
         detail: err.message,
         wasm: diag.wasmPath,
         dbPath: diag.dbPath,
-        hint: 'Auto-recovery failed. Open /api/health?recover=1 or run: bash ~/ehealth-ai/cpanel/repair-production.sh',
+        hint: 'The server is attempting automatic database recovery. Click Retry or wait a moment.',
         recoverUrl: '/api/health?recover=1',
       },
     });
@@ -258,12 +282,6 @@ function onListen() {
   const listenPort = Number(process.env.PORT) || PORT;
   console.log(`eHealth AI API on ${HOST}:${listenPort}`);
   startDbMaintenance();
-  ensureDbReadyWithRecovery()
-    .then((r) => {
-      if (r.recovered) console.warn('[db] recovered during startup');
-      console.log('Startup database check: OK');
-    })
-    .catch((err) => console.error('Startup DB init (will retry per request):', err.message));
   if (!process.env.GEMINI_API_KEY) console.warn('WARNING: GEMINI_API_KEY missing');
   if (!process.env.APP_API_SECRET) console.warn('WARNING: APP_API_SECRET missing');
 }
@@ -282,6 +300,7 @@ module.exports = app;
 const listenPort = Number(process.env.PORT) || PORT;
 
 (async () => {
+  await dbStartupPromise;
   if (!process.env.PASSENGER_APP_ENV) {
     app.listen(listenPort, '0.0.0.0', onListen);
   } else {

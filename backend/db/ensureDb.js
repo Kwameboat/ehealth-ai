@@ -8,9 +8,11 @@ let ready = false;
 let initPromise = null;
 let lastError = null;
 let lastRecoveryAt = 0;
+let watchdogStarted = false;
 
-const STALE_MS = 60_000;
-const MAX_INIT_ATTEMPTS = 6;
+const STALE_MS = 12_000;
+const MAX_INIT_ATTEMPTS = 10;
+const RECOVERY_COOLDOWN_MS = 250;
 
 function dbArtifactDirs() {
   const dirs = new Set([
@@ -88,22 +90,26 @@ function resetDbState() {
   resetDatabase();
 }
 
+function probeDatabase() {
+  getDb().prepare('SELECT 1 AS ok').get();
+}
+
 async function recoverDatabase(reason) {
   const now = Date.now();
-  if (now - lastRecoveryAt < 500) {
-    await sleep(500);
+  if (now - lastRecoveryAt < RECOVERY_COOLDOWN_MS) {
+    await sleep(RECOVERY_COOLDOWN_MS);
   }
   lastRecoveryAt = Date.now();
   console.warn('[db] recovery:', reason || 'manual');
   resetDbState();
   clearDbArtifacts({ aggressive: true });
-  await sleep(120);
+  await sleep(150);
 }
 
 async function ensureDbReady() {
   if (ready) {
     try {
-      getDb().prepare('SELECT 1 AS ok').get();
+      probeDatabase();
       return;
     } catch (_) {
       resetDbState();
@@ -120,7 +126,7 @@ async function ensureDbReady() {
         await initDatabase();
         const { migrateLegacyGeminiModel } = require('../services/settings');
         migrateLegacyGeminiModel();
-        getDb().prepare('SELECT 1 AS ok').get();
+        probeDatabase();
         ready = true;
         lastError = null;
         console.log(`Database ready: ${DB_PATH}`);
@@ -129,10 +135,11 @@ async function ensureDbReady() {
         lastErr = err;
         ready = false;
         resetDatabase();
+        lastError = err;
         console.error(`Database init attempt ${attempt}/${MAX_INIT_ATTEMPTS}:`, err.message);
         clearDbArtifacts({ aggressive: true });
         if (attempt < MAX_INIT_ATTEMPTS) {
-          await sleep(Math.min(2000, 200 * attempt * attempt));
+          await sleep(Math.min(3000, 250 * attempt * attempt));
         }
       }
     }
@@ -147,19 +154,51 @@ async function ensureDbReady() {
   return initPromise;
 }
 
-async function ensureDbReadyWithRecovery() {
-  try {
-    await ensureDbReady();
-    return { ok: true };
-  } catch (firstErr) {
+/**
+ * Init + one recovery cycle (legacy API).
+ */
+async function ensureDbReadyWithRecovery(recoveryAttempts = 3) {
+  for (let cycle = 0; cycle < recoveryAttempts; cycle += 1) {
     try {
-      await recoverDatabase(firstErr.message);
       await ensureDbReady();
-      return { ok: true, recovered: true };
-    } catch (secondErr) {
-      return { ok: false, error: secondErr.message || firstErr.message };
+      return { ok: true, recovered: cycle > 0 };
+    } catch (err) {
+      if (cycle >= recoveryAttempts - 1) {
+        return { ok: false, error: err.message };
+      }
+      await recoverDatabase(err.message);
+      await sleep(300 * (cycle + 1));
     }
   }
+  return { ok: false, error: lastError?.message || 'Database not ready' };
+}
+
+/** Used by API middleware — never give up on first failure. */
+async function ensureDbForRequest(maxAttempts = 5) {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const result = await ensureDbReadyWithRecovery(3);
+    if (result.ok) return result;
+    clearDbArtifacts({ aggressive: true });
+    await sleep(400 * (attempt + 1));
+  }
+  return { ok: false, error: lastError?.message || 'Database not ready after retries' };
+}
+
+/** Block Passenger startup until DB is usable (prevents first-request 503). */
+async function startupDatabase(maxWaitMs = 60000) {
+  const started = Date.now();
+  let lastErr = 'timeout';
+  while (Date.now() - started < maxWaitMs) {
+    const result = await ensureDbReadyWithRecovery(4);
+    if (result.ok) {
+      console.log('[db] startupDatabase: OK', result.recovered ? '(recovered)' : '');
+      return result;
+    }
+    lastErr = result.error || lastErr;
+    clearDbArtifacts({ aggressive: true });
+    await sleep(600);
+  }
+  throw new Error(lastErr || 'Database startup timeout');
 }
 
 function getDbStatus() {
@@ -189,7 +228,10 @@ function getDbStatus() {
 }
 
 function startDbMaintenance() {
-  const intervalMs = Number(process.env.DB_MAINTENANCE_MS) || 5 * 60 * 1000;
+  if (watchdogStarted) return;
+  watchdogStarted = true;
+
+  const intervalMs = Number(process.env.DB_MAINTENANCE_MS) || 3 * 60 * 1000;
   setInterval(() => {
     try {
       clearDbArtifacts();
@@ -201,11 +243,32 @@ function startDbMaintenance() {
       console.warn('[db] maintenance:', err.message);
     }
   }, intervalMs).unref();
+
+  const probeMs = Number(process.env.DB_PROBE_MS) || 25_000;
+  setInterval(async () => {
+    try {
+      if (!ready) {
+        await ensureDbReadyWithRecovery(2);
+        return;
+      }
+      probeDatabase();
+    } catch (err) {
+      console.warn('[db] watchdog: probe failed — recovering:', err.message);
+      try {
+        await recoverDatabase('watchdog');
+        await ensureDbReadyWithRecovery(3);
+      } catch (e) {
+        console.error('[db] watchdog recovery failed:', e.message);
+      }
+    }
+  }, probeMs).unref();
 }
 
 module.exports = {
   ensureDbReady,
   ensureDbReadyWithRecovery,
+  ensureDbForRequest,
+  startupDatabase,
   recoverDatabase,
   getDbStatus,
   clearDbArtifacts,
