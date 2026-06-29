@@ -23,10 +23,10 @@ function detectIntent(text) {
   if (/\b(emergency|ambulance|112|911|999|life.?threat)\b/.test(t)) return 'emergency';
   if (/\bnhis\b|national health insurance|nhis cover|insurance cover/.test(t)) return 'nhis';
   if (
-    /\b(diabetes|hypertension|blood pressure|bp|sugar|type 2|fufu|banku|kontomire|waakye|plantain|diet|nutrition|eat|food)\b/.test(
+    /\b(diabetes|hypertension|sugar|type 2|fufu|banku|kontomire|waakye|plantain|diet|nutrition|eat|food)\b/.test(
       t
     ) &&
-    !/\bbp[:\s]+\d/.test(t)
+    !/\bbp[:\s]+\d|blood pressure[:\s]+\d|log bp/.test(t)
   ) {
     return 'diet';
   }

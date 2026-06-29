@@ -142,7 +142,7 @@ export default function AccountScreen() {
             value={phone}
             onChangeText={setPhone}
           />
-          <Text style={styles.hint}>Link your WhatsApp number to chat with Agyenim on WhatsApp.</Text>
+          <Text style={styles.hint}>Optional: link a WhatsApp number to also chat with Agyenim on WhatsApp.</Text>
 
           <Text style={styles.sectionLabel}>Change password (optional)</Text>
           <PasswordInput

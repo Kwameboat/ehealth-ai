@@ -25,6 +25,15 @@ function buildMeta(history, recommending) {
   };
 }
 
+function sanitizeClientReply(text) {
+  let t = String(text || '').trim();
+  t = t.replace(/\bon whatsapp\b/gi, 'in this app');
+  t = t.replace(/\buse whatsapp\b/gi, 'use this app');
+  t = t.replace(/\bregister at ehealthaigh\.com\b/gi, 'sign in to this app');
+  t = t.replace(/\bvisit ehealthaigh\.com\b/gi, 'use this app');
+  return t;
+}
+
 /**
  * @returns {Promise<{ reply: string, meta?: object, actions?: array }>}
  */
@@ -71,7 +80,11 @@ export async function sendChatMessage({
       notifyPointsBalance(data.points.balance);
       if (onPointsUpdate) onPointsUpdate(data.points.balance);
     }
-    return { reply: data.reply, meta: data.meta, actions: data.actions || [] };
+    return {
+      reply: sanitizeClientReply(data.reply),
+      meta: data.meta,
+      actions: data.actions || [],
+    };
   }
 
   const { generateContent } = await import('./geminiClient');

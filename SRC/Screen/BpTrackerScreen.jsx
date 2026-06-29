@@ -43,7 +43,7 @@ export default function BpTrackerScreen({ navigation }) {
   };
 
   return (
-    <HealthFeatureLayout navigation={navigation} title="BP Tracker" subtitle="Log readings like WhatsApp: 120/80">
+    <HealthFeatureLayout navigation={navigation} title="BP Tracker" subtitle="Log readings — e.g. BP: 120/80">
       <TextInput
         style={styles.input}
         placeholder="120/80"

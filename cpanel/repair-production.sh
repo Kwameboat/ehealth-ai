@@ -50,7 +50,7 @@ curl -fsSL -o "$BACKEND/public/admin/app.js" "$BASE/backend/public/admin/app.js"
 curl -fsSL -o "$BACKEND/routes/health.js" "$BASE/backend/routes/health.js"
 curl -fsSL -o "$BACKEND/routes/consultations.js" "$BASE/backend/routes/consultations.js"
 curl -fsSL -o "$BACKEND/services/healthAssistant.js" "$BASE/backend/services/healthAssistant.js"
-curl -fsSL -o "$BACKEND/services/smartIntents.js" "$BASE/backend/services/smartIntents.js"
+curl -fsSL -o "$BACKEND/db/init.js" "$BASE/backend/db/init.js"
 curl -fsSL -o "$BACKEND/services/smartAssistant.js" "$BASE/backend/services/smartAssistant.js"
 curl -fsSL -o "$BACKEND/services/visionAssist.js" "$BASE/backend/services/visionAssist.js"
 curl -fsSL -o "$BACKEND/services/gemini.js" "$BASE/backend/services/gemini.js"
@@ -114,7 +114,14 @@ cd "$BACKEND"
 node -e "
 require('./db/ensureDb').ensureDbReady().then(() => {
   const s = require('./services/settings');
+  const { PWA_SYSTEM_PROMPT } = require('./services/smartAssistant');
   s.migrateLegacyGeminiModel();
+  const cur = s.getSetting('pwa_system_prompt') || '';
+  const wa = s.getSetting('whatsapp_system_prompt') || '';
+  if (!cur || cur === wa || /on whatsapp/i.test(cur)) {
+    s.setSetting('pwa_system_prompt', PWA_SYSTEM_PROMPT);
+    console.log('Seeded/updated pwa_system_prompt (PWA answers in-app, not WhatsApp)');
+  }
   console.log('DB path:', require('./db/init').DB_PATH);
   console.log('Gemini model:', s.getGeminiModel());
   console.log('REPAIR OK');

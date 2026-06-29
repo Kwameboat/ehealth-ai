@@ -99,7 +99,7 @@ export default function HealthChatFeatureScreen({ navigation, route }) {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>{title}</Text>
-          <Text style={styles.headerSub}>Conversational · same as WhatsApp</Text>
+          <Text style={styles.headerSub}>Ask follow-up questions here</Text>
         </View>
       </View>
 

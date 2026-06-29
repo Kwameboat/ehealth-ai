@@ -17,8 +17,44 @@ const {
   facilityTypeFromText,
 } = require('./smartIntents');
 
-const DEFAULT_GENERAL_PROMPT =
-  'You are Agyenim, the eHealth AI smart health companion for Ghana. You help with symptoms, NHIS, diet, finding care, family health, medications, and general wellness — not only triage. Give concise, caring guidance in plain language with culturally relevant examples (Ghanaian foods, NHIS, local clinics). You are not a doctor — advise seeing a clinician when needed. If the user describes acute symptoms, offer to walk them through a structured symptom check. Keep replies under 200 words unless listing steps.';
+const PWA_SYSTEM_PROMPT = `You are Agyenim, the eHealth AI smart health assistant inside the eHealth mobile/web app (PWA) for Ghana.
+
+CRITICAL RULES:
+- The user is ALREADY in the app chatting with you. Answer their question directly in this conversation.
+- NEVER tell them to use WhatsApp, open WhatsApp, message on WhatsApp, or that you are a WhatsApp bot.
+- NEVER say "register at ehealthaigh.com" or "visit the website" — they are signed in to the app.
+- NEVER redirect them elsewhere to get an answer you can give here.
+- Give concise, caring health guidance in plain language with Ghana-relevant examples (NHIS, local foods, clinics).
+- You are not a doctor — advise seeing a clinician when appropriate.
+- For symptoms, you may ask one focused follow-up question or suggest they describe symptoms for a structured check.
+- Keep replies under 200 words unless listing clear steps.`;
+
+function getPwaSystemPrompt() {
+  return getSetting('pwa_system_prompt') || PWA_SYSTEM_PROMPT;
+}
+
+function sanitizePwaReply(text) {
+  let t = String(text || '').trim();
+  const rules = [
+    [/on whatsapp/gi, 'in this app'],
+    [/via whatsapp/gi, 'here in the app'],
+    [/through whatsapp/gi, 'in this chat'],
+    [/message (us |me )?(on )?whatsapp/gi, 'ask me here'],
+    [/chat with (us |me )?(on )?whatsapp/gi, 'chat with me here'],
+    [/use whatsapp/gi, 'use this app'],
+    [/open whatsapp/gi, 'continue in this chat'],
+    [/whatsapp bot/gi, 'health assistant'],
+    [/link your whatsapp number[^\n.]*/gi, 'use Account settings if you also want WhatsApp (optional)'],
+    [/register at ehealthaigh\.com[^\n.]*/gi, 'use your account in this app'],
+    [/visit ehealthaigh\.com[^\n.]*/gi, 'use the features in this app'],
+    [/top up at ehealthaigh\.com/gi, 'tap Buy Points in the app'],
+    [/ehealthaigh\.com and link your whatsapp[^\n.]*/gi, 'your Account settings in this app'],
+  ];
+  for (const [re, sub] of rules) {
+    t = t.replace(re, sub);
+  }
+  return t.trim();
+}
 
 function getChatText(data) {
   return (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('').trim();
@@ -37,7 +73,7 @@ function isActiveTriageSession(history) {
 }
 
 async function generalHealthReply(userText, history) {
-  const systemPrompt = getSetting('whatsapp_system_prompt') || DEFAULT_GENERAL_PROMPT;
+  const systemPrompt = getPwaSystemPrompt();
   const contents = [...historyToGemini(history), { role: 'user', parts: [{ text: String(userText).trim() }] }];
   const data = await callGemini(contents, undefined, { systemInstruction: systemPrompt });
   const reply = getChatText(data);
@@ -47,7 +83,7 @@ async function generalHealthReply(userText, history) {
 
 function buildResult({ reply, intent, featureKey, actions = [], phase, triageTurn, recommending }) {
   return {
-    reply,
+    reply: sanitizePwaReply(reply),
     featureKey: featureKey || 'chat_text',
     actions,
     meta: {
@@ -57,6 +93,11 @@ function buildResult({ reply, intent, featureKey, actions = [], phase, triageTur
       recommending,
     },
   };
+}
+
+async function answerWithOptionalAction(userText, history, intent, featureKey, actions) {
+  const answer = await generalHealthReply(userText, history);
+  return buildResult({ reply: answer, intent, featureKey, actions });
 }
 
 async function handleAttachments(userId, userText, attachment, attachments) {
@@ -83,9 +124,9 @@ async function handleAttachments(userId, userText, attachment, attachments) {
     if (extract.isPrescription || extract.medicationName) {
       const lines = [
         extract.summary || 'I analyzed your prescription image.',
-        extract.medicationName ? `\n💊 *${extract.medicationName}*` : '',
+        extract.medicationName ? `\n💊 ${extract.medicationName}` : '',
         extract.dosageInstructions ? `\n${extract.dosageInstructions}` : '',
-        '\nWould you like to set daily reminders or order delivery?',
+        '\nWould you like to set daily reminders or order delivery in the app?',
       ].filter(Boolean);
       return buildResult({
         reply: lines.join(''),
@@ -109,7 +150,7 @@ async function handleAttachments(userId, userText, attachment, attachments) {
     }
     if (extract.isLabReport) {
       return buildResult({
-        reply: `${extract.summary || 'This looks like a lab report.'}\n\nI can explain results in simple terms or help you find a doctor for follow-up.`,
+        reply: `${extract.summary || 'This looks like a lab report.'}\n\nI can explain results in simple terms or help you book a doctor for follow-up — all in this app.`,
         intent: 'lab',
         featureKey: 'chat_image',
         actions: [
@@ -119,13 +160,13 @@ async function handleAttachments(userId, userText, attachment, attachments) {
       });
     }
   } catch {
-    /* fall through to medicine scan */
+    /* fall through */
   }
 
   try {
     const scan = await analyzeMedicineImage(b64, mime);
     return buildResult({
-      reply: `💊 *${scan.name}* (${scan.type})\n\n*Uses:* ${scan.uses || '—'}\n*Typical dosing:* ${scan.dosage || 'Check label or pharmacist'}\n*Watch for:* ${scan.sideEffects || '—'}\n*Safety:* ${scan.warnings || 'Confirm with a pharmacist'}\n\nConfidence: ${scan.confidence}%`,
+      reply: `💊 ${scan.name} (${scan.type})\n\nUses: ${scan.uses || '—'}\nTypical dosing: ${scan.dosage || 'Check label or pharmacist'}\nWatch for: ${scan.sideEffects || '—'}\nSafety: ${scan.warnings || 'Confirm with a pharmacist'}\n\nConfidence: ${scan.confidence}%`,
       intent: 'medicine',
       featureKey: 'medicine_scan',
       actions: [
@@ -174,7 +215,7 @@ async function smartChat(userId, history = [], userText = '', attachment = null,
   switch (intent) {
     case 'menu':
       return buildResult({
-        reply: MENU_TEXT,
+        reply: MENU_TEXT.replace(/WhatsApp/g, 'app'),
         intent: 'menu',
         featureKey: 'chat_text',
         actions: MENU_ACTIONS,
@@ -183,7 +224,7 @@ async function smartChat(userId, history = [], userText = '', attachment = null,
     case 'emergency':
       return buildResult({
         reply:
-          '🚨 *Possible emergency*\n\nIf you or someone else is in immediate danger, call **112** (Ghana) or go to the nearest emergency department now.\n\nDo not wait for chat advice. I can help find nearby hospitals in the app.',
+          '🚨 Possible emergency\n\nIf you or someone else is in immediate danger, call 112 (Ghana) or go to the nearest emergency department now.\n\nDo not wait for chat advice. I can help find nearby hospitals in the app.',
         intent: 'emergency',
         featureKey: 'chat_text',
         actions: [
@@ -194,29 +235,19 @@ async function smartChat(userId, history = [], userText = '', attachment = null,
 
     case 'nhis': {
       const answer = await answerNhisQuestion(text, history);
-      return buildResult({
-        reply: answer,
-        intent: 'nhis',
-        featureKey: 'pwa_nhis',
-        actions: [{ id: 'nhis', label: 'Open NHIS chat', screen: 'HealthChatFeature', params: { mode: 'nhis' } }],
-      });
+      return buildResult({ reply: answer, intent: 'nhis', featureKey: 'pwa_nhis' });
     }
 
     case 'diet': {
       const answer = await answerDietQuestion(text, history);
-      return buildResult({
-        reply: answer,
-        intent: 'diet',
-        featureKey: 'pwa_diet',
-        actions: [{ id: 'diet', label: 'Open diet coach', screen: 'HealthChatFeature', params: { mode: 'diet' } }],
-      });
+      return buildResult({ reply: answer, intent: 'diet', featureKey: 'pwa_diet' });
     }
 
     case 'bp_log': {
       const parsed = parseBloodPressure(text);
       if (!parsed) {
         return buildResult({
-          reply: 'To log blood pressure, send a reading like **BP: 120/80** or open the BP Tracker.',
+          reply: 'To log blood pressure, send a reading like **BP: 120/80** or open the BP Tracker below.',
           intent: 'bp_log',
           featureKey: 'chat_text',
           actions: [{ id: 'bp', label: 'Open BP Tracker', screen: 'BpTracker' }],
@@ -230,7 +261,7 @@ async function smartChat(userId, history = [], userText = '', attachment = null,
         )
         .run(uuid(), userId, parsed.valueText, parsed.systolic, ts);
       return buildResult({
-        reply: `✅ Logged **${parsed.valueText}**\n\n${bpInterpretation(parsed.systolic, parsed.diastolic)}`,
+        reply: `✅ Logged ${parsed.valueText}\n\n${bpInterpretation(parsed.systolic, parsed.diastolic)}`,
         intent: 'bp_log',
         featureKey: 'pwa_bp_log',
         actions: [{ id: 'bp', label: 'View BP history', screen: 'BpTracker' }],
@@ -239,8 +270,9 @@ async function smartChat(userId, history = [], userText = '', attachment = null,
 
     case 'facility': {
       const type = facilityTypeFromText(text);
+      const answer = await generalHealthReply(text, history);
       return buildResult({
-        reply: `I can find a nearby ${type} using your GPS. Open the facility finder and allow location — I'll show options on the map.`,
+        reply: `${answer}\n\nTap below to find a ${type} near you on the map.`,
         intent: 'facility',
         featureKey: 'pwa_facility',
         actions: [{ id: 'facility', label: `Find nearby ${type}`, screen: 'FacilityFinder', params: { type } }],
@@ -248,49 +280,30 @@ async function smartChat(userId, history = [], userText = '', attachment = null,
     }
 
     case 'family':
-      return buildResult({
-        reply:
-          'Family profiles let you track health for loved ones — Grandma, children, and more. Open Family Profiles to add or edit members.',
-        intent: 'family',
-        featureKey: 'chat_text',
-        actions: [{ id: 'family', label: 'Manage family profiles', screen: 'FamilyProfiles' }],
-      });
+      return answerWithOptionalAction(text, history, 'family', 'chat_text', [
+        { id: 'family', label: 'Manage family profiles', screen: 'FamilyProfiles' },
+      ]);
 
     case 'consult':
-      return buildResult({
-        reply:
-          'Book a video consultation with a licensed doctor right in the app. Choose a doctor, pick a time slot, and join via secure video.',
-        intent: 'consult',
-        featureKey: 'chat_text',
-        actions: [{ id: 'doctor', label: 'Book video consultation', screen: 'DoctorConsult' }],
-      });
+      return answerWithOptionalAction(text, history, 'consult', 'chat_text', [
+        { id: 'doctor', label: 'Book video consultation', screen: 'DoctorConsult' },
+      ]);
 
     case 'reminder':
-      return buildResult({
-        reply: 'Set daily medication reminders with dose times. You can also scan a prescription photo in chat to auto-fill the medicine name.',
-        intent: 'reminder',
-        featureKey: 'chat_text',
-        actions: [{ id: 'reminders', label: 'Medication reminders', screen: 'MedicationReminders' }],
-      });
+      return answerWithOptionalAction(text, history, 'reminder', 'chat_text', [
+        { id: 'reminders', label: 'Medication reminders', screen: 'MedicationReminders' },
+      ]);
 
     case 'delivery':
-      return buildResult({
-        reply: 'Order medicine delivery with MoMo payment. A partner pharmacy will process your order after payment.',
-        intent: 'delivery',
-        featureKey: 'chat_text',
-        actions: [{ id: 'delivery', label: 'Order medicine delivery', screen: 'MedicineDelivery' }],
-      });
+      return answerWithOptionalAction(text, history, 'delivery', 'chat_text', [
+        { id: 'delivery', label: 'Order medicine delivery', screen: 'MedicineDelivery' },
+      ]);
 
     case 'points':
-      return buildResult({
-        reply: 'Buy points to use AI features, or view your usage history in the app.',
-        intent: 'points',
-        featureKey: 'chat_text',
-        actions: [
-          { id: 'buy', label: 'Buy points', screen: 'BuyPoints' },
-          { id: 'history', label: 'Points history', screen: 'PointsHistory' },
-        ],
-      });
+      return answerWithOptionalAction(text, history, 'points', 'chat_text', [
+        { id: 'buy', label: 'Buy points', screen: 'BuyPoints' },
+        { id: 'history', label: 'Points history', screen: 'PointsHistory' },
+      ]);
 
     default:
       break;
@@ -313,11 +326,8 @@ async function smartChat(userId, history = [], userText = '', attachment = null,
     reply,
     intent: 'general',
     featureKey: 'chat_text',
-    actions: [
-      { id: 'symptoms', label: 'Check my symptoms', screen: 'MedicalChat', params: { initialMessage: text } },
-      { id: 'hub', label: 'Explore health services', screen: 'HealthHub' },
-    ],
+    actions: [{ id: 'hub', label: 'Explore health services', screen: 'HealthHub' }],
   });
 }
 
-module.exports = { smartChat, MENU_TEXT, MENU_ACTIONS };
+module.exports = { smartChat, MENU_TEXT, MENU_ACTIONS, sanitizePwaReply, PWA_SYSTEM_PROMPT };

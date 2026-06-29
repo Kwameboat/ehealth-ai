@@ -26,7 +26,7 @@ export default function HealthHubScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeaderBar title="Health Services" onBack={() => navigation.goBack()} />
-      <Text style={styles.subtitle}>Same features as WhatsApp Agyenim — in the app</Text>
+      <Text style={styles.subtitle}>Your full health companion — NHIS, diet, care finder & more</Text>
       <ScrollView contentContainerStyle={styles.grid}>
         {FEATURES.map((f) => (
           <TouchableOpacity
