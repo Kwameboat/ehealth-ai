@@ -31,10 +31,17 @@ const {
 clearDbArtifacts({ aggressive: true });
 
 /** Shared startup — middleware waits on this so early requests never hit a cold DB. */
-const dbStartupPromise = startupDatabase(60000).catch((err) => {
+const dbStartupPromise = startupDatabase(30_000).catch((err) => {
   console.error('[db] startupDatabase failed (middleware will keep retrying):', err.message);
   return { ok: false, error: err.message };
 });
+
+function waitForStartup(maxMs = 15_000) {
+  return Promise.race([
+    dbStartupPromise,
+    new Promise((resolve) => setTimeout(() => resolve({ ok: false, timedOut: true }), maxMs)),
+  ]);
+}
 
 const { requireAppAuth } = require('./middleware/appSecret');
 
@@ -110,42 +117,67 @@ app.get('/app-config.js', (req, res) => {
 
 app.get('/api/health', async (req, res) => {
   const forceRecover = req.query.recover === '1' || req.query.recover === 'true';
-  try {
-    if (forceRecover) {
-      await recoverDatabase('health-check');
-    }
-    const result = await ensureDbReadyWithRecovery(forceRecover ? 4 : 3);
-    if (!result.ok) {
-      await recoverDatabase('health-auto');
-      const retry = await ensureDbReadyWithRecovery(4);
-      if (!retry.ok) throw new Error(retry.error || result.error || 'Database not ready');
-      probeOk();
+  const diag = getDbStatus();
+
+  if (!forceRecover && diag.ready) {
+    try {
+      getDb().prepare('SELECT 1 AS ok').get();
       return res.json({
         status: 'ok',
         service: 'eHealth AI API',
         db: true,
-        recovered: true,
+        dbPath: diag.dbPath,
         time: new Date().toISOString(),
       });
+    } catch {
+      /* fall through to recovery */
     }
-    getDb().prepare('SELECT 1 AS ok').get();
-    res.json({
+  }
+
+  if (!forceRecover) {
+    ensureDbReadyWithRecovery(2).catch(() => {});
+    return res.status(503).json({
+      status: 'recovering',
+      service: 'eHealth AI API',
+      db: false,
+      recovering: true,
+      error: diag.lastError,
+      wasm: diag.wasmPath,
+      dbPath: diag.dbPath,
+      hint: 'Database warming up — retry in a few seconds',
+      recoverUrl: '/api/health?recover=1',
+      time: new Date().toISOString(),
+    });
+  }
+
+  try {
+    await recoverDatabase('health-check');
+    const result = await Promise.race([
+      ensureDbReadyWithRecovery(4),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Database recovery timeout')), 20_000)
+      ),
+    ]);
+    if (!result.ok) throw new Error(result.error || 'Database not ready');
+    probeOk();
+    return res.json({
       status: 'ok',
       service: 'eHealth AI API',
       db: true,
-      recovered: !!result.recovered,
+      recovered: true,
+      dbPath: diag.dbPath,
       time: new Date().toISOString(),
     });
   } catch (err) {
-    const diag = getDbStatus();
+    const latest = getDbStatus();
     res.status(503).json({
       status: 'error',
       service: 'eHealth AI API',
       db: false,
       error: err.message,
-      wasm: diag.wasmPath,
-      dbPath: diag.dbPath,
-      hint: 'Auto-recovery in progress — retry in a few seconds or run deploy-live.sh',
+      wasm: latest.wasmPath,
+      dbPath: latest.dbPath,
+      hint: 'Run: bash ~/ehealth-ai/cpanel/fix-db-permanent.sh then RESTART Node.js',
       recoverUrl: '/api/health?recover=1',
       time: new Date().toISOString(),
     });
@@ -173,8 +205,8 @@ app.use(async (req, res, next) => {
   }
   if (req.path === '/api/health') return next();
   try {
-    await dbStartupPromise;
-    const result = await ensureDbForRequest(5);
+    await waitForStartup(12_000);
+    const result = await ensureDbForRequest(6);
     if (!result.ok) {
       throw new Error(result.error || 'Database not ready');
     }

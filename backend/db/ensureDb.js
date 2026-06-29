@@ -1,8 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const { initDatabase, getDb, resetDatabase, DB_PATH } = require('./init');
-const { findWasmPath } = require('./driver-sqljs');
+const { findWasmPath, quarantineCorruptDb } = require('./driver-sqljs');
 const { getDefaultDataPath } = require('./resolveDbPath');
+const { releaseLock } = require('./fileLock');
 
 let ready = false;
 let initPromise = null;
@@ -59,7 +60,7 @@ function clearDbArtifacts({ aggressive = false } = {}) {
     for (const name of names) {
       if (!isDbArtifact(name)) continue;
       const full = path.join(dir, name);
-      if (!aggressive && !isStaleArtifact(full) && name.endsWith('.lock')) continue;
+      if (name.endsWith('.lock') && !aggressive && !isStaleArtifact(full)) continue;
       try {
         fs.unlinkSync(full);
         removed += 1;
@@ -77,7 +78,36 @@ function clearDbArtifacts({ aggressive = false } = {}) {
       }
     }
   }
+  try {
+    releaseLock(`${DB_PATH}.lock`);
+  } catch {
+    /* ignore */
+  }
   return removed;
+}
+
+function backupCorruptDatabase(reason) {
+  if (!fs.existsSync(DB_PATH)) return false;
+  if (!ready) {
+    try {
+      const stat = fs.statSync(DB_PATH);
+      if (stat.size < 512) {
+        quarantineCorruptDb(DB_PATH, reason || 'file too small');
+        return true;
+      }
+    } catch {
+      /* ignore */
+    }
+    return false;
+  }
+  try {
+    getDb().prepare('SELECT 1').get();
+    return false;
+  } catch {
+    quarantineCorruptDb(DB_PATH, reason || 'probe failed');
+    resetDbState();
+    return true;
+  }
 }
 
 function sleep(ms) {
@@ -122,10 +152,9 @@ async function ensureDbReady() {
     for (let attempt = 1; attempt <= MAX_INIT_ATTEMPTS; attempt += 1) {
       try {
         clearDbArtifacts({ aggressive: attempt > 1 });
+        backupCorruptDatabase(`init attempt ${attempt}`);
         findWasmPath();
         await initDatabase();
-        const { migrateLegacyGeminiModel } = require('../services/settings');
-        migrateLegacyGeminiModel();
         probeDatabase();
         ready = true;
         lastError = null;
@@ -185,18 +214,19 @@ async function ensureDbForRequest(maxAttempts = 5) {
 }
 
 /** Block Passenger startup until DB is usable (prevents first-request 503). */
-async function startupDatabase(maxWaitMs = 60000) {
+async function startupDatabase(maxWaitMs = 30_000) {
   const started = Date.now();
   let lastErr = 'timeout';
   while (Date.now() - started < maxWaitMs) {
-    const result = await ensureDbReadyWithRecovery(4);
+    clearDbArtifacts({ aggressive: true });
+    backupCorruptDatabase('startup');
+    const result = await ensureDbReadyWithRecovery(3);
     if (result.ok) {
       console.log('[db] startupDatabase: OK', result.recovered ? '(recovered)' : '');
       return result;
     }
     lastErr = result.error || lastErr;
-    clearDbArtifacts({ aggressive: true });
-    await sleep(600);
+    await sleep(500);
   }
   throw new Error(lastErr || 'Database startup timeout');
 }
@@ -273,5 +303,6 @@ module.exports = {
   getDbStatus,
   clearDbArtifacts,
   resetDbState,
+  backupCorruptDatabase,
   startDbMaintenance,
 };

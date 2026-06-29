@@ -21,10 +21,19 @@ function resolveDatabasePath() {
     fs.mkdirSync(dataDir, { recursive: true });
     migrateLegacyIfNeeded(dataPath, legacyPaths);
     const envPath = process.env.DATABASE_PATH ? path.resolve(process.env.DATABASE_PATH) : null;
-    if (envPath && envPath !== dataPath && !envPath.replace(/\\/g, '/').includes('/data/')) {
-      console.warn(
-        `[db] Using ${dataPath} — set cPanel DATABASE_PATH to this path (was ${envPath})`
-      );
+    if (envPath && envPath !== dataPath) {
+      const envNorm = envPath.replace(/\\/g, '/');
+      if (!envNorm.includes('/data/') && fs.existsSync(envPath) && !fs.existsSync(dataPath)) {
+        try {
+          fs.copyFileSync(envPath, dataPath);
+          console.log(`[db] Copied DATABASE_PATH ${envPath} -> ${dataPath}`);
+        } catch (err) {
+          console.warn('[db] Could not copy env DATABASE_PATH to data/:', err.message);
+        }
+      }
+      if (!envNorm.includes('/data/')) {
+        console.warn(`[db] Using ${dataPath} — update cPanel DATABASE_PATH to this path (was ${envPath})`);
+      }
     }
     return dataPath;
   }

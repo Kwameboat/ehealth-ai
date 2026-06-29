@@ -25,7 +25,8 @@ curl -fsSL -o "$APP/cpanel/deploy-live.sh" "$BASE/cpanel/deploy-live.sh"
 chmod +x "$APP/cpanel/repair-production.sh" "$APP/cpanel/deploy-live.sh" 2>/dev/null || true
 
 curl -fsSL -o "$APP/cpanel/db-watchdog.sh" "$BASE/cpanel/db-watchdog.sh"
-chmod +x "$APP/cpanel/db-watchdog.sh" 2>/dev/null || true
+curl -fsSL -o "$APP/cpanel/fix-db-permanent.sh" "$BASE/cpanel/fix-db-permanent.sh"
+chmod +x "$APP/cpanel/db-watchdog.sh" "$APP/cpanel/fix-db-permanent.sh" 2>/dev/null || true
 
 bash "$APP/cpanel/repair-production.sh"
 

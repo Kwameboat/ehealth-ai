@@ -29,6 +29,7 @@ chmod 775 "$APP/data" 2>/dev/null || true
 
 echo "=== Syncing critical backend files from GitHub ==="
 curl -fsSL -o "$BACKEND/db/driver-sqljs.js" "$BASE/backend/db/driver-sqljs.js"
+curl -fsSL -o "$BACKEND/db/fileLock.js" "$BASE/backend/db/fileLock.js"
 curl -fsSL -o "$BACKEND/db/ensureDb.js" "$BASE/backend/db/ensureDb.js"
 curl -fsSL -o "$BACKEND/db/resolveDbPath.js" "$BASE/backend/db/resolveDbPath.js"
 curl -fsSL -o "$BACKEND/db/init.js" "$BASE/backend/db/init.js"
@@ -128,6 +129,11 @@ require('./db/ensureDb').startupDatabase(45000).then(() => {
   console.log('REPAIR OK');
 }).catch(e => { console.error('REPAIR FAILED:', e.message); process.exit(1); });
 "
+
+curl -fsSL -o "$APP/cpanel/fix-db-permanent.sh" "$BASE/cpanel/fix-db-permanent.sh" 2>/dev/null || true
+chmod +x "$APP/cpanel/fix-db-permanent.sh" 2>/dev/null || true
+export DATABASE_PATH="${DATABASE_PATH:-$APP/data/medassistant.db}"
+bash "$APP/cpanel/fix-db-permanent.sh" || echo "WARN: fix-db-permanent — set DATABASE_PATH in cPanel then RESTART"
 
 echo ""
 echo "=== REQUIRED ==="

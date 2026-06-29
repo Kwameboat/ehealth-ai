@@ -35,7 +35,22 @@ function clearSession() {
   localStorage.removeItem(ADMIN_KEY);
 }
 
-async function tryRecoverDb(maxAttempts = 5) {
+async function waitForDbReady(maxMs = 45000) {
+  const started = Date.now();
+  while Date.now() - started < maxMs) {
+    try {
+      const res = await fetch('/api/health?recover=1', { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.db === true) return true;
+    } catch {
+      /* retry */
+    }
+    await new Promise((r) => setTimeout(r, 1200));
+  }
+  return false;
+}
+
+async function tryRecoverDb(maxAttempts = 8) {
   for (let i = 0; i < maxAttempts; i += 1) {
     try {
       const res = await fetch('/api/health?recover=1', { cache: 'no-store' });
@@ -45,7 +60,7 @@ async function tryRecoverDb(maxAttempts = 5) {
       /* retry */
     }
     if (i < maxAttempts - 1) {
-      await new Promise((r) => setTimeout(r, 700 * (i + 1)));
+      await new Promise((r) => setTimeout(r, 900 * (i + 1)));
     }
   }
   return false;
@@ -59,7 +74,7 @@ async function api(path, options = {}, attempt = 0) {
   try {
     res = await fetch(`${API}${path}`, { ...options, headers });
   } catch {
-    if (attempt < 4 && (await tryRecoverDb())) {
+    if (attempt < 7 && (await tryRecoverDb())) {
       return api(path, options, attempt + 1);
     }
     throw new Error('Failed to fetch');
@@ -72,7 +87,7 @@ async function api(path, options = {}, attempt = 0) {
     throw new Error('Session expired');
   }
   if (!res.ok) {
-    if (res.status === 503 && attempt < 4 && path !== '/login') {
+    if (res.status === 503 && attempt < 7 && path !== '/login') {
       if (await tryRecoverDb()) {
         return api(path, options, attempt + 1);
       }
@@ -162,6 +177,16 @@ async function runPage(el, loadingText, fn, retry) {
   try {
     await fn();
   } catch (err) {
+    const is503 = /503|Database not ready|recover/i.test(String(err.message || err));
+    if (is503 && !el.dataset.recovering) {
+      el.dataset.recovering = '1';
+      el.innerHTML = `<p class="muted">Database recovering… auto-retry in progress.</p>`;
+      if (await waitForDbReady(40000)) {
+        delete el.dataset.recovering;
+        return runPage(el, loadingText, fn, retry);
+      }
+      delete el.dataset.recovering;
+    }
     showPageError(el, err, retry || (() => runPage(el, loadingText, fn, retry)));
   }
 }
@@ -1136,9 +1161,16 @@ document.getElementById('page-dashboard')?.addEventListener('click', (e) => {
   if (e.target.closest('[data-goto-analytics]')) showPage('analytics');
 });
 
-if (getToken()) {
+async function bootApp() {
+  if (!getToken()) {
+    showLogin();
+    return;
+  }
   showApp();
+  document.getElementById('page-dashboard').innerHTML =
+    '<p class="muted">Connecting to database…</p>';
+  await waitForDbReady(35000);
   showPage('dashboard');
-} else {
-  showLogin();
 }
+
+bootApp();

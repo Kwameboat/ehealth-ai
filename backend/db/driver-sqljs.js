@@ -1,5 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const { withFileLock } = require('./fileLock');
+
+let sqlModulePromise = null;
 
 function findWasmPath() {
   if (process.env.SQLJS_WASM_PATH && fs.existsSync(process.env.SQLJS_WASM_PATH)) {
@@ -24,6 +27,21 @@ function findWasmPath() {
   );
 }
 
+async function loadSqlModule() {
+  if (!sqlModulePromise) {
+    const wasmPath = findWasmPath();
+    const initSqlJs = require('sql.js');
+    const timeoutMs = Number(process.env.SQLJS_INIT_TIMEOUT_MS) || 20_000;
+    sqlModulePromise = Promise.race([
+      initSqlJs({ locateFile: () => wasmPath }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('sql.js WASM init timeout')), timeoutMs)
+      ),
+    ]);
+  }
+  return sqlModulePromise;
+}
+
 function removeIfExists(filePath) {
   try {
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
@@ -32,33 +50,42 @@ function removeIfExists(filePath) {
   }
 }
 
-function writeFileSafe(filePath, buf) {
+function quarantineCorruptDb(dbPath, reason) {
+  if (!fs.existsSync(dbPath)) return null;
+  const bak = `${dbPath}.corrupt-${Date.now()}.bak`;
+  try {
+    fs.renameSync(dbPath, bak);
+    console.error(`[db] Quarantined corrupt DB -> ${bak} (${reason})`);
+    return bak;
+  } catch (err) {
+    console.error('[db] Could not quarantine corrupt DB:', err.message);
+    return null;
+  }
+}
+
+function writeBytesUnsafe(filePath, buf) {
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   const tmp = `${filePath}.tmp`;
-
-  const attempt = () => {
-    removeIfExists(tmp);
-    fs.writeFileSync(tmp, buf);
-    try {
-      fs.renameSync(tmp, filePath);
-    } catch (_) {
-      fs.writeFileSync(filePath, buf);
-      removeIfExists(tmp);
-    }
-  };
-
+  removeIfExists(tmp);
+  fs.writeFileSync(tmp, buf);
   try {
-    attempt();
-  } catch (err) {
+    fs.renameSync(tmp, filePath);
+  } catch (_) {
+    fs.writeFileSync(filePath, buf);
     removeIfExists(tmp);
-    try {
-      attempt();
-    } catch (retryErr) {
-      const msg = retryErr.code ? `${retryErr.code}: ${retryErr.message}` : retryErr.message;
-      throw new Error(`Cannot write database file ${filePath} (${msg}). Use ~/ehealth-ai/data/ and chmod 775`);
-    }
   }
+}
+
+function writeFileSafe(filePath, buf) {
+  const lockPath = `${filePath}.lock`;
+  return withFileLock(
+    lockPath,
+    () => {
+      writeBytesUnsafe(filePath, buf);
+    },
+    { timeoutMs: 30_000 }
+  );
 }
 
 function createWrapper(SQL, dbPath) {
@@ -67,24 +94,57 @@ function createWrapper(SQL, dbPath) {
   let dirty = false;
   let txnDepth = 0;
   let persistTimer = null;
-  const persistDelayMs = Number(process.env.DB_PERSIST_DELAY_MS) || 350;
+  let opChain = Promise.resolve();
+  const lockPath = `${dbPath}.lock`;
+  const persistDelayMs =
+    Number(process.env.DB_PERSIST_DELAY_MS) ||
+    (process.env.NODE_ENV === 'production' ? 1500 : 350);
 
-  function loadFromDisk() {
+  function runSerialized(fn) {
+    const run = opChain.then(fn, fn);
+    opChain = run.catch(() => {});
+    return run;
+  }
+
+  function loadFromDiskSync() {
     removeIfExists(`${dbPath}.tmp`);
-    if (fs.existsSync(dbPath)) {
-      rawDb = new SQL.Database(fs.readFileSync(dbPath));
-    } else {
+    if (!fs.existsSync(dbPath)) {
+      rawDb = new SQL.Database();
+      return;
+    }
+    try {
+      const buf = fs.readFileSync(dbPath);
+      rawDb = new SQL.Database(buf);
+      const rows = rawDb.exec('PRAGMA integrity_check');
+      const status = rows?.[0]?.values?.[0]?.[0];
+      if (status && status !== 'ok') {
+        throw new Error(`integrity_check: ${status}`);
+      }
+    } catch (err) {
+      quarantineCorruptDb(dbPath, err.message);
       rawDb = new SQL.Database();
     }
   }
 
-  function persistNow() {
+  function persistNowSync() {
     if (deferPersist || txnDepth > 0) {
       dirty = true;
       return;
     }
-    writeFileSafe(dbPath, Buffer.from(rawDb.export()));
+    writeBytesUnsafe(dbPath, Buffer.from(rawDb.export()));
     dirty = false;
+  }
+
+  function persistNow() {
+    return runSerialized(() =>
+      withFileLock(
+        lockPath,
+        () => {
+          persistNowSync();
+        },
+        { timeoutMs: 30_000 }
+      )
+    );
   }
 
   function persist() {
@@ -95,12 +155,10 @@ function createWrapper(SQL, dbPath) {
     if (persistTimer) return;
     persistTimer = setTimeout(() => {
       persistTimer = null;
-      try {
-        persistNow();
-      } catch (err) {
+      persistNow().catch((err) => {
         console.error('[db] persist failed:', err.message);
         dirty = true;
-      }
+      });
     }, persistDelayMs);
     if (typeof persistTimer.unref === 'function') persistTimer.unref();
   }
@@ -110,21 +168,27 @@ function createWrapper(SQL, dbPath) {
       clearTimeout(persistTimer);
       persistTimer = null;
     }
-    if (!dirty && !deferPersist && txnDepth === 0) {
-      try {
-        persistNow();
-      } catch {
-        /* ignore */
-      }
-      return;
-    }
-    if (dirty || deferPersist || txnDepth > 0) {
-      writeFileSafe(dbPath, Buffer.from(rawDb.export()));
-      dirty = false;
-    }
+    return runSerialized(() =>
+      withFileLock(
+        lockPath,
+        () => {
+          if (dirty || deferPersist || txnDepth > 0) {
+            writeBytesUnsafe(dbPath, Buffer.from(rawDb.export()));
+            dirty = false;
+            return;
+          }
+          try {
+            persistNowSync();
+          } catch {
+            /* ignore */
+          }
+        },
+        { timeoutMs: 30_000 }
+      )
+    );
   }
 
-  loadFromDisk();
+  loadFromDiskSync();
 
   return {
     flush,
@@ -194,10 +258,8 @@ function createWrapper(SQL, dbPath) {
 }
 
 async function openDatabase(dbPath) {
-  const initSqlJs = require('sql.js');
-  const wasmPath = findWasmPath();
-  const SQL = await initSqlJs({ locateFile: () => wasmPath });
+  const SQL = await loadSqlModule();
   return createWrapper(SQL, dbPath);
 }
 
-module.exports = { openDatabase, findWasmPath };
+module.exports = { openDatabase, findWasmPath, quarantineCorruptDb };
