@@ -10,6 +10,7 @@ import { getApiAuthHeadersAsync } from './apiAuth';
 import { getApiUrl } from './appConfig';
 import { fetchWithRetry } from './fetchRetry';
 import { notifyPointsBalance } from './pointsBridge';
+import { typingForIntent } from '../constants/smartAssistant';
 
 function getApiBase() {
   return getApiUrl();
@@ -25,7 +26,7 @@ function buildMeta(history, recommending) {
 }
 
 /**
- * @returns {Promise<{ reply: string, meta?: object }>}
+ * @returns {Promise<{ reply: string, meta?: object, actions?: array }>}
  */
 export async function sendChatMessage({
   history = [],
@@ -70,7 +71,7 @@ export async function sendChatMessage({
       notifyPointsBalance(data.points.balance);
       if (onPointsUpdate) onPointsUpdate(data.points.balance);
     }
-    return { reply: data.reply, meta: data.meta };
+    return { reply: data.reply, meta: data.meta, actions: data.actions || [] };
   }
 
   const { generateContent } = await import('./geminiClient');
@@ -147,7 +148,9 @@ export async function sendChatMessage({
   return { reply, meta: buildMeta(history, recommending) };
 }
 
-export function getTypingLabel(history, hasAttachments = false) {
+export function getTypingLabel(history, hasAttachments = false, intent = null) {
+  const smart = typingForIntent(intent, history, hasAttachments);
+  if (smart) return smart;
   if (hasAttachments) return 'Reviewing your files…';
   const triageTurn = countTriageAssistantTurns(history);
   if (shouldGiveRecommendations(history)) return 'Preparing your recommendations…';

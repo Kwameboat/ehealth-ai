@@ -12,10 +12,10 @@ const TYPES = [
   { id: 'hospital', label: 'Hospital' },
 ];
 
-export default function FacilityFinderScreen({ navigation }) {
+export default function FacilityFinderScreen({ navigation, route }) {
   const med = useMedTheme();
   const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
-  const [type, setType] = useState('pharmacy');
+  const [type, setType] = useState(route.params?.type || 'pharmacy');
   const [places, setPlaces] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');

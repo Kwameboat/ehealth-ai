@@ -13,6 +13,8 @@ import ResponsiveContainer from '../Components/ResponsiveContainer';
 import SymptomMenuModal from '../Components/SymptomMenuModal';
 import { useMedTheme } from '../hooks/useMedTheme';
 import { QUICK_ACTIONS, SYMPTOM_CATEGORIES } from '../constants/symptomCategories';
+import { SUGGESTION_CHIPS } from '../constants/smartAssistant';
+import { loadRecentChatTopics } from '../services/chatStorage';
 import { useAuth } from '../Context/AuthContext';
 import { useResponsive } from '../hooks/useResponsive';
 import { useChatVoiceInput } from '../hooks/useChatVoiceInput';
@@ -30,6 +32,11 @@ const MedicalHomeScreen = ({ navigation }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeCategory, setActiveCategory] = useState('MedicalHealth');
   const [chatFocusMode, setChatFocusMode] = useState(false);
+  const [recentChats, setRecentChats] = useState([]);
+
+  useEffect(() => {
+    loadRecentChatTopics().then(setRecentChats).catch(() => {});
+  }, []);
 
   const voice = useChatVoiceInput({
     onTranscript: (text) => {
@@ -84,12 +91,20 @@ const MedicalHomeScreen = ({ navigation }) => {
 
   const handleQuickAction = (action) => {
     if (action.screen) {
-      navigation.navigate(action.screen);
+      navigation.navigate(action.screen, action.params || {});
       return;
     }
     if (action.chatPrompt) {
       goToChat(action.chatPrompt);
     }
+  };
+
+  const handleHomeChip = (chip) => {
+    if (chip.screen) {
+      navigation.navigate(chip.screen, chip.params || {});
+      return;
+    }
+    if (chip.prompt) goToChat(chip.prompt);
   };
 
   const Sidebar = () => (
@@ -141,11 +156,8 @@ const MedicalHomeScreen = ({ navigation }) => {
       </ScrollView>
 
       <Text style={styles.sidebarSection}>Recent Chats</Text>
-      {[
-        'Chest pain after exercise…',
-        'Knee joint swelling report',
-        'Sleep tracking analysis',
-      ].map((label) => (
+      {(recentChats.length ? recentChats : ['Ask about NHIS coverage', 'Find pharmacy near me', 'Can I eat banku?']).map(
+        (label) => (
         <TouchableOpacity key={label} style={styles.recentChat} onPress={() => goToChat(label)}>
           <Text style={styles.recentChatText} numberOfLines={1}>
             {label}
@@ -187,7 +199,7 @@ const MedicalHomeScreen = ({ navigation }) => {
                 style={[styles.topTitle, r.isSmallPhone && styles.topTitleSmall]}
                 numberOfLines={1}
               >
-                AI Medical Assistant
+                AI Smart Assistant
               </Text>
               <View style={styles.topRight}>
                 {backendRequired && user && pointsEnabled && (
@@ -255,8 +267,8 @@ const MedicalHomeScreen = ({ navigation }) => {
                         : `How can ${AI_ASSISTANT_NAME} help with your health today?`}
                     </Text>
                     <Text style={[styles.heroSub, { fontSize: r.heroSubSize }]}>
-                      Describe your symptoms or ask a medical question. {AI_ASSISTANT_NAME} is here
-                      to analyze and guide your health journey.
+                      Ask about NHIS, Ghana diet, symptoms, medicines, or find care near you.
+                      {` ${AI_ASSISTANT_NAME}`} is your full health companion — not just triage.
                     </Text>
 
                     {r.useQuickGrid ? (
@@ -313,6 +325,31 @@ const MedicalHomeScreen = ({ navigation }) => {
                     )}
                   </>
                 )}
+              </ScrollView>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ maxHeight: 44, marginBottom: 8, paddingHorizontal: r.horizontalPadding }}
+                contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
+              >
+                {SUGGESTION_CHIPS.slice(0, 6).map((chip) => (
+                  <TouchableOpacity
+                    key={chip.id}
+                    style={{
+                      backgroundColor: med.surface,
+                      borderWidth: 1,
+                      borderColor: med.cardBorder,
+                      borderRadius: 20,
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      marginRight: 8,
+                    }}
+                    onPress={() => handleHomeChip(chip)}
+                  >
+                    <Text style={{ color: med.primary, fontSize: 13, fontWeight: '600' }}>{chip.label}</Text>
+                  </TouchableOpacity>
+                ))}
               </ScrollView>
 
               <View style={{ paddingHorizontal: r.horizontalPadding }}>

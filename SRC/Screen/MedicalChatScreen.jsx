@@ -20,19 +20,22 @@ import AppBottomNav from '../Components/AppBottomNav';
 import ChatInputBar from '../Components/ChatInputBar';
 import ResponsiveContainer from '../Components/ResponsiveContainer';
 import ThemeToggleButton from '../Components/ThemeToggleButton';
-import { AI_ASSISTANT_NAME } from '../constants/branding';
+import { AI_ASSISTANT_NAME, getUserFirstName } from '../constants/branding';
+import { SMART_WELCOME, SUGGESTION_CHIPS } from '../constants/smartAssistant';
+import { useAuth } from '../Context/AuthContext';
 import { useMedTheme } from '../hooks/useMedTheme';
 import { useResponsive } from '../hooks/useResponsive';
 import { attachmentToBase64, guessImageMimeType } from '../services/fileToBase64';
 import { useChatVoiceInput } from '../hooks/useChatVoiceInput';
 import { pickChatAttachments } from '../services/chatAttachmentPicker';
 import { getTypingLabel, sendChatMessage } from '../services/geminiChat';
+import { saveRecentChatTopic } from '../services/chatStorage';
 import { takeStashedAttachments } from '../services/attachmentBridge';
 
 const MAX_PDF_BYTES = 8 * 1024 * 1024;
-const CHAT_STORAGE_KEY = '@ehealth_medical_chat_v1';
+const CHAT_STORAGE_KEY = '@ehealth_smart_chat_v2';
 
-function createMessage(role, text, attachment = null, status = 'sent') {
+function createMessage(role, text, attachment = null, status = 'sent', actions = null) {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     role,
@@ -40,22 +43,22 @@ function createMessage(role, text, attachment = null, status = 'sent') {
     attachment,
     ts: new Date(),
     status,
+    actions: actions || null,
   };
 }
 
-function welcomeMessage() {
-  return createMessage(
-    'assistant',
-    `Hello — I'm ${AI_ASSISTANT_NAME}, your health assistant at eHealth AI. Tell me what's bothering you. I'll ask up to 5 short follow-up questions, then share recommendations. For emergencies, use Emergency or call your local emergency number.`
-  );
+function welcomeMessage(firstName) {
+  return createMessage('assistant', SMART_WELCOME(firstName));
 }
 
 export default function MedicalChatScreen({ navigation, route }) {
   const med = useMedTheme();
   const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
   const r = useResponsive();
+  const { user } = useAuth();
+  const firstName = getUserFirstName(user);
   const initialMessage = route.params?.initialMessage;
-  const [messages, setMessages] = useState([welcomeMessage()]);
+  const [messages, setMessages] = useState([welcomeMessage(firstName)]);
   const [input, setInput] = useState(initialMessage || '');
   const [pendingAttachments, setPendingAttachments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -203,7 +206,8 @@ export default function MedicalChatScreen({ navigation, route }) {
     }
 
     setIsLoading(true);
-    setTypingLabel(getTypingLabel(history, attachmentsToSend.length > 0));
+    const guessedIntent = /^(menu|help)$/i.test(text) ? 'menu' : null;
+    setTypingLabel(getTypingLabel(history, attachmentsToSend.length > 0, guessedIntent));
     setFailedPayload(null);
 
     try {
@@ -213,7 +217,9 @@ export default function MedicalChatScreen({ navigation, route }) {
         apiAttachments.push({ mimeType: att.mimeType, base64 });
       }
 
-      const { reply, meta } = await sendChatMessage({
+      if (text && text.length > 4) saveRecentChatTopic(text);
+
+      const { reply, meta, actions } = await sendChatMessage({
         history,
         userText: userMessage.text,
         attachments: apiAttachments.length ? apiAttachments : null,
@@ -221,17 +227,12 @@ export default function MedicalChatScreen({ navigation, route }) {
 
       const msgId = retryPayload?.messageId || userMessage.id;
       setMessages((prev) => {
-        const updated = prev.map((m) =>
-          m.id === msgId ? { ...m, status: 'sent' } : m
-        );
-        const phaseHint =
-          meta?.phase === 'recommendations'
-            ? ''
-            : meta?.triageTurn >= 4
-              ? ' (Almost done — recommendations next.)'
-              : '';
-        return [...updated, createMessage('assistant', `${reply}${phaseHint}`)];
+        const updated = prev.map((m) => (m.id === msgId ? { ...m, status: 'sent' } : m));
+        return [...updated, createMessage('assistant', reply, null, 'sent', actions?.length ? actions : null)];
       });
+      if (meta?.intent) {
+        setTypingLabel(getTypingLabel(history, false, meta.intent));
+      }
     } catch (e) {
       const msgId = retryPayload?.messageId || userMessage.id;
       setMessages((prev) =>
@@ -266,12 +267,25 @@ export default function MedicalChatScreen({ navigation, route }) {
         text: 'Clear',
         style: 'destructive',
         onPress: () => {
-          setMessages([welcomeMessage()]);
+          setMessages([welcomeMessage(firstName)]);
           setFailedPayload(null);
           AsyncStorage.removeItem(CHAT_STORAGE_KEY).catch(() => {});
         },
       },
     ]);
+  };
+
+  const runChip = (chip) => {
+    if (chip.screen) {
+      navigation.navigate(chip.screen, chip.params || {});
+      return;
+    }
+    if (chip.prompt) handleSend(chip.prompt);
+  };
+
+  const runAction = (action) => {
+    if (!action?.screen) return;
+    navigation.navigate(action.screen, action.params || {});
   };
 
   const renderAttachmentPreview = (attachment, compact = false) => {
@@ -330,6 +344,19 @@ export default function MedicalChatScreen({ navigation, route }) {
         <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
           {renderAttachmentPreview(item.attachment)}
           <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>{item.text}</Text>
+          {!isUser && item.actions?.length > 0 ? (
+            <View style={styles.actionRow}>
+              {item.actions.map((action) => (
+                <TouchableOpacity
+                  key={action.id || action.label}
+                  style={styles.actionChip}
+                  onPress={() => runAction(action)}
+                >
+                  <Text style={styles.actionChipText}>{action.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
           {isUser && item.status === 'failed' ? (
             <TouchableOpacity
               style={styles.retryBtn}
@@ -362,10 +389,10 @@ export default function MedicalChatScreen({ navigation, route }) {
             <Ionicons name="arrow-back" size={24} color={med.text} />
           </TouchableOpacity>
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Chat with {AI_ASSISTANT_NAME}</Text>
+            <Text style={styles.headerTitle}>Smart Health Chat</Text>
             <View style={styles.onlineRow}>
               <View style={styles.onlineDot} />
-              <Text style={styles.onlineLabel}>{AI_ASSISTANT_NAME} online</Text>
+              <Text style={styles.onlineLabel}>{AI_ASSISTANT_NAME} · NHIS · diet · care finder</Text>
             </View>
           </View>
           <ThemeToggleButton compact style={{ marginRight: 4 }} />
@@ -422,6 +449,24 @@ export default function MedicalChatScreen({ navigation, route }) {
                 </TouchableOpacity>
               </View>
             )}
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={[styles.chipsScroll, { marginHorizontal: r.horizontalPadding }]}
+              contentContainerStyle={styles.chipsContent}
+            >
+              {SUGGESTION_CHIPS.map((chip) => (
+                <TouchableOpacity
+                  key={chip.id}
+                  style={styles.chip}
+                  onPress={() => runChip(chip)}
+                  disabled={isLoading}
+                >
+                  <Text style={styles.chipText}>{chip.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
             <View style={{ paddingHorizontal: r.horizontalPadding }}>
               <ChatInputBar
@@ -525,6 +570,26 @@ const createStyles = (med) =>
   retryBtn: { marginTop: 8, alignSelf: 'flex-start' },
   retryText: { color: '#fff', fontSize: 12, fontWeight: '700', textDecorationLine: 'underline' },
   statusText: { color: 'rgba(255,255,255,0.75)', fontSize: 11, marginTop: 4 },
+  chipsScroll: { maxHeight: 44, marginBottom: 6 },
+  chipsContent: { gap: 8, paddingVertical: 4 },
+  chip: {
+    backgroundColor: med.surface,
+    borderWidth: 1,
+    borderColor: med.cardBorder,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginRight: 8,
+  },
+  chipText: { color: med.primary, fontSize: 13, fontWeight: '600' },
+  actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  actionChip: {
+    backgroundColor: med.primary,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  actionChipText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   pendingBar: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -3,7 +3,6 @@ const { requireUserAuth } = require('../middleware/userAuth');
 const { deductPoints, PointsError } = require('../services/points');
 const {
   callGemini,
-  chatCompletion,
   resolveChatFeatureKey,
   resolveGenerationConfig,
 } = require('../services/gemini');
@@ -13,6 +12,7 @@ const {
 } = require('../services/clinicalResponseFormat');
 const { SYMPTOM_SYSTEM_INSTRUCTION } = require('../services/symptomClinicalPrompt');
 const { logUsage } = require('../services/points');
+const { smartChat } = require('../services/smartAssistant');
 
 const router = express.Router();
 const { getGeminiModel } = require('../services/settings');
@@ -66,13 +66,14 @@ router.post('/chat', async (req, res) => {
       attachments = null,
       featureKey: overrideKey,
     } = req.body || {};
-    featureKey = overrideKey || resolveChatFeatureKey(attachment, attachments);
+    const smart = await smartChat(req.userId, history, userText, attachment, attachments);
+    featureKey = overrideKey || smart.featureKey || resolveChatFeatureKey(attachment, attachments);
 
     const deduction = deductPoints(req.userId, featureKey);
-    const result = await chatCompletion(history, userText, attachment, attachments);
     res.json({
-      reply: result.reply,
-      meta: result.meta,
+      reply: smart.reply,
+      meta: smart.meta,
+      actions: smart.actions || [],
       points: { charged: deduction.charged, balance: deduction.balance, featureKey },
     });
   } catch (e) {

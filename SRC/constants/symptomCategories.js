@@ -18,6 +18,14 @@ export const SYMPTOM_CATEGORIES = [
 
 export const QUICK_ACTIONS = [
   {
+    id: 'ask',
+    title: 'Ask Agyenim Anything',
+    desc: 'NHIS, diet, symptoms, medicines & more',
+    icon: 'robot-happy-outline',
+    color: '#00C9A7',
+    chatPrompt: 'menu',
+  },
+  {
     id: 'health-hub',
     title: 'Health Services',
     desc: 'NHIS, diet, BP, reminders, video doctors & more',

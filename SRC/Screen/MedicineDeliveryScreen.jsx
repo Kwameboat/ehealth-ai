@@ -4,10 +4,10 @@ import HealthFeatureLayout from '../Components/HealthFeatureLayout';
 import { useMedTheme } from '../hooks/useMedTheme';
 import { orderMedicineDelivery } from '../services/healthApi';
 
-export default function MedicineDeliveryScreen({ navigation }) {
+export default function MedicineDeliveryScreen({ navigation, route }) {
   const med = useMedTheme();
   const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
-  const [medicationName, setMedicationName] = useState('');
+  const [medicationName, setMedicationName] = useState(route.params?.medicationName || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
