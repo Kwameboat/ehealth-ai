@@ -13,6 +13,13 @@ BASE="https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main"
 
 echo "=== eHealth AI — LIVE DEPLOY ==="
 
+mkdir -p "$APP/data" "$APP/backend/db" "$PUBLIC/tmp"
+chmod 775 "$APP/data" 2>/dev/null || true
+rm -f "$APP/data/"*.lock "$APP/data/"*.tmp "$APP/backend/db/"*.lock "$APP/backend/db/"*.tmp 2>/dev/null || true
+find "$APP/data" "$APP/backend/db" -maxdepth 1 -name '.writetest-*' -delete 2>/dev/null || true
+touch "$PUBLIC/tmp/restart.txt" 2>/dev/null || true
+echo "Cleared DB lock files; triggered Passenger restart.txt"
+
 curl -fsSL -o "$APP/cpanel/repair-production.sh" "$BASE/cpanel/repair-production.sh"
 curl -fsSL -o "$APP/cpanel/deploy-live.sh" "$BASE/cpanel/deploy-live.sh"
 chmod +x "$APP/cpanel/repair-production.sh" "$APP/cpanel/deploy-live.sh" 2>/dev/null || true
