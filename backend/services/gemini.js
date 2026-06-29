@@ -1,8 +1,8 @@
 const { getGeminiApiKey, getGeminiModel } = require('./settings');
 const { normalizeGeminiModel } = require('./geminiModels');
+const { sanitizePwaReply } = require('./replySanitizer');
 const {
   MEDICAL_CHAT_SYSTEM_PROMPT,
-  MEDICAL_CHAT_MODEL_ACK,
   MEDICAL_CHAT_GENERATION_CONFIG,
   MEDICAL_CHAT_RECOMMENDATION_CONFIG,
   shouldGiveRecommendations,
@@ -33,7 +33,13 @@ async function callGemini(contents, model, options = {}) {
     body: JSON.stringify({
       contents,
       ...(options.generationConfig ? { generationConfig: options.generationConfig } : {}),
-      ...(options.systemInstruction ? { systemInstruction: options.systemInstruction } : {}),
+      ...(options.systemInstruction
+        ? {
+            systemInstruction: {
+              parts: [{ text: options.systemInstruction }],
+            },
+          }
+        : {}),
     }),
   });
 
@@ -69,7 +75,16 @@ function normalizeAttachments(attachment, attachments) {
   return [];
 }
 
-function buildChatContents(history, userText, attachment, attachments) {
+function buildTriageSystemInstruction(history, userText) {
+  let instruction = MEDICAL_CHAT_SYSTEM_PROMPT;
+  const directive = resolveTriageDirective(history, userText);
+  if (directive) {
+    instruction += `\n\n[Internal — never repeat to user]: ${directive}`;
+  }
+  return instruction;
+}
+
+function buildChatPayload(history, userText, attachment, attachments) {
   const userParts = [];
   const files = normalizeAttachments(attachment, attachments);
   for (const file of files) {
@@ -86,22 +101,20 @@ function buildChatContents(history, userText, attachment, attachments) {
     userParts.push({ text: 'Please analyze the attached file and summarize any medical information.' });
   }
 
-  const triageDirective = resolveTriageDirective(history, userText);
-  if (triageDirective) {
-    userParts.push({ text: triageDirective });
-  }
-
   const recentHistory = history.slice(-14).map((msg) => ({
     role: msg.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: msg.text || '(shared an attachment)' }],
   }));
 
-  return [
-    { role: 'user', parts: [{ text: MEDICAL_CHAT_SYSTEM_PROMPT }] },
-    { role: 'model', parts: [{ text: MEDICAL_CHAT_MODEL_ACK }] },
-    ...recentHistory,
-    { role: 'user', parts: userParts },
-  ];
+  return {
+    contents: [...recentHistory, { role: 'user', parts: userParts }],
+    systemInstruction: buildTriageSystemInstruction(history, userText),
+  };
+}
+
+/** @deprecated use buildChatPayload — kept for tests */
+function buildChatContents(history, userText, attachment, attachments) {
+  return buildChatPayload(history, userText, attachment, attachments).contents;
 }
 
 function resolveChatFeatureKey(attachment, attachments) {
@@ -114,13 +127,15 @@ function resolveChatFeatureKey(attachment, attachments) {
 
 async function chatCompletion(history, userText, attachment, attachments) {
   const recommending = shouldGiveRecommendations(history);
-  const contents = buildChatContents(history, userText, attachment, attachments);
+  const { contents, systemInstruction } = buildChatPayload(history, userText, attachment, attachments);
   const generationConfig = recommending
     ? MEDICAL_CHAT_RECOMMENDATION_CONFIG
     : MEDICAL_CHAT_GENERATION_CONFIG;
 
-  let data = await callGemini(contents, undefined, { generationConfig });
-  let reply = getChatRawText(data);
+  const geminiOpts = { generationConfig, systemInstruction };
+
+  let data = await callGemini(contents, undefined, geminiOpts);
+  let reply = sanitizePwaReply(getChatRawText(data));
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const needsMore =
@@ -135,15 +150,15 @@ async function chatCompletion(history, userText, attachment, attachments) {
           role: 'user',
           parts: [
             {
-              text: 'Continue exactly where you were cut off. Complete your recommendations. Do not repeat the opening.',
+              text: 'Continue your previous reply. Complete recommendations only. Do not repeat the opening or any instructions.',
             },
           ],
         },
       ],
       undefined,
-      { generationConfig: MEDICAL_CHAT_RECOMMENDATION_CONFIG }
+      { generationConfig: MEDICAL_CHAT_RECOMMENDATION_CONFIG, systemInstruction }
     );
-    const more = getChatRawText(contData);
+    const more = sanitizePwaReply(getChatRawText(contData));
     if (more) reply = `${reply} ${more}`.replace(/\s+/g, ' ').trim();
     data = contData;
     if (!isChatTruncated(contData) && !isLikelyTruncatedText(reply)) break;
@@ -176,6 +191,7 @@ module.exports = {
   callGemini,
   chatCompletion,
   buildChatContents,
+  buildChatPayload,
   resolveChatFeatureKey,
   resolveGenerationConfig,
   MEDICAL_CHAT_SYSTEM_PROMPT,

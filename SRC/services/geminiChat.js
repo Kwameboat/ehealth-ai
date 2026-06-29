@@ -1,6 +1,4 @@
 import {
-  MEDICAL_CHAT_MODEL_ACK,
-  MEDICAL_CHAT_SYSTEM_PROMPT,
   countTriageAssistantTurns,
   isLikelyTruncatedText,
   resolveTriageDirective,
@@ -25,13 +23,25 @@ function buildMeta(history, recommending) {
   };
 }
 
+const LEAK_PATTERNS = [
+  /^understood\.?\s*i will ask at most/i,
+  /^you are agyenim,?\s*the (professional|ehealth)/i,
+  /conversation style \(strict\)/i,
+  /give your final recommendations now/i,
+  /internal instruction/i,
+];
+
 function sanitizeClientReply(text) {
   let t = String(text || '').trim();
+  t = t.replace(/\*\*/g, '');
+  for (const re of LEAK_PATTERNS) {
+    if (re.test(t)) t = t.replace(re, '').trim();
+  }
   t = t.replace(/\bon whatsapp\b/gi, 'in this app');
   t = t.replace(/\buse whatsapp\b/gi, 'use this app');
   t = t.replace(/\bregister at ehealthaigh\.com\b/gi, 'sign in to this app');
   t = t.replace(/\bvisit ehealthaigh\.com\b/gi, 'use this app');
-  return t;
+  return t.trim();
 }
 
 /**
@@ -87,78 +97,7 @@ export async function sendChatMessage({
     };
   }
 
-  const { generateContent } = await import('./geminiClient');
-
-  const userParts = [];
-  for (const file of fileList) {
-    if (file?.base64 && file?.mimeType) {
-      userParts.push({
-        inline_data: { mime_type: file.mimeType, data: file.base64 },
-      });
-    }
-  }
-  const trimmedText = (userText || '').trim();
-  if (trimmedText) userParts.push({ text: trimmedText });
-  if (userParts.length === 0) {
-    userParts.push({ text: 'Please analyze the attached file and summarize any medical information.' });
-  }
-
-  const triageDirective = resolveTriageDirective(history, userText);
-  if (triageDirective) {
-    userParts.push({ text: triageDirective });
-  }
-
-  const recentHistory = history.slice(-14).map((msg) => ({
-    role: msg.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: msg.text || '(shared an attachment)' }],
-  }));
-
-  const contents = [
-    { role: 'user', parts: [{ text: MEDICAL_CHAT_SYSTEM_PROMPT }] },
-    { role: 'model', parts: [{ text: MEDICAL_CHAT_MODEL_ACK }] },
-    ...recentHistory,
-    { role: 'user', parts: userParts },
-  ];
-
-  const recommending = shouldGiveRecommendations(history);
-  let data = await generateContent({ contents });
-  let reply =
-    data?.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('').trim() || '';
-
-  const isTruncated = () => {
-    const reason = data?.candidates?.[0]?.finishReason;
-    return reason === 'MAX_TOKENS' || reason === 'LENGTH';
-  };
-
-  for (
-    let attempt = 0;
-    attempt < 2 && recommending && reply && (isTruncated() || isLikelyTruncatedText(reply));
-    attempt += 1
-  ) {
-    const contData = await generateContent({
-      contents: [
-        ...contents,
-        { role: 'model', parts: [{ text: reply }] },
-        {
-          role: 'user',
-          parts: [
-            {
-              text: 'Continue exactly where you were cut off. Complete your recommendations. Do not repeat the opening.',
-            },
-          ],
-        },
-      ],
-    });
-    const more =
-      contData?.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('').trim() || '';
-    if (more) reply = `${reply} ${more}`.replace(/\s+/g, ' ').trim();
-    data = contData;
-  }
-
-  if (!reply) {
-    throw new Error('No response from the assistant');
-  }
-  return { reply, meta: buildMeta(history, recommending) };
+  throw new Error('Assistant is unavailable. Sign in and ensure the server is running.');
 }
 
 export function getTypingLabel(history, hasAttachments = false, intent = null) {
@@ -167,7 +106,7 @@ export function getTypingLabel(history, hasAttachments = false, intent = null) {
   if (hasAttachments) return 'Reviewing your files…';
   const triageTurn = countTriageAssistantTurns(history);
   if (shouldGiveRecommendations(history)) return 'Preparing your recommendations…';
-  if (triageTurn === 0) return 'Understanding your symptoms…';
-  if (triageTurn >= 3) return 'Almost there — one more check…';
-  return 'Thinking through your answers…';
+  if (triageTurn === 0) return 'Understanding your question…';
+  if (triageTurn >= 3) return 'Almost there…';
+  return 'Thinking…';
 }
