@@ -1,26 +1,31 @@
 import {
   MEDICAL_CHAT_MODEL_ACK,
   MEDICAL_CHAT_SYSTEM_PROMPT,
+  countTriageAssistantTurns,
   isLikelyTruncatedText,
   resolveTriageDirective,
   shouldGiveRecommendations,
 } from '../Config/medicalChatPrompt';
 import { getApiAuthHeadersAsync } from './apiAuth';
 import { getApiUrl } from './appConfig';
+import { fetchWithRetry } from './fetchRetry';
 import { notifyPointsBalance } from './pointsBridge';
 
 function getApiBase() {
   return getApiUrl();
 }
 
+function buildMeta(history, recommending) {
+  const triageTurn = countTriageAssistantTurns(history);
+  return {
+    triageTurn,
+    recommending,
+    phase: recommending ? 'recommendations' : triageTurn === 0 ? 'intake' : 'triage',
+  };
+}
+
 /**
- * @param {object} params
- * @param {Array<{role: 'user'|'assistant', text: string}>} params.history
- * @param {string} [params.userText]
- * @param {{ mimeType: string, base64: string } | null} [params.attachment]
- * @param {Array<{ mimeType: string, base64: string }>} [params.attachments]
- * @param {(balance: number) => void} [params.onPointsUpdate]
- * @returns {Promise<string>} reply text
+ * @returns {Promise<{ reply: string, meta?: object }>}
  */
 export async function sendChatMessage({
   history = [],
@@ -38,7 +43,7 @@ export async function sendChatMessage({
         : [];
 
   if (apiBase) {
-    const response = await fetch(`${apiBase}/api/chat`, {
+    const response = await fetchWithRetry(`${apiBase}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -65,7 +70,7 @@ export async function sendChatMessage({
       notifyPointsBalance(data.points.balance);
       if (onPointsUpdate) onPointsUpdate(data.points.balance);
     }
-    return data.reply;
+    return { reply: data.reply, meta: data.meta };
   }
 
   const { generateContent } = await import('./geminiClient');
@@ -139,5 +144,14 @@ export async function sendChatMessage({
   if (!reply) {
     throw new Error('No response from the assistant');
   }
-  return reply;
+  return { reply, meta: buildMeta(history, recommending) };
+}
+
+export function getTypingLabel(history, hasAttachments = false) {
+  if (hasAttachments) return 'Reviewing your files…';
+  const triageTurn = countTriageAssistantTurns(history);
+  if (shouldGiveRecommendations(history)) return 'Preparing your recommendations…';
+  if (triageTurn === 0) return 'Understanding your symptoms…';
+  if (triageTurn >= 3) return 'Almost there — one more check…';
+  return 'Thinking through your answers…';
 }

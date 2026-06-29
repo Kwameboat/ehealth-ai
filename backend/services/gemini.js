@@ -8,6 +8,7 @@ const {
   shouldGiveRecommendations,
   resolveTriageDirective,
   isLikelyTruncatedText,
+  countTriageAssistantTurns,
 } = require('./medicalChatPrompt');
 
 const SYMPTOM_GENERATION_CONFIG = {
@@ -149,7 +150,15 @@ async function chatCompletion(history, userText, attachment, attachments) {
   }
 
   if (!reply) throw new Error('No response from the assistant');
-  return reply;
+  const triageTurn = countTriageAssistantTurns(history);
+  return {
+    reply,
+    meta: {
+      triageTurn,
+      recommending,
+      phase: recommending ? 'recommendations' : triageTurn === 0 ? 'intake' : 'triage',
+    },
+  };
 }
 
 function resolveGenerationConfig(featureKey) {

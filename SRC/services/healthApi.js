@@ -15,17 +15,31 @@ async function healthRequest(path, options = {}) {
   return data;
 }
 
-export async function askNhis(question) {
+export async function askNhis(question, history = []) {
   return healthRequest('/api/health/nhis', {
     method: 'POST',
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, history }),
   });
 }
 
-export async function askDiet(question) {
+export async function askDiet(question, history = []) {
   return healthRequest('/api/health/diet', {
     method: 'POST',
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, history }),
+  });
+}
+
+export async function scanMedicine(base64, mimeType = 'image/jpeg') {
+  return healthRequest('/api/health/medicine/scan', {
+    method: 'POST',
+    body: JSON.stringify({ base64, mimeType }),
+  });
+}
+
+export async function analyzePrescription(base64, mimeType = 'image/jpeg', caption = '') {
+  return healthRequest('/api/health/prescription/analyze', {
+    method: 'POST',
+    body: JSON.stringify({ base64, mimeType, caption }),
   });
 }
 

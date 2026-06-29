@@ -69,9 +69,10 @@ router.post('/chat', async (req, res) => {
     featureKey = overrideKey || resolveChatFeatureKey(attachment, attachments);
 
     const deduction = deductPoints(req.userId, featureKey);
-    const reply = await chatCompletion(history, userText, attachment, attachments);
+    const result = await chatCompletion(history, userText, attachment, attachments);
     res.json({
-      reply,
+      reply: result.reply,
+      meta: result.meta,
       points: { charged: deduction.charged, balance: deduction.balance, featureKey },
     });
   } catch (e) {

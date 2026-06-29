@@ -15,6 +15,9 @@ const PAGE_TITLES = {
   packages: 'Points Shop — Pricing',
   whatsapp: 'WhatsApp Management',
   doctors: 'Doctor Management',
+  broadcasts: 'Health Broadcasts',
+  payments: 'Payments',
+  delivery: 'Medicine Delivery',
   settings: 'Settings & API Keys',
 };
 
@@ -110,6 +113,9 @@ function showPage(name) {
     packages: loadPackages,
     whatsapp: () => (typeof loadWhatsApp === 'function' ? loadWhatsApp() : undefined),
     doctors: loadDoctors,
+    broadcasts: loadBroadcasts,
+    payments: loadPayments,
+    delivery: loadDelivery,
     settings: loadSettings,
   };
   if (loaders[name]) loaders[name]();
@@ -867,7 +873,7 @@ async function loadDoctors() {
       <h3 style="margin-bottom:12px">Recent consultations</h3>
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>When</th><th>Patient</th><th>Doctor</th><th>Status</th></tr></thead>
+          <thead><tr><th>When</th><th>Patient</th><th>Doctor</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             ${consultations.slice(0, 20).map((c) => `
               <tr>
@@ -875,8 +881,14 @@ async function loadDoctors() {
                 <td>${escapeHtml(c.patient_name || c.email || '—')}</td>
                 <td>${escapeHtml(c.doctor_name || '—')}</td>
                 <td>${escapeHtml(c.status || '—')}</td>
+                <td>
+                  ${c.status === 'pending' || c.status === 'scheduled' ? `
+                    <button type="button" class="panel-link consult-done" data-id="${c.id}">Complete</button>
+                    <button type="button" class="panel-link consult-cancel" data-id="${c.id}">Cancel</button>
+                  ` : '—'}
+                </td>
               </tr>
-            `).join('') || '<tr><td colspan="4">No bookings yet</td></tr>'}
+            `).join('') || '<tr><td colspan="5">No bookings yet</td></tr>'}
           </tbody>
         </table>
       </div>
@@ -948,9 +960,162 @@ async function loadDoctors() {
         loadDoctors();
       });
     });
+
+    el.querySelectorAll('.consult-done').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await api(`/consultations/${btn.dataset.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'completed' }),
+        });
+        loadDoctors();
+      });
+    });
+    el.querySelectorAll('.consult-cancel').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Cancel this consultation?')) return;
+        await api(`/consultations/${btn.dataset.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'cancelled' }),
+        });
+        loadDoctors();
+      });
+    });
   } catch (err) {
     el.innerHTML = `<div class="wa-alert"><strong>Error</strong><br>${escapeHtml(err.message)}</div>`;
   }
+}
+
+async function loadBroadcasts() {
+  const el = document.getElementById('page-broadcasts');
+  await runPage(el, 'Loading broadcasts…', async () => {
+    const { broadcasts } = await api('/broadcasts');
+    el.innerHTML = `
+      <div class="page-header-row">
+        <div>
+          <h2 class="page-heading">Health Broadcasts</h2>
+          <p class="muted">Send in-app alerts (PWA Health Alerts) and optionally WhatsApp</p>
+        </div>
+      </div>
+      <div class="panel" style="max-width:640px;margin-bottom:24px">
+        <h3 style="margin-bottom:12px">New broadcast</h3>
+        <label class="field-label">Title<input id="bc-title" placeholder="Health alert" /></label>
+        <label class="field-label">Message<textarea id="bc-message" rows="4" placeholder="Your health tip or clinic notice…"></textarea></label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px">
+          <button type="button" class="btn btn-primary" id="bc-pwa">Send to PWA (in-app)</button>
+          <button type="button" class="btn btn-ghost" id="bc-wa">Also send WhatsApp</button>
+        </div>
+        <p class="muted" style="margin-top:10px;font-size:12px">PWA users see alerts under Health Services → Health Alerts. WhatsApp uses registered phones.</p>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>When</th><th>Title</th><th>Message</th><th>Recipients</th></tr></thead>
+          <tbody>
+            ${(broadcasts || []).map((b) => `
+              <tr>
+                <td>${escapeHtml(formatDate(b.created_at))}</td>
+                <td>${escapeHtml(b.title || '—')}</td>
+                <td>${escapeHtml(String(b.message || '').slice(0, 120))}${String(b.message || '').length > 120 ? '…' : ''}</td>
+                <td>${b.recipient_count ?? 0}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="4">No broadcasts yet</td></tr>'}
+          </tbody>
+        </table>
+      </div>`;
+
+    document.getElementById('bc-pwa').onclick = async () => {
+      const message = document.getElementById('bc-message').value.trim();
+      const title = document.getElementById('bc-title').value.trim() || 'Health alert';
+      if (!message) return alert('Enter a message');
+      await api('/broadcasts', { method: 'POST', body: JSON.stringify({ title, message }) });
+      alert('Broadcast saved — visible in PWA Health Alerts');
+      loadBroadcasts();
+    };
+
+    document.getElementById('bc-wa').onclick = async () => {
+      const message = document.getElementById('bc-message').value.trim();
+      const title = document.getElementById('bc-title').value.trim() || 'Health alert';
+      if (!message) return alert('Enter a message');
+      await api('/broadcasts', { method: 'POST', body: JSON.stringify({ title, message }) });
+      try {
+        const wa = await fetch('/admin/api/whatsapp/broadcast', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${getToken()}`,
+          },
+          body: JSON.stringify({ message: `${title}\n\n${message}` }),
+        });
+        const data = await wa.json();
+        if (!wa.ok) throw new Error(data?.error?.message || 'WhatsApp send failed');
+        alert(`Sent — PWA alert saved, WhatsApp: ${data.sent || 0} delivered`);
+      } catch (e) {
+        alert(`PWA alert saved. WhatsApp failed: ${e.message}`);
+      }
+      loadBroadcasts();
+    };
+  }, loadBroadcasts);
+}
+
+async function loadPayments() {
+  const el = document.getElementById('page-payments');
+  await runPage(el, 'Loading payments…', async () => {
+    const { payments } = await api('/payments');
+    el.innerHTML = `
+      <div class="page-header-row">
+        <div>
+          <h2 class="page-heading">Payments</h2>
+          <p class="muted">Paystack point purchases and transactions</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>When</th><th>User</th><th>Reference</th><th>Amount</th><th>Status</th><th>Points</th></tr></thead>
+          <tbody>
+            ${(payments || []).map((p) => `
+              <tr>
+                <td>${escapeHtml(formatDate(p.created_at))}</td>
+                <td>${escapeHtml(p.email || '—')}</td>
+                <td><code>${escapeHtml(p.paystack_reference || '—')}</code></td>
+                <td>${escapeHtml(String(p.currency || 'GHS'))} ${((p.amount_kobo || 0) / 100).toFixed(2)}</td>
+                <td>${escapeHtml(p.status || '—')}</td>
+                <td>${p.points_to_credit ?? '—'}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="6">No payments yet</td></tr>'}
+          </tbody>
+        </table>
+      </div>`;
+  }, loadPayments);
+}
+
+async function loadDelivery() {
+  const el = document.getElementById('page-delivery');
+  await runPage(el, 'Loading delivery orders…', async () => {
+    const { orders } = await api('/delivery-orders');
+    el.innerHTML = `
+      <div class="page-header-row">
+        <div>
+          <h2 class="page-heading">Medicine Delivery</h2>
+          <p class="muted">MoMo orders from PWA and WhatsApp</p>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>When</th><th>Patient</th><th>Medicine</th><th>Amount</th><th>Status</th><th>Pay link</th></tr></thead>
+          <tbody>
+            ${(orders || []).map((o) => `
+              <tr>
+                <td>${escapeHtml(formatDate(o.created_at))}</td>
+                <td>${escapeHtml(o.patient_name || o.email || '—')}</td>
+                <td>${escapeHtml(o.medication_name || '—')}</td>
+                <td>${escapeHtml(o.currency || 'GHS')} ${((o.amount_kobo || 0) / 100).toFixed(2)}</td>
+                <td>${escapeHtml(o.status || '—')}</td>
+                <td>${o.paystack_url ? `<a href="${escapeHtml(o.paystack_url)}" target="_blank" rel="noopener">Pay</a>` : '—'}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="6">No delivery orders yet</td></tr>'}
+          </tbody>
+        </table>
+      </div>`;
+  }, loadDelivery);
 }
 
 document.getElementById('modal-cancel').onclick = closeModal;

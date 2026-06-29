@@ -11,14 +11,19 @@ Give culturally accurate advice about Ghanaian foods: fufu, banku, rice, yam, pl
 Suggest practical swaps (boiled plantain, smaller fufu portions, more kontomire/vegetables, less sugary drinks).
 Include a brief post-meal tip (e.g. 15-minute walk). Not a doctor — encourage clinic follow-up for medication changes.`;
 
-async function specialtyAnswer(systemPrompt, question) {
+async function specialtyAnswer(systemPrompt, question, history = []) {
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error('Gemini API key not configured');
-  const data = await callGemini(
-    [{ role: 'user', parts: [{ text: String(question).trim() }] }],
-    undefined,
-    { systemInstruction: systemPrompt }
-  );
+  const contents = [];
+  for (const msg of history.slice(-10)) {
+    if (!msg?.text) continue;
+    contents.push({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: String(msg.text).trim() }],
+    });
+  }
+  contents.push({ role: 'user', parts: [{ text: String(question).trim() }] });
+  const data = await callGemini(contents, undefined, { systemInstruction: systemPrompt });
   const text =
     data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') ||
     data?.text ||
@@ -26,12 +31,12 @@ async function specialtyAnswer(systemPrompt, question) {
   return text.trim();
 }
 
-async function answerNhisQuestion(question) {
-  return specialtyAnswer(NHIS_PROMPT, question);
+async function answerNhisQuestion(question, history = []) {
+  return specialtyAnswer(NHIS_PROMPT, question, history);
 }
 
-async function answerDietQuestion(question) {
-  return specialtyAnswer(DIET_PROMPT, question);
+async function answerDietQuestion(question, history = []) {
+  return specialtyAnswer(DIET_PROMPT, question, history);
 }
 
 function parseBloodPressure(text) {

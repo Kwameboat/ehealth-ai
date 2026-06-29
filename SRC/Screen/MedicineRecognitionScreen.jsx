@@ -1,6 +1,8 @@
 import { FontAwesome5, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { pickClinicalGalleryImages, takeClinicalPhoto } from '../services/clinicalMediaPicker';
+import { attachmentToBase64, guessImageMimeType } from '../services/fileToBase64';
+import { scanMedicine } from '../services/healthApi';
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
@@ -28,58 +30,31 @@ const MedicineRecognitionScreen = () => {
   const [showHistory, setShowHistory] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Mock function to simulate AI analysis
   const analyzeMedicineWithAI = async (imageUri) => {
     setIsAnalyzing(true);
-    
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Mock response data - in a real app, this would come from your AI API
-    const mockResults = [
-      {
-        name: "Amoxicillin",
-        type: "Antibiotic",
-        uses: "Treats bacterial infections such as pneumonia, bronchitis, and infections of the ear, nose, throat, urinary tract, and skin.",
-        dosage: "Adults: 250-500 mg every 8 hours. Children: 20-40 mg/kg/day divided every 8 hours.",
-        sideEffects: "Nausea, vomiting, diarrhea, rash, allergic reactions.",
-        warnings: "Complete the full course even if you feel better. May reduce effectiveness of birth control pills.",
-        confidence: 92
-      },
-      {
-        name: "Lipitor",
-        type: "Statin (Cholesterol medication)",
-        uses: "Lowers cholesterol and triglycerides in the blood. Reduces risk of heart attack and stroke.",
-        dosage: "Initial dose: 10-20 mg once daily. Maximum dose: 80 mg once daily.",
-        sideEffects: "Headache, muscle pain, constipation, diarrhea, rash, increased liver enzymes.",
-        warnings: "Avoid grapefruit products. Report unexplained muscle pain or weakness immediately.",
-        confidence: 85
-      },
-      {
-        name: "Ventolin",
-        type: "Bronchodilator",
-        uses: "Treats or prevents bronchospasm in people with reversible obstructive airway disease.",
-        dosage: "2 puffs every 4-6 hours as needed. Maximum 8 puffs in 24 hours.",
-        sideEffects: "Nervousness, shaking, headache, mouth/throat irritation, fast heartbeat.",
-        warnings: "Rinse mouth after use to prevent thrush. Seek help if breathing problems worsen.",
-        confidence: 78
-      }
-    ];
-    
-    // Select a random result from the mock data
-    const randomResult = mockResults[Math.floor(Math.random() * mockResults.length)];
-    
-    setAnalysisResult(randomResult);
-    setIsAnalyzing(false);
-    
-    // Add to history
-    setHistory(prev => [{
-      id: Date.now(),
-      name: randomResult.name,
-      image: imageUri,
-      timestamp: new Date().toLocaleString(),
-      result: randomResult
-    }, ...prev]);
+    try {
+      const base64 = await attachmentToBase64({
+        uri: imageUri,
+        mimeType: guessImageMimeType(imageUri),
+      });
+      const { result } = await scanMedicine(base64, guessImageMimeType(imageUri));
+      setAnalysisResult(result);
+      setHistory((prev) => [
+        {
+          id: Date.now(),
+          name: result.name,
+          image: imageUri,
+          timestamp: new Date().toLocaleString(),
+          result,
+        },
+        ...prev,
+      ]);
+    } catch (e) {
+      Alert.alert('Scan failed', e.message || 'Could not analyze this image. Try a clearer photo.');
+      setAnalysisResult(null);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const runMockAnalysis = (uris) => {
@@ -168,7 +143,7 @@ const MedicineRecognitionScreen = () => {
                 <ActivityIndicator size="large" color={theme.colors.primary} />
                 <Text style={[styles.analyzingText, { color: theme.colors.text }]}>Analyzing medication...</Text>
                 <Text style={[styles.analyzingSubtext, { color: theme.colors.textSecondary }]}>
-                  Comparing against our medicine database
+                  Agyenim AI is reading the label
                 </Text>
               </View>
             ) : analysisResult ? (

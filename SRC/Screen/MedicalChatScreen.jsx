@@ -1,6 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
@@ -25,19 +26,28 @@ import { useResponsive } from '../hooks/useResponsive';
 import { attachmentToBase64, guessImageMimeType } from '../services/fileToBase64';
 import { useChatVoiceInput } from '../hooks/useChatVoiceInput';
 import { pickChatAttachments } from '../services/chatAttachmentPicker';
-import { sendChatMessage } from '../services/geminiChat';
+import { getTypingLabel, sendChatMessage } from '../services/geminiChat';
 import { takeStashedAttachments } from '../services/attachmentBridge';
 
 const MAX_PDF_BYTES = 8 * 1024 * 1024;
+const CHAT_STORAGE_KEY = '@ehealth_medical_chat_v1';
 
-function createMessage(role, text, attachment = null) {
+function createMessage(role, text, attachment = null, status = 'sent') {
   return {
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     role,
     text,
     attachment,
     ts: new Date(),
+    status,
   };
+}
+
+function welcomeMessage() {
+  return createMessage(
+    'assistant',
+    `Hello — I'm ${AI_ASSISTANT_NAME}, your health assistant at eHealth AI. Tell me what's bothering you. I'll ask up to 5 short follow-up questions, then share recommendations. For emergencies, use Emergency or call your local emergency number.`
+  );
 }
 
 export default function MedicalChatScreen({ navigation, route }) {
@@ -45,16 +55,13 @@ export default function MedicalChatScreen({ navigation, route }) {
   const styles = useMemo(() => createStyles(med), [med.isDarkMode]);
   const r = useResponsive();
   const initialMessage = route.params?.initialMessage;
-  const [messages, setMessages] = useState([
-    createMessage(
-      'assistant',
-      `Hello — I'm ${AI_ASSISTANT_NAME}, your health assistant at eHealth AI. Tell me what's bothering you. I'll ask up to 5 short follow-up questions, then share recommendations. For emergencies, use Emergency or call your local emergency number.`
-    ),
-  ]);
+  const [messages, setMessages] = useState([welcomeMessage()]);
   const [input, setInput] = useState(initialMessage || '');
   const [pendingAttachments, setPendingAttachments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [typingLabel, setTypingLabel] = useState('');
   const [initialSent, setInitialSent] = useState(false);
+  const [failedPayload, setFailedPayload] = useState(null);
   const listRef = useRef(null);
 
   const voice = useChatVoiceInput({
@@ -65,6 +72,26 @@ export default function MedicalChatScreen({ navigation, route }) {
     ImagePicker.requestCameraPermissionsAsync();
     ImagePicker.requestMediaLibraryPermissionsAsync();
   }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem(CHAT_STORAGE_KEY)
+      .then((raw) => {
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 1) {
+          setMessages(parsed.map((m) => ({ ...m, ts: m.ts ? new Date(m.ts) : new Date() })));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (messages.length <= 1) return;
+    AsyncStorage.setItem(
+      CHAT_STORAGE_KEY,
+      JSON.stringify(messages.slice(-40).map((m) => ({ ...m, ts: m.ts?.toISOString?.() || m.ts })))
+    ).catch(() => {});
+  }, [messages]);
 
   useEffect(() => {
     const timer = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100);
@@ -122,47 +149,62 @@ export default function MedicalChatScreen({ navigation, route }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
 
-  const handleSend = async (overrideText) => {
+  const handleSend = async (overrideText, retryPayload = null) => {
     if (voice.isListening) voice.stop();
-    const text = (typeof overrideText === 'string' ? overrideText : input).trim();
-    if (!text && !pendingAttachments.length) {
+    const payload = retryPayload || {
+      text: (typeof overrideText === 'string' ? overrideText : input).trim(),
+      attachments: pendingAttachments,
+    };
+    const text = payload.text?.trim() || '';
+    const attachmentsToSend = payload.attachments || [];
+    if (!text && !attachmentsToSend.length) {
       Alert.alert('Empty message', 'Type a message or attach photos/PDFs.');
       return;
     }
     if (isLoading) return;
 
     const attachmentMeta =
-      pendingAttachments.length === 1
+      attachmentsToSend.length === 1
         ? {
-            type: pendingAttachments[0].type,
-            name: pendingAttachments[0].name,
-            uri: pendingAttachments[0].uri,
+            type: attachmentsToSend[0].type,
+            name: attachmentsToSend[0].name,
+            uri: attachmentsToSend[0].uri,
           }
-        : pendingAttachments.length > 1
+        : attachmentsToSend.length > 1
           ? {
               type: 'multi',
-              name: `${pendingAttachments.length} files`,
-              uris: pendingAttachments.map((a) => a.uri).filter(Boolean),
+              name: `${attachmentsToSend.length} files`,
+              uris: attachmentsToSend.map((a) => a.uri).filter(Boolean),
             }
           : null;
 
-    const hasPdf = pendingAttachments.some((a) => a.type === 'pdf');
+    const hasPdf = attachmentsToSend.some((a) => a.type === 'pdf');
     const defaultPrompt = hasPdf
       ? 'Please analyze these PDFs and images.'
-      : pendingAttachments.length > 1
+      : attachmentsToSend.length > 1
         ? 'Please analyze these images.'
-        : pendingAttachments[0]?.type === 'pdf'
+        : attachmentsToSend[0]?.type === 'pdf'
           ? 'Please analyze this PDF.'
           : 'Please analyze this image.';
 
-    const userMessage = createMessage('user', text || defaultPrompt, attachmentMeta);
-
+    const userMessage = retryPayload?.messageId
+      ? { id: retryPayload.messageId, text: text || defaultPrompt, role: 'user' }
+      : createMessage('user', text || defaultPrompt, attachmentMeta, 'sending');
     const history = historyForApi();
-    setMessages((prev) => [...prev, userMessage]);
-    setInput('');
-    const attachmentsToSend = pendingAttachments;
-    setPendingAttachments([]);
+
+    if (retryPayload?.messageId) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === retryPayload.messageId ? { ...m, status: 'sending' } : m))
+      );
+    } else {
+      setMessages((prev) => [...prev, userMessage]);
+      setInput('');
+      setPendingAttachments([]);
+    }
+
     setIsLoading(true);
+    setTypingLabel(getTypingLabel(history, attachmentsToSend.length > 0));
+    setFailedPayload(null);
 
     try {
       const apiAttachments = [];
@@ -171,20 +213,65 @@ export default function MedicalChatScreen({ navigation, route }) {
         apiAttachments.push({ mimeType: att.mimeType, base64 });
       }
 
-      const reply = await sendChatMessage({
+      const { reply, meta } = await sendChatMessage({
         history,
         userText: userMessage.text,
         attachments: apiAttachments.length ? apiAttachments : null,
       });
-      setMessages((prev) => [...prev, createMessage('assistant', reply)]);
+
+      const msgId = retryPayload?.messageId || userMessage.id;
+      setMessages((prev) => {
+        const updated = prev.map((m) =>
+          m.id === msgId ? { ...m, status: 'sent' } : m
+        );
+        const phaseHint =
+          meta?.phase === 'recommendations'
+            ? ''
+            : meta?.triageTurn >= 4
+              ? ' (Almost done — recommendations next.)'
+              : '';
+        return [...updated, createMessage('assistant', `${reply}${phaseHint}`)];
+      });
     } catch (e) {
+      const msgId = retryPayload?.messageId || userMessage.id;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === msgId
+            ? { ...m, status: 'failed' }
+            : m
+        )
+      );
+      setFailedPayload({
+        messageId: msgId,
+        text: userMessage.text,
+        attachments: attachmentsToSend,
+      });
       setMessages((prev) => [
         ...prev,
-        createMessage('assistant', `Sorry, I could not process that. ${e.message || 'Please try again.'}`),
+        createMessage(
+          'assistant',
+          `I couldn't deliver that reply (${e.message || 'network error'}). Tap Retry on your message to try again.`
+        ),
       ]);
     } finally {
       setIsLoading(false);
+      setTypingLabel('');
     }
+  };
+
+  const clearChat = () => {
+    Alert.alert('New conversation', 'Clear this chat and start fresh?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: () => {
+          setMessages([welcomeMessage()]);
+          setFailedPayload(null);
+          AsyncStorage.removeItem(CHAT_STORAGE_KEY).catch(() => {});
+        },
+      },
+    ]);
   };
 
   const renderAttachmentPreview = (attachment, compact = false) => {
@@ -243,6 +330,24 @@ export default function MedicalChatScreen({ navigation, route }) {
         <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAssistant]}>
           {renderAttachmentPreview(item.attachment)}
           <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>{item.text}</Text>
+          {isUser && item.status === 'failed' ? (
+            <TouchableOpacity
+              style={styles.retryBtn}
+              onPress={() =>
+                failedPayload &&
+                handleSend(null, {
+                  messageId: item.id,
+                  text: item.text,
+                  attachments: failedPayload.attachments,
+                })
+              }
+            >
+              <Text style={styles.retryText}>Retry send</Text>
+            </TouchableOpacity>
+          ) : null}
+          {isUser && item.status === 'sending' ? (
+            <Text style={styles.statusText}>Sending…</Text>
+          ) : null}
         </View>
       </View>
     );
@@ -264,6 +369,9 @@ export default function MedicalChatScreen({ navigation, route }) {
             </View>
           </View>
           <ThemeToggleButton compact style={{ marginRight: 4 }} />
+          <TouchableOpacity onPress={clearChat} style={styles.headerBtn}>
+            <Ionicons name="refresh-outline" size={22} color={med.textMuted} />
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('MedicalHome')} style={styles.headerBtn}>
             <Ionicons name="home-outline" size={22} color={med.textMuted} />
           </TouchableOpacity>
@@ -289,7 +397,14 @@ export default function MedicalChatScreen({ navigation, route }) {
 
             {isLoading && (
               <View style={[styles.typing, { paddingHorizontal: r.horizontalPadding }]}>
-                <Text style={styles.typingText}>Analyzing your request…</Text>
+                <View style={styles.typingRow}>
+                  <View style={styles.typingDots}>
+                    <View style={[styles.dot, styles.dot1]} />
+                    <View style={[styles.dot, styles.dot2]} />
+                    <View style={[styles.dot, styles.dot3]} />
+                  </View>
+                  <Text style={styles.typingText}>{typingLabel || 'Agyenim is thinking…'}</Text>
+                </View>
               </View>
             )}
 
@@ -400,7 +515,16 @@ const createStyles = (med) =>
   },
   pdfName: { color: med.text, fontSize: 13, flex: 1 },
   typing: { paddingHorizontal: 20, paddingBottom: 6 },
-  typingText: { color: med.textMuted, fontSize: 13, fontStyle: 'italic' },
+  typingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  typingDots: { flexDirection: 'row', gap: 4 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: med.primary, opacity: 0.5 },
+  dot1: { opacity: 1 },
+  dot2: { opacity: 0.7 },
+  dot3: { opacity: 0.4 },
+  typingText: { color: med.textMuted, fontSize: 13, fontStyle: 'italic', flex: 1 },
+  retryBtn: { marginTop: 8, alignSelf: 'flex-start' },
+  retryText: { color: '#fff', fontSize: 12, fontWeight: '700', textDecorationLine: 'underline' },
+  statusText: { color: 'rgba(255,255,255,0.75)', fontSize: 11, marginTop: 4 },
   pendingBar: {
     flexDirection: 'row',
     alignItems: 'center',

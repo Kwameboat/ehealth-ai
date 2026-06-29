@@ -570,4 +570,39 @@ router.post('/broadcasts', (req, res) => {
   res.status(201).json({ success: true, id });
 });
 
+router.get('/broadcasts', (req, res) => {
+  const rows = getDb()
+    .prepare(
+      `SELECT id, title, message, recipient_count, created_at FROM health_broadcasts ORDER BY created_at DESC LIMIT 100`
+    )
+    .all();
+  res.json({ broadcasts: rows });
+});
+
+router.get('/delivery-orders', (req, res) => {
+  const rows = getDb()
+    .prepare(
+      `SELECT o.*, u.email, u.full_name AS patient_name
+       FROM wa_delivery_orders o
+       LEFT JOIN users u ON u.id = o.user_id
+       ORDER BY o.created_at DESC LIMIT 100`
+    )
+    .all();
+  res.json({ orders: rows });
+});
+
+router.patch('/consultations/:id', (req, res) => {
+  const { status } = req.body || {};
+  const allowed = ['pending', 'scheduled', 'completed', 'cancelled', 'no_show'];
+  if (!allowed.includes(status)) {
+    return res.status(400).json({ error: { message: 'Invalid status' } });
+  }
+  const row = getDb().prepare(`SELECT id FROM consultations WHERE id = ?`).get(req.params.id);
+  if (!row) return res.status(404).json({ error: { message: 'Not found' } });
+  getDb()
+    .prepare(`UPDATE consultations SET status = ?, updated_at = ? WHERE id = ?`)
+    .run(status, now(), req.params.id);
+  res.json({ success: true, status });
+});
+
 module.exports = router;

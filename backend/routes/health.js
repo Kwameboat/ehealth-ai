@@ -10,6 +10,7 @@ const {
 } = require('../services/healthAssistant');
 const { findNearbyFacilities } = require('../services/nearbyPlaces');
 const { initializeTransaction } = require('../services/paystack');
+const { analyzeMedicineImage, analyzePrescriptionImage } = require('../services/visionAssist');
 
 const router = express.Router();
 router.use(requireUserAuth);
@@ -26,9 +27,10 @@ function handlePointsError(res, e, userId, featureKey) {
 router.post('/health/nhis', async (req, res) => {
   try {
     const question = String(req.body?.question || '').trim();
+    const history = Array.isArray(req.body?.history) ? req.body.history : [];
     if (!question) return res.status(400).json({ error: { message: 'Question is required' } });
     const deduction = deductPoints(req.userId, 'pwa_nhis');
-    const answer = await answerNhisQuestion(question);
+    const answer = await answerNhisQuestion(question, history);
     res.json({ answer, points: { charged: deduction.charged, balance: deduction.balance } });
   } catch (e) {
     const handled = handlePointsError(res, e, req.userId, 'pwa_nhis');
@@ -40,12 +42,41 @@ router.post('/health/nhis', async (req, res) => {
 router.post('/health/diet', async (req, res) => {
   try {
     const question = String(req.body?.question || '').trim();
+    const history = Array.isArray(req.body?.history) ? req.body.history : [];
     if (!question) return res.status(400).json({ error: { message: 'Question is required' } });
     const deduction = deductPoints(req.userId, 'pwa_diet');
-    const answer = await answerDietQuestion(question);
+    const answer = await answerDietQuestion(question, history);
     res.json({ answer, points: { charged: deduction.charged, balance: deduction.balance } });
   } catch (e) {
     const handled = handlePointsError(res, e, req.userId, 'pwa_diet');
+    if (handled) return handled;
+    res.status(500).json({ error: { message: e.message } });
+  }
+});
+
+router.post('/health/medicine/scan', async (req, res) => {
+  try {
+    const { base64, mimeType } = req.body || {};
+    if (!base64) return res.status(400).json({ error: { message: 'Image required' } });
+    const deduction = deductPoints(req.userId, 'medicine_scan');
+    const result = await analyzeMedicineImage(base64, mimeType || 'image/jpeg');
+    res.json({ result, points: { charged: deduction.charged, balance: deduction.balance } });
+  } catch (e) {
+    const handled = handlePointsError(res, e, req.userId, 'medicine_scan');
+    if (handled) return handled;
+    res.status(500).json({ error: { message: e.message } });
+  }
+});
+
+router.post('/health/prescription/analyze', async (req, res) => {
+  try {
+    const { base64, mimeType, caption } = req.body || {};
+    if (!base64) return res.status(400).json({ error: { message: 'Image required' } });
+    const deduction = deductPoints(req.userId, 'chat_image');
+    const result = await analyzePrescriptionImage(base64, mimeType || 'image/jpeg', caption || '');
+    res.json({ result, points: { charged: deduction.charged, balance: deduction.balance } });
+  } catch (e) {
+    const handled = handlePointsError(res, e, req.userId, 'chat_image');
     if (handled) return handled;
     res.status(500).json({ error: { message: e.message } });
   }

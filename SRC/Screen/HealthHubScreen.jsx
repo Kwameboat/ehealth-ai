@@ -6,6 +6,7 @@ import ScreenHeaderBar from '../Components/ScreenHeaderBar';
 import { useMedTheme } from '../hooks/useMedTheme';
 
 const FEATURES = [
+  { id: 'scan', title: 'Medicine Scanner', desc: 'Identify pills & packaging', icon: 'pill', screen: 'MedicineRecognition', color: '#EC4899' },
   { id: 'nhis', title: 'NHIS Assistant', desc: 'Coverage & benefits guidance', icon: 'card-account-details', screen: 'HealthChatFeature', params: { mode: 'nhis' }, color: '#10B981' },
   { id: 'diet', title: 'Ghana Diet Coach', desc: 'Diabetes & hypertension meals', icon: 'food-apple', screen: 'HealthChatFeature', params: { mode: 'diet' }, color: '#F59E0B' },
   { id: 'bp', title: 'BP Tracker', desc: 'Log & track blood pressure', icon: 'heart-pulse', screen: 'BpTracker', color: '#EF4444' },
