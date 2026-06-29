@@ -1,22 +1,18 @@
 #!/bin/bash
-# ONE COMMAND live deploy — pull latest from GitHub, repair backend, publish admin, verify.
+# One command live deploy — pull latest backend/admin from GitHub, publish PWA if dist/ exists, restart hint.
 # Usage (cPanel Terminal):
 #   curl -fsSL https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main/cpanel/deploy-live.sh | bash
 #
-# After this: cPanel -> Node.js -> RESTART
-# PWA: upload dist/ from your PC via FTP to ~/public_html/ (see deploy-bundle/dist/)
+# Upload dist/ via FTP first (run on PC: npm run build:web && npm run deploy:bundle, then upload deploy-bundle/dist → ~/ehealth-ai/dist)
 set -eo pipefail
 
 HOME_DIR="${HOME:-/home/ehealtha}"
 APP="$HOME_DIR/ehealth-ai"
-PUBLIC="$HOME_DIR/public_html"
+PUBLIC="${PUBLIC_HTML:-$HOME_DIR/public_html}"
 BASE="https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main"
 
-echo "=========================================="
-echo " eHealth AI — deploy live from GitHub"
-echo "=========================================="
+echo "=== eHealth AI — LIVE DEPLOY ==="
 
-mkdir -p "$APP/cpanel"
 curl -fsSL -o "$APP/cpanel/repair-production.sh" "$BASE/cpanel/repair-production.sh"
 curl -fsSL -o "$APP/cpanel/deploy-live.sh" "$BASE/cpanel/deploy-live.sh"
 chmod +x "$APP/cpanel/repair-production.sh" "$APP/cpanel/deploy-live.sh" 2>/dev/null || true
@@ -24,36 +20,34 @@ chmod +x "$APP/cpanel/repair-production.sh" "$APP/cpanel/deploy-live.sh" 2>/dev/
 bash "$APP/cpanel/repair-production.sh"
 
 echo ""
-echo "=== Health API routes ==="
-for f in health.js consultations.js healthAssistant.js; do
-  if [ -f "$APP/backend/routes/$f" ] || [ -f "$APP/backend/services/$f" ]; then
-    echo "  OK $f"
-  else
-    echo "  MISSING $f"
-  fi
-done
-
-echo ""
-echo "=== Admin UI ==="
-bash "$APP/cpanel/publish-admin.sh" 2>/dev/null || cp -f "$APP/backend/public/admin/"* "$PUBLIC/admin/" 2>/dev/null || true
-grep -q 'wa-pair-btn' "$PUBLIC/admin/whatsapp-admin.js" 2>/dev/null && echo "  OK WhatsApp pairing UI" || echo "  WARN: old admin JS"
-grep -q 'loadDoctors' "$PUBLIC/admin/app.js" 2>/dev/null && echo "  OK Doctor management" || echo "  WARN: old admin app.js"
-
-echo ""
-echo "=== PWA (dist) ==="
+echo "=== Publish PWA (dist/) ==="
 if [ -d "$APP/dist" ] && [ -f "$APP/dist/index.html" ]; then
-  cp -rf "$APP/dist/"* "$PUBLIC/" 2>/dev/null || true
-  echo "  Copied ehealth-ai/dist -> public_html"
-elif [ -f "$PUBLIC/index.html" ]; then
-  echo "  PWA already in public_html — upload fresh dist/ from PC if Health Services missing"
+  mkdir -p "$PUBLIC"
+  cp -r "$APP/dist/"* "$PUBLIC/"
+  if ! grep -q 'app-config.js' "$PUBLIC/index.html" 2>/dev/null; then
+    sed -i 's|</head>|<script src="/app-config.js"></script></head>|' "$PUBLIC/index.html" 2>/dev/null || true
+  fi
+  cp -f "$APP/public/manifest.json" "$PUBLIC/" 2>/dev/null || true
+  cp -f "$APP/public/robots.txt" "$PUBLIC/" 2>/dev/null || true
+  cp -f "$APP/public/sitemap.xml" "$PUBLIC/" 2>/dev/null || true
+  cp -f "$APP/public/sw.js" "$PUBLIC/" 2>/dev/null || true
+  cp -r "$APP/public/icons" "$PUBLIC/" 2>/dev/null || true
+  mkdir -p "$PUBLIC/fonts"
+  cp -f "$APP/public/fonts/"*.ttf "$PUBLIC/fonts/" 2>/dev/null || true
+  cp -f "$APP/dist/fonts/"*.ttf "$PUBLIC/fonts/" 2>/dev/null || true
+  echo "PWA published from $APP/dist -> $PUBLIC"
 else
-  echo "  Upload deploy-bundle/dist/ from PC to public_html via FTP"
+  echo "WARN: No $APP/dist — upload from PC after: npm run build:web"
+  echo "      FTP: deploy-bundle/dist/* -> ~/ehealth-ai/dist/"
 fi
 
 echo ""
-echo "=========================================="
-echo " DONE — RESTART Node.js in cPanel now"
-echo " Test: curl -s https://www.ehealthaigh.com/api/health"
-echo " Admin: Ctrl+Shift+R -> Doctors + WhatsApp v3"
-echo " PWA:  Home -> Health Services quick action"
-echo "=========================================="
+echo "=== Verify ==="
+curl -s "https://www.ehealthaigh.com/api/health" | head -c 200 || true
+echo ""
+grep -q 'wa-pair-btn' "$PUBLIC/admin/whatsapp-admin.js" 2>/dev/null && echo "Admin WhatsApp UI: OK" || echo "Admin WhatsApp UI: check publish-admin"
+grep -q 'HealthHub' "$PUBLIC/_expo/static/js/web/"*.js 2>/dev/null && echo "PWA Health Services: OK" || echo "PWA: upload dist/ then re-run this script"
+
+echo ""
+echo "=== REQUIRED: cPanel -> Node.js -> RESTART ==="
+echo "Then hard-refresh: Ctrl+Shift+R on admin and PWA"
