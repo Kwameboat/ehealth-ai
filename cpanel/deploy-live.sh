@@ -49,6 +49,18 @@ else
 fi
 
 echo ""
+echo "=== Restore Passenger .htaccess (required for /api) ==="
+curl -fsSL -o "$APP/cpanel/merge-htaccess.sh" "$BASE/cpanel/merge-htaccess.sh"
+chmod +x "$APP/cpanel/merge-htaccess.sh" 2>/dev/null || true
+bash "$APP/cpanel/merge-htaccess.sh" || {
+  echo "CRITICAL: merge-htaccess failed — API will 503 until fixed"
+  curl -fsSL -o "$APP/cpanel/fix-api-404.sh" "$BASE/cpanel/fix-api-404.sh"
+  chmod +x "$APP/cpanel/fix-api-404.sh"
+  bash "$APP/cpanel/fix-api-404.sh" || true
+}
+touch "$PUBLIC/tmp/restart.txt" 2>/dev/null || true
+
+echo ""
 echo "=== Verify ==="
 curl -s "https://www.ehealthaigh.com/api/health" | head -c 200 || true
 echo ""
