@@ -53,20 +53,42 @@ function isActiveTriageSession(history) {
   return turns > 0 && !shouldGiveRecommendations(history);
 }
 
-function buildSymptomIntakeFallback(userText) {
+function buildSymptomIntakeReply(userText) {
   const t = String(userText || '').toLowerCase();
   if (/pregnan|vomit|nausea|morning sickness/.test(t)) {
     return (
-      "I'm sorry to hear that. Nausea and vomiting in pregnancy are common, but they can become serious.\n\n" +
-      'Please tell me:\n• How many weeks pregnant is she?\n• Can she keep fluids down today?\n• Any fever, blood in vomit, severe headache, dizziness, or belly pain?\n\n' +
-      'If she cannot keep fluids for 24 hours, feels very weak, or has severe pain — please go to a clinic or hospital today. NHIS often covers antenatal visits.'
+      "I'm sorry to hear that. Nausea and vomiting in pregnancy are common, but they can become serious if severe. " +
+      'Roughly how many weeks pregnant is she, and can she keep any fluids down today?'
     );
   }
+  if (/headache/.test(t) && /fever/.test(t)) {
+    return (
+      "Sorry you're dealing with a headache and fever. Did both start around the same time, " +
+      'and have you been able to measure your temperature?'
+    );
+  }
+  if (/headache|migraine/.test(t)) {
+    return (
+      "I'm sorry about the headache. Where is the pain mainly — one side, the whole head, or behind the eyes — " +
+      'and when did it start?'
+    );
+  }
+  if (/fever|chills|temperature/.test(t)) {
+    return 'A fever can have several causes. How high has it been (if measured), and how long have you had it?';
+  }
+  if (/cough|breath|breathing/.test(t)) {
+    return "I'm sorry you're unwell. Are you having any trouble breathing, or is it mainly a cough?";
+  }
+  if (/stomach|belly|abdominal|diarrhea|vomit|nausea/.test(t)) {
+    return 'That sounds uncomfortable. When did it start, and have you had any fever or blood in vomit or stool?';
+  }
   return (
-    "I hear you — let's figure this out safely.\n\n" +
-    'Please share:\n• Main symptom and when it started\n• How bad it is (mild, moderate, or severe)\n• Any fever, breathing trouble, chest pain, or confusion?\n\n' +
-    'Seek emergency care right away if symptoms are severe or sudden.'
+    "I hear you — let's take this step by step. What symptom bothers you most right now, and when did it start?"
   );
+}
+
+function buildSymptomIntakeFallback(userText) {
+  return buildSymptomIntakeReply(userText);
 }
 
 async function safeChatCompletion(history, userText, attachment, attachments) {
@@ -338,6 +360,17 @@ async function smartChat(userId, history = [], userText = '', attachment = null,
       break;
   }
 
+  if (looksLikeSymptomTriage(text) && countTriageAssistantTurns(history) === 0) {
+    return buildResult({
+      reply: buildSymptomIntakeReply(text),
+      intent: 'symptom',
+      featureKey: 'chat_text',
+      phase: 'intake',
+      triageTurn: 0,
+      recommending: false,
+    });
+  }
+
   if (looksLikeSymptomTriage(text)) {
     const result = await safeChatCompletion(history, text, null, null);
     return buildResult({
@@ -359,4 +392,4 @@ async function smartChat(userId, history = [], userText = '', attachment = null,
   });
 }
 
-module.exports = { smartChat, MENU_TEXT, MENU_ACTIONS, PWA_SYSTEM_PROMPT };
+module.exports = { smartChat, MENU_TEXT, MENU_ACTIONS, PWA_SYSTEM_PROMPT, buildSymptomIntakeReply };

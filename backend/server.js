@@ -114,12 +114,25 @@ app.get('/app-config.js', (req, res) => {
   const apiUrl =
     process.env.PUBLIC_APP_URL?.replace(/\/$/, '') ||
     (host ? `${proto}://${host}` : '');
+  let canonicalApiUrl = apiUrl.replace(/\/$/, '');
+  if (isProd && canonicalApiUrl) {
+    try {
+      const u = new URL(canonicalApiUrl);
+      if (/^ehealthaigh\.com$/i.test(u.hostname)) {
+        u.hostname = 'www.ehealthaigh.com';
+        u.protocol = 'https:';
+        canonicalApiUrl = u.origin;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
   res.type('application/javascript');
   res.setHeader('Cache-Control', 'no-store');
   res.send(
     `window.__EHEALTH_CONFIG__=${JSON.stringify({
       appApiSecret: secret,
-      apiUrl: apiUrl.replace(/\/$/, ''),
+      apiUrl: canonicalApiUrl,
     })};`
   );
 });

@@ -1,4 +1,6 @@
 const https = require('https');
+const path = require('path');
+const { fork } = require('child_process');
 const { getGeminiApiKey, getGeminiModel } = require('./settings');
 const { normalizeGeminiModel } = require('./geminiModels');
 const { sanitizePwaReply } = require('./replySanitizer');
@@ -17,36 +19,12 @@ const SYMPTOM_GENERATION_CONFIG = {
   temperature: 0.35,
 };
 
-/** cPanel/Passenger: native fetch (undici) can crash the worker — use https or axios. */
-function postGeminiJson(url, payload, timeoutMs = 22_000) {
+const USE_GEMINI_WORKER =
+  !!process.env.PASSENGER_APP_ENV || process.env.GEMINI_USE_WORKER === '1';
+
+/** Native https only — never fetch/axios (undici can crash Passenger workers). */
+function postGeminiJsonDirect(url, payload, timeoutMs = 22_000) {
   return new Promise((resolve, reject) => {
-    let axios;
-    try {
-      axios = require('axios');
-    } catch {
-      axios = null;
-    }
-
-    if (axios) {
-      axios
-        .post(url, payload, {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: timeoutMs,
-          validateStatus: () => true,
-        })
-        .then(({ status, data }) => resolve({ status, data }))
-        .catch((err) => {
-          if (err.code === 'ECONNABORTED') {
-            const e = new Error('AI response timed out — please try again in a moment.');
-            e.status = 504;
-            reject(e);
-            return;
-          }
-          reject(err);
-        });
-      return;
-    }
-
     const body = JSON.stringify(payload);
     const target = new URL(url);
     const req = https.request(
@@ -59,6 +37,7 @@ function postGeminiJson(url, payload, timeoutMs = 22_000) {
           'Content-Length': Buffer.byteLength(body),
         },
         timeout: timeoutMs,
+        agent: false,
       },
       (res) => {
         let raw = '';
@@ -85,6 +64,68 @@ function postGeminiJson(url, payload, timeoutMs = 22_000) {
     req.write(body);
     req.end();
   });
+}
+
+function postGeminiJsonViaWorker(url, payload, timeoutMs = 22_000) {
+  return new Promise((resolve, reject) => {
+    const workerPath = path.join(__dirname, 'geminiWorker.js');
+    const child = fork(workerPath, [], {
+      env: process.env,
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+    });
+    let settled = false;
+
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        child.kill('SIGTERM');
+      } catch {
+        /* ignore */
+      }
+      fn(value);
+    };
+
+    const timer = setTimeout(() => {
+      finish(reject, Object.assign(new Error('AI response timed out — please try again in a moment.'), { status: 504 }));
+    }, timeoutMs + 5_000);
+
+    child.on('message', (msg) => {
+      if (!msg?.ok) {
+        const err = new Error(msg?.error?.message || 'Gemini worker failed');
+        err.status = msg?.error?.status || 500;
+        finish(reject, err);
+        return;
+      }
+      finish(resolve, { status: 200, data: msg.data });
+    });
+
+    child.on('error', (err) => finish(reject, err));
+
+    child.on('exit', (code) => {
+      if (settled) return;
+      if (code !== 0) {
+        finish(
+          reject,
+          Object.assign(new Error('AI service temporarily unavailable — please try again.'), { status: 503 })
+        );
+      }
+    });
+
+    try {
+      child.send({ type: 'call', url, payload, timeoutMs });
+    } catch (err) {
+      finish(reject, err);
+    }
+  });
+}
+
+function postGeminiJson(url, payload, timeoutMs = 22_000) {
+  if (USE_GEMINI_WORKER) {
+    return postGeminiJsonViaWorker(url, payload, timeoutMs);
+  }
+  return postGeminiJsonDirect(url, payload, timeoutMs);
 }
 
 async function callGemini(contents, model, options = {}) {
@@ -262,4 +303,5 @@ module.exports = {
   resolveChatFeatureKey,
   resolveGenerationConfig,
   MEDICAL_CHAT_SYSTEM_PROMPT,
+  USE_GEMINI_WORKER,
 };

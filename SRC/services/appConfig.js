@@ -15,23 +15,38 @@ export function getAppApiSecret() {
 
 export function getApiUrl() {
   const cfg = getRuntimeConfig();
-  const fromCfg = cfg.apiUrl?.replace(/\/$/, '');
+  let fromCfg = cfg.apiUrl?.replace(/\/$/, '');
   if (typeof window !== 'undefined' && window.location?.origin) {
     const pageOrigin = window.location.origin.replace(/\/$/, '');
-    if (!fromCfg) return pageOrigin;
+    if (!fromCfg) return normalizeApiHost(pageOrigin);
     try {
       const cfgHost = new URL(fromCfg).hostname.replace(/^www\./, '');
       const pageHost = new URL(pageOrigin).hostname.replace(/^www\./, '');
-      if (cfgHost === pageHost) return pageOrigin;
+      if (cfgHost === pageHost) return normalizeApiHost(pageOrigin);
     } catch {
       /* ignore */
     }
   }
-  if (fromCfg) return fromCfg;
+  if (fromCfg) return normalizeApiHost(fromCfg);
   const fromEnv = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
-  if (fromEnv) return fromEnv;
+  if (fromEnv) return normalizeApiHost(fromEnv);
   if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin.replace(/\/$/, '');
+    return normalizeApiHost(window.location.origin.replace(/\/$/, ''));
   }
   return null;
+}
+
+function normalizeApiHost(url) {
+  if (!url) return url;
+  try {
+    const u = new URL(url);
+    if (/^ehealthaigh\.com$/i.test(u.hostname)) {
+      u.hostname = 'www.ehealthaigh.com';
+      u.protocol = 'https:';
+      return u.origin;
+    }
+  } catch {
+    /* ignore */
+  }
+  return url.replace(/\/$/, '');
 }

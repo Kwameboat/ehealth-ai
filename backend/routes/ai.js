@@ -15,7 +15,8 @@ const {
 } = require('../services/clinicalResponseFormat');
 const { SYMPTOM_SYSTEM_INSTRUCTION } = require('../services/symptomClinicalPrompt');
 const { logUsage } = require('../services/points');
-const { smartChat } = require('../services/smartAssistant');
+const { smartChat, buildSymptomIntakeReply } = require('../services/smartAssistant');
+const { looksLikeSymptomTriage } = require('../services/smartIntents');
 
 const router = express.Router();
 const { getGeminiModel } = require('../services/settings');
@@ -80,7 +81,23 @@ router.post('/chat', async (req, res) => {
       attachments = null,
       featureKey: overrideKey,
     } = req.body || {};
-    const smart = await smartChat(req.userId, history, userText, attachment, attachments);
+    let smart;
+    try {
+      smart = await smartChat(req.userId, history, userText, attachment, attachments);
+    } catch (chatErr) {
+      console.error('[chat] smartChat failed:', chatErr?.message || chatErr);
+      const text = String(userText || '').trim();
+      if (looksLikeSymptomTriage(text)) {
+        smart = {
+          reply: buildSymptomIntakeReply(text),
+          meta: { intent: 'symptom', phase: 'intake', triageTurn: 0, recommending: false },
+          featureKey: 'chat_text',
+          actions: [],
+        };
+      } else {
+        throw chatErr;
+      }
+    }
     featureKey = overrideKey || smart.featureKey || resolveChatFeatureKey(attachment, attachments);
 
     if (!smart?.reply) {
@@ -90,6 +107,7 @@ router.post('/chat', async (req, res) => {
     const deduction = deductPoints(req.userId, featureKey);
     flushDb();
     if (res.headersSent) return;
+    res.setHeader('X-Chat-Engine', '2');
     res.json({
       reply: smart.reply,
       meta: smart.meta,
