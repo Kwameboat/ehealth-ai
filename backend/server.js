@@ -184,7 +184,12 @@ app.use(async (req, res, next) => {
   const isAdminLogin = req.method === 'POST' && req.path === '/admin/api/login';
   try {
     if (isAdminLogin) {
-      const result = await ensureDbReadyWithRecovery(3);
+      const result = await Promise.race([
+        ensureDbReadyWithRecovery(2),
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ ok: false, error: 'Database startup timeout' }), 8000)
+        ),
+      ]);
       if (!result.ok) throw new Error(result.error || 'Database not ready');
     } else {
       await waitForStartup(12_000);

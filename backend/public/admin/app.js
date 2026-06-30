@@ -2,19 +2,31 @@ const API = '/admin/api';
 const TOKEN_KEY = 'medassistant_admin_token';
 const ADMIN_KEY = 'medassistant_admin_user';
 
-function apiUrl(path) {
-  const base = API + path;
-  if (location.hostname === 'ehealthaigh.com') {
-    return 'https://www.ehealthaigh.com' + base;
-  }
-  return base;
+function siteOrigin() {
+  if (location.hostname === 'ehealthaigh.com') return 'https://www.ehealthaigh.com';
+  return window.location.origin;
 }
 
-function healthUrl() {
-  if (location.hostname === 'ehealthaigh.com') {
-    return 'https://www.ehealthaigh.com/api/health?recover=1';
+function apiUrl(path) {
+  return `${siteOrigin()}/admin/api${path}`;
+}
+
+function healthUrl(recover = false) {
+  const q = recover ? '?recover=1' : '';
+  return `${siteOrigin()}/api/health${q}`;
+}
+
+async function fetchWithTimeout(url, options = {}, ms = 15000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: ctrl.signal, cache: 'no-store' });
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('Request timed out — RESTART Node.js in cPanel');
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return '/api/health?recover=1';
 }
 
 let modalCallback = null;
@@ -50,32 +62,32 @@ function clearSession() {
   localStorage.removeItem(ADMIN_KEY);
 }
 
-async function waitForDbReady(maxMs = 45000) {
+async function waitForDbReady(maxMs = 8000) {
   const started = Date.now();
   while (Date.now() - started < maxMs) {
     try {
-      const res = await fetch(healthUrl(), { cache: 'no-store' });
+      const res = await fetchWithTimeout(healthUrl(false), {}, 5000);
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.db === true) return true;
     } catch {
       /* retry */
     }
-    await new Promise((r) => setTimeout(r, 1200));
+    await new Promise((r) => setTimeout(r, 600));
   }
   return false;
 }
 
-async function tryRecoverDb(maxAttempts = 8) {
+async function tryRecoverDb(maxAttempts = 3) {
   for (let i = 0; i < maxAttempts; i += 1) {
     try {
-      const res = await fetch(healthUrl(), { cache: 'no-store' });
+      const res = await fetchWithTimeout(healthUrl(true), {}, 12000);
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.db === true) return true;
     } catch {
       /* retry */
     }
     if (i < maxAttempts - 1) {
-      await new Promise((r) => setTimeout(r, 900 * (i + 1)));
+      await new Promise((r) => setTimeout(r, 500 * (i + 1)));
     }
   }
   return false;
@@ -87,12 +99,12 @@ async function api(path, options = {}, attempt = 0, opts = {}) {
   if (token) headers.Authorization = `Bearer ${token}`;
   let res;
   try {
-    res = await fetch(apiUrl(path), { ...options, headers });
-  } catch {
-    if (attempt < 7 && (await tryRecoverDb())) {
+    res = await fetchWithTimeout(apiUrl(path), { ...options, headers }, opts.timeoutMs || 20000);
+  } catch (err) {
+    if (attempt < 2 && path !== '/login' && (await tryRecoverDb())) {
       return api(path, options, attempt + 1, opts);
     }
-    throw new Error('Failed to fetch');
+    throw err.message ? err : new Error('Failed to fetch');
   }
   const isJson = (res.headers.get('content-type') || '').includes('application/json');
   const data = isJson ? await res.json().catch(() => ({})) : {};
@@ -102,7 +114,7 @@ async function api(path, options = {}, attempt = 0, opts = {}) {
     throw new Error('Session expired');
   }
   if (!res.ok) {
-    if (res.status === 503 && attempt < 7) {
+    if (res.status === 503 && attempt < 2 && path !== '/login') {
       if (await tryRecoverDb()) {
         return api(path, options, attempt + 1, opts);
       }
@@ -146,26 +158,32 @@ async function handleLoginSubmit(e) {
     btn.textContent = 'Signing in…';
   }
   try {
-    await waitForDbReady(25000);
-    const data = await api('/login', {
-      method: 'POST',
-      body: JSON.stringify({
-        username: document.getElementById('login-username').value.trim(),
-        password: document.getElementById('login-password').value,
-      }),
-    });
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    const res = await fetchWithTimeout(
+      apiUrl('/login'),
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      },
+      25000
+    );
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const msg = data?.error?.message || data?.error?.detail || `Login failed (${res.status})`;
+      throw new Error(msg);
+    }
     if (!data?.token) throw new Error('Login response missing token — RESTART Node.js in cPanel');
     setSession(data.token, data.admin);
-    const session = await api('/session', {}, 0, { silentAuth: true });
-    if (!session?.ok) throw new Error('Session could not be verified — check JWT_SECRET in cPanel');
     showApp();
     showPage('dashboard');
   } catch (err) {
     clearSession();
     const msg = err.message || 'Login failed';
     errEl.textContent =
-      msg === 'Failed to fetch' || msg.includes('NetworkError')
-        ? 'Cannot reach API. Use https://www.ehealthaigh.com/admin and RESTART Node.js'
+      msg.includes('timed out') || msg === 'Failed to fetch'
+        ? 'Server not responding. Use https://www.ehealthaigh.com/admin then RESTART Node.js'
         : msg.includes('Invalid credentials')
           ? 'Invalid username or password — must match cPanel ADMIN_USERNAME / ADMIN_PASSWORD'
           : msg;
@@ -1202,8 +1220,7 @@ async function bootApp() {
     return;
   }
   try {
-    await waitForDbReady(20000);
-    await api('/session');
+    await api('/session', {}, 0, { silentAuth: true, timeoutMs: 12000 });
     showApp();
     showPage('dashboard');
   } catch {
