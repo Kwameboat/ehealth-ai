@@ -61,9 +61,6 @@ router.post('/gemini/generateContent', async (req, res) => {
 
 router.post('/chat', async (req, res) => {
   let featureKey = 'chat_text';
-  res.set('Content-Type', 'application/json; charset=utf-8');
-  res.set('Cache-Control', 'no-store');
-  if (typeof res.flushHeaders === 'function') res.flushHeaders();
 
   try {
     if (!getGeminiApiKey()) {
@@ -85,7 +82,12 @@ router.post('/chat', async (req, res) => {
     const smart = await smartChat(req.userId, history, userText, attachment, attachments);
     featureKey = overrideKey || smart.featureKey || resolveChatFeatureKey(attachment, attachments);
 
+    if (!smart?.reply) {
+      return res.status(500).json({ error: { message: 'No response from the assistant' } });
+    }
+
     const deduction = deductPoints(req.userId, featureKey);
+    if (res.headersSent) return;
     res.json({
       reply: smart.reply,
       meta: smart.meta,
@@ -93,6 +95,7 @@ router.post('/chat', async (req, res) => {
       points: { charged: deduction.charged, balance: deduction.balance, featureKey },
     });
   } catch (e) {
+    if (res.headersSent) return;
     const handled = handlePointsError(res, e, req.userId, featureKey);
     if (handled) return handled;
     res.status(e.status || 500).json({ error: { message: e.message } });
