@@ -117,66 +117,43 @@ app.get('/app-config.js', (req, res) => {
 
 app.get('/api/health', async (req, res) => {
   const forceRecover = req.query.recover === '1' || req.query.recover === 'true';
-  const diag = getDbStatus();
-
-  if (!forceRecover && diag.ready) {
-    try {
-      getDb().prepare('SELECT 1 AS ok').get();
-      return res.json({
-        status: 'ok',
-        service: 'eHealth AI API',
-        db: true,
-        dbPath: diag.dbPath,
-        time: new Date().toISOString(),
-      });
-    } catch {
-      /* fall through to recovery */
-    }
-  }
-
-  if (!forceRecover) {
-    ensureDbReadyWithRecovery(2).catch(() => {});
-    return res.status(503).json({
-      status: 'recovering',
-      service: 'eHealth AI API',
-      db: false,
-      recovering: true,
-      error: diag.lastError,
-      wasm: diag.wasmPath,
-      dbPath: diag.dbPath,
-      hint: 'Database warming up — retry in a few seconds',
-      recoverUrl: '/api/health?recover=1',
-      time: new Date().toISOString(),
-    });
-  }
+  const timeoutMs = forceRecover ? 25_000 : 18_000;
 
   try {
-    await recoverDatabase('health-check');
+    if (forceRecover) {
+      await recoverDatabase('health-check');
+    }
+
+    await waitForStartup(timeoutMs);
+
     const result = await Promise.race([
-      ensureDbReadyWithRecovery(4),
+      ensureDbReadyWithRecovery(forceRecover ? 4 : 3),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Database recovery timeout')), 20_000)
+        setTimeout(() => reject(new Error('Database init timeout')), timeoutMs)
       ),
     ]);
     if (!result.ok) throw new Error(result.error || 'Database not ready');
     probeOk();
+    const diag = getDbStatus();
     return res.json({
       status: 'ok',
       service: 'eHealth AI API',
       db: true,
-      recovered: true,
+      recovered: !!result.recovered || forceRecover,
       dbPath: diag.dbPath,
       time: new Date().toISOString(),
     });
   } catch (err) {
-    const latest = getDbStatus();
+    const diag = getDbStatus();
     res.status(503).json({
       status: 'error',
       service: 'eHealth AI API',
       db: false,
       error: err.message,
-      wasm: latest.wasmPath,
-      dbPath: latest.dbPath,
+      wasm: diag.wasmPath,
+      dbPath: diag.dbPath,
+      dbExists: diag.dbExists,
+      dbWritable: diag.dbWritable,
       hint: 'Run: bash ~/ehealth-ai/cpanel/fix-db-permanent.sh then RESTART Node.js',
       recoverUrl: '/api/health?recover=1',
       time: new Date().toISOString(),

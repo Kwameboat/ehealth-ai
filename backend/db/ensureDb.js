@@ -154,7 +154,12 @@ async function ensureDbReady() {
         clearDbArtifacts({ aggressive: attempt > 1 });
         backupCorruptDatabase(`init attempt ${attempt}`);
         findWasmPath();
-        await initDatabase();
+        await Promise.race([
+          initDatabase(),
+          sleep(18_000).then(() => {
+            throw new Error('initDatabase timeout');
+          }),
+        ]);
         probeDatabase();
         ready = true;
         lastError = null;
@@ -193,6 +198,7 @@ async function ensureDbReadyWithRecovery(recoveryAttempts = 3) {
       return { ok: true, recovered: cycle > 0 };
     } catch (err) {
       if (cycle >= recoveryAttempts - 1) {
+        lastError = err;
         return { ok: false, error: err.message };
       }
       await recoverDatabase(err.message);
@@ -228,7 +234,8 @@ async function startupDatabase(maxWaitMs = 30_000) {
     lastErr = result.error || lastErr;
     await sleep(500);
   }
-  throw new Error(lastErr || 'Database startup timeout');
+  lastError = new Error(lastErr || 'Database startup timeout');
+  throw lastError;
 }
 
 function getDbStatus() {
