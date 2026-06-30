@@ -2,6 +2,21 @@ const API = '/admin/api';
 const TOKEN_KEY = 'medassistant_admin_token';
 const ADMIN_KEY = 'medassistant_admin_user';
 
+function apiUrl(path) {
+  const base = API + path;
+  if (location.hostname === 'ehealthaigh.com') {
+    return 'https://www.ehealthaigh.com' + base;
+  }
+  return base;
+}
+
+function healthUrl() {
+  if (location.hostname === 'ehealthaigh.com') {
+    return 'https://www.ehealthaigh.com/api/health?recover=1';
+  }
+  return '/api/health?recover=1';
+}
+
 let modalCallback = null;
 let selectedUserId = null;
 let cachedUsers = [];
@@ -39,7 +54,7 @@ async function waitForDbReady(maxMs = 45000) {
   const started = Date.now();
   while Date.now() - started < maxMs) {
     try {
-      const res = await fetch('/api/health?recover=1', { cache: 'no-store' });
+      const res = await fetch(healthUrl(), { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.db === true) return true;
     } catch {
@@ -53,7 +68,7 @@ async function waitForDbReady(maxMs = 45000) {
 async function tryRecoverDb(maxAttempts = 8) {
   for (let i = 0; i < maxAttempts; i += 1) {
     try {
-      const res = await fetch('/api/health?recover=1', { cache: 'no-store' });
+      const res = await fetch(healthUrl(), { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.db === true) return true;
     } catch {
@@ -66,22 +81,22 @@ async function tryRecoverDb(maxAttempts = 8) {
   return false;
 }
 
-async function api(path, options = {}, attempt = 0) {
+async function api(path, options = {}, attempt = 0, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   let res;
   try {
-    res = await fetch(`${API}${path}`, { ...options, headers });
+    res = await fetch(apiUrl(path), { ...options, headers });
   } catch {
     if (attempt < 7 && (await tryRecoverDb())) {
-      return api(path, options, attempt + 1);
+      return api(path, options, attempt + 1, opts);
     }
     throw new Error('Failed to fetch');
   }
   const isJson = (res.headers.get('content-type') || '').includes('application/json');
   const data = isJson ? await res.json().catch(() => ({})) : {};
-  if (res.status === 401 && path !== '/login') {
+  if (res.status === 401 && path !== '/login' && !opts.silentAuth) {
     clearSession();
     showLogin();
     throw new Error('Session expired');
@@ -89,7 +104,7 @@ async function api(path, options = {}, attempt = 0) {
   if (!res.ok) {
     if (res.status === 503 && attempt < 7) {
       if (await tryRecoverDb()) {
-        return api(path, options, attempt + 1);
+        return api(path, options, attempt + 1, opts);
       }
     }
     if (res.status === 404) {
@@ -119,6 +134,51 @@ function showApp() {
   document.getElementById('admin-name').textContent = name;
   document.getElementById('admin-avatar').textContent = name.slice(0, 2).toUpperCase();
 }
+
+async function handleLoginSubmit(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const errEl = document.getElementById('login-error');
+  const btn = e.target.querySelector('button[type="submit"]');
+  errEl.classList.add('hidden');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+  }
+  try {
+    await waitForDbReady(25000);
+    const data = await api('/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: document.getElementById('login-username').value.trim(),
+        password: document.getElementById('login-password').value,
+      }),
+    });
+    if (!data?.token) throw new Error('Login response missing token — RESTART Node.js in cPanel');
+    setSession(data.token, data.admin);
+    const session = await api('/session', {}, 0, { silentAuth: true });
+    if (!session?.ok) throw new Error('Session could not be verified — check JWT_SECRET in cPanel');
+    showApp();
+    showPage('dashboard');
+  } catch (err) {
+    clearSession();
+    const msg = err.message || 'Login failed';
+    errEl.textContent =
+      msg === 'Failed to fetch' || msg.includes('NetworkError')
+        ? 'Cannot reach API. Use https://www.ehealthaigh.com/admin and RESTART Node.js'
+        : msg.includes('Invalid credentials')
+          ? 'Invalid username or password — must match cPanel ADMIN_USERNAME / ADMIN_PASSWORD'
+          : msg;
+    errEl.classList.remove('hidden');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Sign in to dashboard';
+    }
+  }
+}
+
+document.getElementById('login-form')?.addEventListener('submit', handleLoginSubmit);
 
 function showPage(name) {
   document.querySelectorAll('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.page === name));
@@ -808,44 +868,6 @@ async function loadSettings() {
 }
 
 // Event wiring
-document.getElementById('login-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const errEl = document.getElementById('login-error');
-  const btn = e.target.querySelector('button[type="submit"]');
-  errEl.classList.add('hidden');
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Signing in…';
-  }
-  try {
-    await waitForDbReady(25000);
-    const data = await api('/login', {
-      method: 'POST',
-      body: JSON.stringify({
-        username: document.getElementById('login-username').value.trim(),
-        password: document.getElementById('login-password').value,
-      }),
-    });
-    setSession(data.token, data.admin);
-    showApp();
-    showPage('dashboard');
-  } catch (err) {
-    const msg = err.message || 'Login failed';
-    errEl.textContent =
-      msg === 'Failed to fetch' || msg.includes('NetworkError')
-        ? 'Cannot reach API. cPanel → Node.js → RESTART, then test /api/health'
-        : msg.includes('Invalid credentials')
-          ? 'Invalid username or password. Use cPanel ADMIN_USERNAME / ADMIN_PASSWORD, or run reset-admin-password.sh'
-          : msg;
-    errEl.classList.remove('hidden');
-  } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = 'Sign in to dashboard';
-    }
-  }
-});
-
 document.getElementById('logout-btn').onclick = () => {
   clearSession();
   showLogin();

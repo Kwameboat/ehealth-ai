@@ -9,6 +9,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/admin/styles.css?v=10" />
   <style>.hidden{display:none!important}.login-view.hidden,.shell.hidden{display:none!important}</style>
+  <script>
+    // Always use www — bare domain 301 breaks POST /admin/api/login
+    if (location.hostname === 'ehealthaigh.com') {
+      location.replace('https://www.ehealthaigh.com' + location.pathname + location.search + location.hash);
+    }
+  </script>
 </head>
 <body>
   <!-- Login -->
@@ -18,7 +24,7 @@
         <img src="/admin/logo.png" alt="eHealth AI" class="login-logo" />
         <p>Admin — 360° System Control</p>
       </div>
-      <form id="login-form">
+      <form id="login-form" method="post" action="#" autocomplete="on" onsubmit="return false;">
         <label class="field-label">Username<input type="text" id="login-username" autocomplete="username" required /></label>
         <label class="field-label">Password<input type="password" id="login-password" autocomplete="current-password" required /></label>
         <p id="login-error" class="error-msg hidden"></p>
@@ -152,8 +158,16 @@
     </div>
   </div>
 
-  <script src="/admin/app.js?v=14"></script>
-  <script src="/admin/whatsapp-admin.js?v=10"></script>
-  <script src="/admin/settings-ext.js?v=1"></script>
+  <script src="/admin/app.js?v=15"></script>
+  <script src="/admin/whatsapp-admin.js?v=11"></script>
+  <script src="/admin/settings-ext.js?v=2"></script>
+  <script>
+    window.addEventListener('error', function (e) {
+      var el = document.getElementById('login-error');
+      if (!el) return;
+      el.textContent = 'Admin failed to load: ' + (e.message || 'script error') + '. Hard-refresh (Ctrl+Shift+R).';
+      el.classList.remove('hidden');
+    });
+  </script>
 </body>
 </html>
