@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireUserAuth } = require('../middleware/userAuth');
 const { deductPoints, PointsError } = require('../services/points');
+const { isDbReady, ensureDbForRequest } = require('../db/ensureDb');
 const {
   callGemini,
   resolveChatFeatureKey,
@@ -59,6 +60,23 @@ router.post('/gemini/generateContent', async (req, res) => {
 router.post('/chat', async (req, res) => {
   let featureKey = 'chat_text';
   try {
+    if (!isDbReady()) {
+      const db = await Promise.race([
+        ensureDbForRequest(4),
+        new Promise((resolve) => setTimeout(() => resolve({ ok: false, error: 'Database timeout' }), 20_000)),
+      ]);
+      if (!db.ok) {
+        return res.status(503).json({
+          error: {
+            message: 'Database not ready',
+            detail: db.error,
+            hint: 'Retry in a few seconds',
+            recoverUrl: '/api/health?recover=1',
+          },
+        });
+      }
+    }
+
     const {
       history = [],
       userText = '',

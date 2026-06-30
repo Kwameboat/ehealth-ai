@@ -6,6 +6,7 @@ import {
 } from '../Config/medicalChatPrompt';
 import { getApiAuthHeadersAsync } from './apiAuth';
 import { getApiUrl } from './appConfig';
+import { readApiJson } from './apiResponse';
 import { fetchWithRetry } from './fetchRetry';
 import { notifyPointsBalance } from './pointsBridge';
 import { typingForIntent } from '../constants/smartAssistant';
@@ -75,8 +76,8 @@ export async function sendChatMessage({
         attachment: fileList[0] || null,
         attachments: fileList.length ? fileList : null,
       }),
-    });
-    const data = await response.json();
+    }, 4);
+    const data = await readApiJson(response);
     if (!response.ok) {
       const err = new Error(data?.error?.message || 'Unable to reach the assistant');
       err.code = data?.error?.code;

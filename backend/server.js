@@ -182,7 +182,15 @@ app.use(async (req, res, next) => {
   if (req.path === '/api/health') return next();
   // Admin console has its own DB middleware (longer recovery window).
   if (req.path.startsWith('/admin/api')) return next();
-  const gate = await gateDatabase(8000);
+  // Chat/auth routes handle DB in their routers — avoid double-gating + proxy timeouts.
+  if (
+    req.path === '/api/chat' ||
+    req.path === '/api/auth/login' ||
+    req.path === '/api/auth/register'
+  ) {
+    return next();
+  }
+  const gate = await gateDatabase(12_000);
   if (!gate.ok) {
     const diag = gate.status || getDbStatus();
     return res.status(503).json({
@@ -270,6 +278,9 @@ app.use((err, req, res, next) => {
 });
 
 app.use((req, res) => {
+  if (req.path.startsWith('/api') || req.path.startsWith('/admin/api')) {
+    return res.status(404).json({ error: { message: 'API route not found', path: req.path } });
+  }
   res.status(404).end();
 });
 

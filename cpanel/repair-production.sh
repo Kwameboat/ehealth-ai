@@ -62,7 +62,6 @@ curl -fsSL -o "$BACKEND/services/smartIntents.js" "$BASE/backend/services/smartI
 curl -fsSL -o "$BACKEND/services/smartAssistant.js" "$BASE/backend/services/smartAssistant.js"
 curl -fsSL -o "$BACKEND/services/visionAssist.js" "$BASE/backend/services/visionAssist.js"
 curl -fsSL -o "$BACKEND/services/gemini.js" "$BASE/backend/services/gemini.js"
-curl -fsSL -o "$BACKEND/routes/ai.js" "$BASE/backend/routes/ai.js"
 curl -fsSL -o "$BACKEND/routes/whatsapp-bridge.js" "$BASE/backend/routes/whatsapp-bridge.js"
 curl -fsSL -o "$BACKEND/services/nearbyPlaces.js" "$BASE/backend/services/nearbyPlaces.js"
 curl -fsSL -o "$BACKEND/routes/payments.js" "$BASE/backend/routes/payments.js"
