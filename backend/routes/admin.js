@@ -21,6 +21,7 @@ const {
   formatPackage,
 } = require('../services/packages');
 const { getDashboardData, getFreshCache, getStaleCache } = require('../services/dashboardCache');
+const { isDbReady } = require('../db/ensureDb');
 const { adminRouter: whatsappAdminRouter } = require('./whatsapp-bridge');
 
 const router = express.Router();
@@ -64,6 +65,7 @@ router.get('/dashboard', (req, res) => {
   try {
     const fresh = getFreshCache();
     if (fresh) return res.json(fresh);
+    if (!isDbReady()) return res.json(getStaleCache());
     const db = getDb();
     res.json(getDashboardData(db));
   } catch (err) {

@@ -97,7 +97,7 @@ async function api(path, options = {}, attempt = 0, opts = {}) {
   if (token) headers.Authorization = `Bearer ${token}`;
   let res;
   try {
-    res = await fetchWithTimeout(apiUrl(path), { ...options, headers }, opts.timeoutMs || 10000);
+    res = await fetchWithTimeout(apiUrl(path), { ...options, headers }, opts.timeoutMs || 7000);
   } catch (err) {
     if (attempt < 1 && path !== '/login') {
       await new Promise((r) => setTimeout(r, 600));
@@ -111,8 +111,8 @@ async function api(path, options = {}, attempt = 0, opts = {}) {
     throw new Error('Session expired — please sign in again');
   }
   if (!res.ok) {
-    if (res.status === 503 && attempt < 3) {
-      await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+    if (res.status === 503 && attempt < 1) {
+      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
       return api(path, options, attempt + 1, opts);
     }
     if (res.status === 404) {
@@ -256,7 +256,7 @@ async function runPage(el, loadingText, fn, retry) {
       clearTimeout(slowTimer);
       (retry || (() => runPage(el, loadingText, fn, retry)))();
     });
-  }, 12000);
+  }, 6000);
   try {
     await fn();
     clearTimeout(slowTimer);
@@ -272,7 +272,7 @@ async function runPage(el, loadingText, fn, retry) {
     if (is503 && !el.dataset.recovering) {
       el.dataset.recovering = '1';
       el.innerHTML = `<p class="muted">Recovering database… retrying.</p>`;
-      await new Promise((r) => setTimeout(r, 1500));
+      await new Promise((r) => setTimeout(r, 700));
       delete el.dataset.recovering;
       return runPage(el, loadingText, fn, retry);
     }
@@ -326,7 +326,7 @@ function buildBarChart(topFeatures, usageToday) {
 async function loadDashboard() {
   const el = document.getElementById('page-dashboard');
   await runPage(el, 'Loading clinical data…', async () => {
-  const data = await api('/dashboard', {}, 0, { timeoutMs: 12000 });
+  const data = await api('/dashboard', {}, 0, { timeoutMs: 5000 });
   const { stats, recentUsage, topFeatures } = data;
   const staleBanner = data.stale
     ? '<p class="muted" style="margin-bottom:12px">Showing cached data — database is catching up.</p>'

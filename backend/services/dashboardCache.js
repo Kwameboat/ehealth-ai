@@ -2,6 +2,24 @@ let cache = null;
 let cachedAt = 0;
 const TTL_MS = Number(process.env.DASHBOARD_CACHE_MS) || 90_000;
 
+function emptyDashboard() {
+  return {
+    stats: {
+      users: 0,
+      activeUsers: 0,
+      totalPoints: 0,
+      transactionsToday: 0,
+      usageToday: 0,
+      pointsDebitedToday: 0,
+    },
+    recentUsage: [],
+    topFeatures: [],
+    cached: true,
+    stale: true,
+    fallback: true,
+  };
+}
+
 function buildFromDb(db) {
   const stats = {
     users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
@@ -51,7 +69,7 @@ function getFreshCache() {
 }
 
 function getStaleCache() {
-  if (!cache) return null;
+  if (!cache) return emptyDashboard();
   return { ...cache, cached: true, stale: true };
 }
 
@@ -60,4 +78,4 @@ function clearDashboardCache() {
   cachedAt = 0;
 }
 
-module.exports = { getDashboardData, getFreshCache, getStaleCache, clearDashboardCache };
+module.exports = { getDashboardData, getFreshCache, getStaleCache, clearDashboardCache, emptyDashboard };

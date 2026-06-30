@@ -180,6 +180,7 @@ app.use(async (req, res, next) => {
     return next();
   }
   if (req.path === '/api/health') return next();
+  if (req.path === '/admin/api/session' || req.path === '/admin/api/dashboard') return next();
   const isAdminLogin = req.method === 'POST' && req.path === '/admin/api/login';
   const gateMs = isAdminLogin ? 8000 : 4000;
   const gate = await gateDatabase(gateMs);
