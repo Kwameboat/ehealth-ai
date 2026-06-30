@@ -322,7 +322,6 @@ module.exports = {
   isDbReady,
   clearDbArtifacts,
   resetDbState,
-  isDbReady,
   backupCorruptDatabase,
   startDbMaintenance,
 };
