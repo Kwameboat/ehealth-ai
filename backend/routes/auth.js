@@ -1,6 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
-const { getDb, uuid, now } = require('../db/init');
+const { getDb, uuid, now, flushDb } = require('../db/init');
 const { signUserToken } = require('../middleware/userAuth');
 const { ensureRouteDatabase } = require('../middleware/requestDb');
 const { creditPoints } = require('../services/points');
@@ -52,6 +52,7 @@ router.post('/register', (req, res) => {
 
     const user = getDb().prepare('SELECT * FROM users WHERE id = ?').get(id);
     const token = signUserToken(user);
+    flushDb();
     res.status(201).json({ token, user: sanitizeUser(user) });
   } catch (e) {
     res.status(500).json({ error: { message: e.message } });

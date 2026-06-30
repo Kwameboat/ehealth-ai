@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireUserAuth } = require('../middleware/userAuth');
 const { deductPoints, PointsError } = require('../services/points');
+const { flushDb } = require('../db/init');
 const { ensureRouteDatabase } = require('../middleware/requestDb');
 const { getGeminiApiKey } = require('../services/settings');
 const {
@@ -87,6 +88,7 @@ router.post('/chat', async (req, res) => {
     }
 
     const deduction = deductPoints(req.userId, featureKey);
+    flushDb();
     if (res.headersSent) return;
     res.json({
       reply: smart.reply,

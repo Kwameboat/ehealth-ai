@@ -546,4 +546,13 @@ async function initDatabase() {
   }
 }
 
-module.exports = { getDb, initDatabase, resetDatabase, uuid, now, DB_PATH };
+function flushDb() {
+  try {
+    const database = getDb();
+    if (typeof database.flush === 'function') database.flush();
+  } catch {
+    /* ignore */
+  }
+}
+
+module.exports = { getDb, initDatabase, resetDatabase, flushDb, uuid, now, DB_PATH };
