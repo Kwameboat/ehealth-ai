@@ -179,6 +179,16 @@ async function smartChat(userId, history = [], userText = '', attachment = null,
     return handleAttachments(userId, text, attachment, attachments);
   }
 
+  if (/^(hi|hello|hey|good\s+(morning|afternoon|evening))[!.\s?]*$/i.test(text)) {
+    return buildResult({
+      reply:
+        'Hello! I\'m Agyenim, your health assistant. You can ask about symptoms, NHIS, diet, finding care, blood pressure, or medicines — or tap a shortcut below.',
+      intent: 'general',
+      featureKey: 'chat_text',
+      actions: MENU_ACTIONS,
+    });
+  }
+
   if (isActiveTriageSession(history)) {
     const result = await chatCompletion(history, text, null, null);
     return buildResult({

@@ -1,7 +1,8 @@
 const express = require('express');
 const { requireUserAuth } = require('../middleware/userAuth');
 const { deductPoints, PointsError } = require('../services/points');
-const { isDbReady, ensureDbForRequest } = require('../db/ensureDb');
+const { ensureRouteDatabase } = require('../middleware/requestDb');
+const { getGeminiApiKey } = require('../services/settings');
 const {
   callGemini,
   resolveChatFeatureKey,
@@ -18,6 +19,7 @@ const { smartChat } = require('../services/smartAssistant');
 const router = express.Router();
 const { getGeminiModel } = require('../services/settings');
 
+router.use((req, res, next) => ensureRouteDatabase(req, res, next, 15_000));
 router.use(requireUserAuth);
 
 function handlePointsError(res, e, userId, featureKey) {
@@ -59,22 +61,18 @@ router.post('/gemini/generateContent', async (req, res) => {
 
 router.post('/chat', async (req, res) => {
   let featureKey = 'chat_text';
+  res.set('Content-Type', 'application/json; charset=utf-8');
+  res.set('Cache-Control', 'no-store');
+  if (typeof res.flushHeaders === 'function') res.flushHeaders();
+
   try {
-    if (!isDbReady()) {
-      const db = await Promise.race([
-        ensureDbForRequest(4),
-        new Promise((resolve) => setTimeout(() => resolve({ ok: false, error: 'Database timeout' }), 20_000)),
-      ]);
-      if (!db.ok) {
-        return res.status(503).json({
-          error: {
-            message: 'Database not ready',
-            detail: db.error,
-            hint: 'Retry in a few seconds',
-            recoverUrl: '/api/health?recover=1',
-          },
-        });
-      }
+    if (!getGeminiApiKey()) {
+      return res.status(503).json({
+        error: {
+          message: 'AI is not configured yet',
+          detail: 'Add GEMINI_API_KEY in cPanel → Node.js → Environment Variables, then RESTART.',
+        },
+      });
     }
 
     const {

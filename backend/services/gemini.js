@@ -27,10 +27,15 @@ async function callGemini(contents, model, options = {}) {
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${useModel}:generateContent?key=${apiKey}`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs || 22_000);
+  let response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
       contents,
       ...(options.generationConfig ? { generationConfig: options.generationConfig } : {}),
       ...(options.systemInstruction
@@ -40,8 +45,18 @@ async function callGemini(contents, model, options = {}) {
             },
           }
         : {}),
-    }),
-  });
+      }),
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      const timeoutErr = new Error('AI response timed out — please try again in a moment.');
+      timeoutErr.status = 504;
+      throw timeoutErr;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 
   const data = await response.json();
   if (!response.ok) {

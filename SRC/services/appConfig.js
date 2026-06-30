@@ -16,6 +16,17 @@ export function getAppApiSecret() {
 export function getApiUrl() {
   const cfg = getRuntimeConfig();
   const fromCfg = cfg.apiUrl?.replace(/\/$/, '');
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    const pageOrigin = window.location.origin.replace(/\/$/, '');
+    if (!fromCfg) return pageOrigin;
+    try {
+      const cfgHost = new URL(fromCfg).hostname.replace(/^www\./, '');
+      const pageHost = new URL(pageOrigin).hostname.replace(/^www\./, '');
+      if (cfgHost === pageHost) return pageOrigin;
+    } catch {
+      /* ignore */
+    }
+  }
   if (fromCfg) return fromCfg;
   const fromEnv = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, '');
   if (fromEnv) return fromEnv;

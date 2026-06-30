@@ -7,6 +7,11 @@
   RewriteEngine On
   RewriteBase /
 
+  # LiteSpeed: do not kill long /api requests (AI chat)
+  <IfModule LiteSpeed>
+    RewriteRule ^api/ - [E=noabort:1,E=noconntimeout:1]
+  </IfModule>
+
   # Canonical host: prefer www (SEO — single indexed URL)
   RewriteCond %{HTTP_HOST} ^ehealthaigh\.com$ [NC]
   RewriteRule ^ https://www.ehealthaigh.com%{REQUEST_URI} [L,R=301]

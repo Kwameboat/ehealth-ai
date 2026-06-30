@@ -82,6 +82,16 @@ app.use(
         callback(null, true);
         return;
       }
+      if (isProd) {
+        try {
+          if (/(^|\.)ehealthaigh\.com$/i.test(new URL(origin).hostname)) {
+            callback(null, true);
+            return;
+          }
+        } catch {
+          /* ignore bad origin */
+        }
+      }
       callback(new Error('Not allowed by CORS'));
     },
     credentials: true,
