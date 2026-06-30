@@ -97,9 +97,10 @@ async function api(path, options = {}, attempt = 0, opts = {}) {
   if (token) headers.Authorization = `Bearer ${token}`;
   let res;
   try {
-    res = await fetchWithTimeout(apiUrl(path), { ...options, headers }, opts.timeoutMs || 20000);
+    res = await fetchWithTimeout(apiUrl(path), { ...options, headers }, opts.timeoutMs || 10000);
   } catch (err) {
-    if (attempt < 2 && path !== '/login' && (await tryRecoverDb())) {
+    if (attempt < 1 && path !== '/login') {
+      await new Promise((r) => setTimeout(r, 600));
       return api(path, options, attempt + 1, opts);
     }
     throw err.message ? err : new Error('Failed to fetch');
@@ -110,8 +111,8 @@ async function api(path, options = {}, attempt = 0, opts = {}) {
     throw new Error('Session expired — please sign in again');
   }
   if (!res.ok) {
-    if (res.status === 503 && attempt < 4) {
-      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+    if (res.status === 503 && attempt < 3) {
+      await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
       return api(path, options, attempt + 1, opts);
     }
     if (res.status === 404) {
@@ -247,20 +248,31 @@ function showPageError(el, err, retry) {
 
 async function runPage(el, loadingText, fn, retry) {
   el.innerHTML = `<p class="muted">${loadingText}</p>`;
+  const slowTimer = setTimeout(() => {
+    if (el.querySelector('.page-retry')) return;
+    el.innerHTML = `<p class="muted">${loadingText}<br><small>Taking longer than usual…</small></p>
+      <button type="button" class="btn btn-primary btn-sm page-retry" style="margin-top:12px">Retry now</button>`;
+    el.querySelector('.page-retry')?.addEventListener('click', () => {
+      clearTimeout(slowTimer);
+      (retry || (() => runPage(el, loadingText, fn, retry)))();
+    });
+  }, 12000);
   try {
     await fn();
+    clearTimeout(slowTimer);
   } catch (err) {
+    clearTimeout(slowTimer);
     const msg = String(err.message || err);
     if (/session expired/i.test(msg)) {
       clearSession();
       showLogin();
       return;
     }
-    const is503 = /503|Database not ready|timed out|recover/i.test(msg);
+    const is503 = /503|Database not ready|timed out|recover|unavailable/i.test(msg);
     if (is503 && !el.dataset.recovering) {
       el.dataset.recovering = '1';
-      el.innerHTML = `<p class="muted">Database recovering… retrying.</p>`;
-      await new Promise((r) => setTimeout(r, 2000));
+      el.innerHTML = `<p class="muted">Recovering database… retrying.</p>`;
+      await new Promise((r) => setTimeout(r, 1500));
       delete el.dataset.recovering;
       return runPage(el, loadingText, fn, retry);
     }
@@ -314,11 +326,15 @@ function buildBarChart(topFeatures, usageToday) {
 async function loadDashboard() {
   const el = document.getElementById('page-dashboard');
   await runPage(el, 'Loading clinical data…', async () => {
-  const { stats, recentUsage, topFeatures } = await api('/dashboard');
+  const data = await api('/dashboard', {}, 0, { timeoutMs: 12000 });
+  const { stats, recentUsage, topFeatures } = data;
+  const staleBanner = data.stale
+    ? '<p class="muted" style="margin-bottom:12px">Showing cached data — database is catching up.</p>'
+    : '';
   const accuracy = stats.users > 0 ? Math.min(99.9, 95 + stats.activeUsers / Math.max(stats.users, 1) * 4).toFixed(1) : '99.8';
   const growth = stats.users > 0 ? `+${Math.min(12, Math.round((stats.activeUsers / stats.users) * 10))}%` : '+0%';
 
-  el.innerHTML = `
+  el.innerHTML = `${staleBanner}
     <div class="metrics-row">
       <div class="metric-card">
         <div class="metric-header">

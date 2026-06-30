@@ -17,16 +17,14 @@ const fs = require('fs');
 
 const { getDb } = require('./db/init');
 const {
-  ensureDbReady,
   ensureDbReadyWithRecovery,
-  ensureDbForRequest,
   startupDatabase,
   recoverDatabase,
   getDbStatus,
-  isDbReady,
   clearDbArtifacts,
   startDbMaintenance,
 } = require('./db/ensureDb');
+const { gateDatabase } = require('./middleware/dbGate');
 
 // Clear stale lock files before any worker tries to open the DB (Passenger multi-worker fix)
 clearDbArtifacts({ aggressive: true });
@@ -182,41 +180,23 @@ app.use(async (req, res, next) => {
     return next();
   }
   if (req.path === '/api/health') return next();
-  if (isDbReady()) return next();
   const isAdminLogin = req.method === 'POST' && req.path === '/admin/api/login';
-  try {
-    if (isAdminLogin) {
-      const result = await Promise.race([
-        ensureDbReadyWithRecovery(2),
-        new Promise((resolve) =>
-          setTimeout(() => resolve({ ok: false, error: 'Database startup timeout' }), 8000)
-        ),
-      ]);
-      if (!result.ok) throw new Error(result.error || 'Database not ready');
-    } else {
-      const result = await Promise.race([
-        ensureDbForRequest(3),
-        new Promise((resolve) =>
-          setTimeout(() => resolve({ ok: false, error: 'Database request timeout' }), 15000)
-        ),
-      ]);
-      if (!result.ok) throw new Error(result.error || 'Database not ready');
-    }
-    next();
-  } catch (err) {
-    const diag = getDbStatus();
-    console.error('DB middleware:', req.method, req.path, err.message, diag);
-    res.status(503).json({
+  const gateMs = isAdminLogin ? 8000 : 4000;
+  const gate = await gateDatabase(gateMs);
+  if (!gate.ok) {
+    const diag = gate.status || getDbStatus();
+    return res.status(503).json({
       error: {
         message: 'Database not ready',
-        detail: err.message,
+        detail: gate.error,
         wasm: diag.wasmPath,
         dbPath: diag.dbPath,
-        hint: 'The server is attempting automatic database recovery. Click Retry or wait a moment.',
+        hint: 'Retry in a few seconds — auto-recovery is running',
         recoverUrl: '/api/health?recover=1',
       },
     });
   }
+  next();
 });
 
 app.use('/whatsapp-webhook', whatsappWebhookRouter);
@@ -325,6 +305,13 @@ const listenPort = Number(process.env.PORT) || PORT;
 
 (async () => {
   await dbStartupPromise;
+  try {
+    const { getDashboardData } = require('./services/dashboardCache');
+    getDashboardData(getDb());
+    console.log('[cache] Dashboard stats warmed');
+  } catch (e) {
+    console.warn('[cache] Dashboard warm skipped:', e.message);
+  }
   if (!process.env.PASSENGER_APP_ENV) {
     app.listen(listenPort, '0.0.0.0', onListen);
   } else {

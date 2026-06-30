@@ -20,6 +20,7 @@ const {
   deletePackage,
   formatPackage,
 } = require('../services/packages');
+const { getDashboardData, getFreshCache, getStaleCache } = require('../services/dashboardCache');
 const { adminRouter: whatsappAdminRouter } = require('./whatsapp-bridge');
 
 const router = express.Router();
@@ -60,39 +61,23 @@ router.use(requireAdminAuth);
 router.use('/whatsapp', whatsappAdminRouter);
 
 router.get('/dashboard', (req, res) => {
-  const db = getDb();
-  const stats = {
-    users: db.prepare('SELECT COUNT(*) AS c FROM users').get().c,
-    activeUsers: db.prepare('SELECT COUNT(*) AS c FROM users WHERE is_active = 1').get().c,
-    totalPoints: db.prepare('SELECT COALESCE(SUM(points_balance), 0) AS s FROM users').get().s,
-    transactionsToday: db
-      .prepare(`SELECT COUNT(*) AS c FROM point_transactions WHERE date(created_at) = date('now')`)
-      .get().c,
-    usageToday: db.prepare(`SELECT COUNT(*) AS c FROM usage_logs WHERE date(created_at) = date('now')`).get().c,
-    pointsDebitedToday: db
-      .prepare(
-        `SELECT COALESCE(SUM(ABS(amount)), 0) AS s FROM point_transactions
-         WHERE amount < 0 AND date(created_at) = date('now')`
-      )
-      .get().s,
-  };
-
-  const recentUsage = db
-    .prepare(
-      `SELECT u.email, l.feature_key, l.points_charged, l.status, l.created_at
-       FROM usage_logs l LEFT JOIN users u ON u.id = l.user_id
-       ORDER BY l.created_at DESC LIMIT 15`
-    )
-    .all();
-
-  const topFeatures = db
-    .prepare(
-      `SELECT feature_key, COUNT(*) AS count, SUM(points_charged) AS total_points
-       FROM usage_logs WHERE status = 'success' GROUP BY feature_key ORDER BY count DESC LIMIT 8`
-    )
-    .all();
-
-  res.json({ stats, recentUsage, topFeatures });
+  try {
+    const fresh = getFreshCache();
+    if (fresh) return res.json(fresh);
+    const db = getDb();
+    res.json(getDashboardData(db));
+  } catch (err) {
+    console.error('Dashboard error:', err.message);
+    const stale = getStaleCache();
+    if (stale) return res.json(stale);
+    res.status(503).json({
+      error: {
+        message: 'Dashboard temporarily unavailable',
+        detail: err.message,
+        hint: 'Retry in a few seconds',
+      },
+    });
+  }
 });
 
 router.get('/users', (req, res) => {

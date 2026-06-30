@@ -292,19 +292,25 @@ function startDbMaintenance() {
     }
   }, intervalMs).unref();
 
-  const probeMs = Number(process.env.DB_PROBE_MS) || 25_000;
+  const probeMs = Number(process.env.DB_PROBE_MS) || 90_000;
+  let probeFailures = 0;
   setInterval(async () => {
     try {
       if (!ready) {
-        await ensureDbReadyWithRecovery(2);
+        await ensureDbReadyWithRecovery(1);
+        probeFailures = 0;
         return;
       }
       probeDatabase();
+      probeFailures = 0;
     } catch (err) {
-      console.warn('[db] watchdog: probe failed — recovering:', err.message);
+      probeFailures += 1;
+      console.warn(`[db] watchdog: probe failed (${probeFailures}):`, err.message);
+      if (probeFailures < 3) return;
+      probeFailures = 0;
       try {
         await recoverDatabase('watchdog');
-        await ensureDbReadyWithRecovery(3);
+        await ensureDbReadyWithRecovery(2);
       } catch (e) {
         console.error('[db] watchdog recovery failed:', e.message);
       }
