@@ -52,7 +52,7 @@ function clearSession() {
 
 async function waitForDbReady(maxMs = 45000) {
   const started = Date.now();
-  while Date.now() - started < maxMs) {
+  while (Date.now() - started < maxMs) {
     try {
       const res = await fetch(healthUrl(), { cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
