@@ -23,6 +23,7 @@ const {
   startupDatabase,
   recoverDatabase,
   getDbStatus,
+  isDbReady,
   clearDbArtifacts,
   startDbMaintenance,
 } = require('./db/ensureDb');
@@ -181,6 +182,7 @@ app.use(async (req, res, next) => {
     return next();
   }
   if (req.path === '/api/health') return next();
+  if (isDbReady()) return next();
   const isAdminLogin = req.method === 'POST' && req.path === '/admin/api/login';
   try {
     if (isAdminLogin) {
@@ -192,8 +194,12 @@ app.use(async (req, res, next) => {
       ]);
       if (!result.ok) throw new Error(result.error || 'Database not ready');
     } else {
-      await waitForStartup(12_000);
-      const result = await ensureDbForRequest(6);
+      const result = await Promise.race([
+        ensureDbForRequest(3),
+        new Promise((resolve) =>
+          setTimeout(() => resolve({ ok: false, error: 'Database request timeout' }), 15000)
+        ),
+      ]);
       if (!result.ok) throw new Error(result.error || 'Database not ready');
     }
     next();

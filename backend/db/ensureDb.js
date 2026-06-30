@@ -124,6 +124,17 @@ function probeDatabase() {
   getDb().prepare('SELECT 1 AS ok').get();
 }
 
+function isDbReady() {
+  if (!ready) return false;
+  try {
+    probeDatabase();
+    return true;
+  } catch {
+    resetDbState();
+    return false;
+  }
+}
+
 async function recoverDatabase(reason) {
   const now = Date.now();
   if (now - lastRecoveryAt < RECOVERY_COOLDOWN_MS) {
@@ -308,8 +319,10 @@ module.exports = {
   startupDatabase,
   recoverDatabase,
   getDbStatus,
+  isDbReady,
   clearDbArtifacts,
   resetDbState,
+  isDbReady,
   backupCorruptDatabase,
   startDbMaintenance,
 };

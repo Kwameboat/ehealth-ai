@@ -3,17 +3,15 @@ const TOKEN_KEY = 'medassistant_admin_token';
 const ADMIN_KEY = 'medassistant_admin_user';
 
 function siteOrigin() {
-  if (location.hostname === 'ehealthaigh.com') return 'https://www.ehealthaigh.com';
   return window.location.origin;
 }
 
 function apiUrl(path) {
-  return `${siteOrigin()}/admin/api${path}`;
+  return `/admin/api${path}`;
 }
 
 function healthUrl(recover = false) {
-  const q = recover ? '?recover=1' : '';
-  return `${siteOrigin()}/api/health${q}`;
+  return recover ? '/api/health?recover=1' : '/api/health';
 }
 
 async function fetchWithTimeout(url, options = {}, ms = 15000) {
@@ -109,15 +107,12 @@ async function api(path, options = {}, attempt = 0, opts = {}) {
   const isJson = (res.headers.get('content-type') || '').includes('application/json');
   const data = isJson ? await res.json().catch(() => ({})) : {};
   if (res.status === 401 && path !== '/login' && !opts.silentAuth) {
-    clearSession();
-    showLogin();
-    throw new Error('Session expired');
+    throw new Error('Session expired — please sign in again');
   }
   if (!res.ok) {
-    if (res.status === 503 && attempt < 2 && path !== '/login') {
-      if (await tryRecoverDb()) {
-        return api(path, options, attempt + 1, opts);
-      }
+    if (res.status === 503 && attempt < 4) {
+      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)));
+      return api(path, options, attempt + 1, opts);
     }
     if (res.status === 404) {
       throw new Error(
@@ -255,15 +250,19 @@ async function runPage(el, loadingText, fn, retry) {
   try {
     await fn();
   } catch (err) {
-    const is503 = /503|Database not ready|recover/i.test(String(err.message || err));
+    const msg = String(err.message || err);
+    if (/session expired/i.test(msg)) {
+      clearSession();
+      showLogin();
+      return;
+    }
+    const is503 = /503|Database not ready|timed out|recover/i.test(msg);
     if (is503 && !el.dataset.recovering) {
       el.dataset.recovering = '1';
-      el.innerHTML = `<p class="muted">Database recovering… auto-retry in progress.</p>`;
-      if (await waitForDbReady(40000)) {
-        delete el.dataset.recovering;
-        return runPage(el, loadingText, fn, retry);
-      }
+      el.innerHTML = `<p class="muted">Database recovering… retrying.</p>`;
+      await new Promise((r) => setTimeout(r, 2000));
       delete el.dataset.recovering;
+      return runPage(el, loadingText, fn, retry);
     }
     showPageError(el, err, retry || (() => runPage(el, loadingText, fn, retry)));
   }
@@ -1219,14 +1218,8 @@ async function bootApp() {
     showLogin();
     return;
   }
-  try {
-    await api('/session', {}, 0, { silentAuth: true, timeoutMs: 12000 });
-    showApp();
-    showPage('dashboard');
-  } catch {
-    clearSession();
-    showLogin();
-  }
+  showApp();
+  showPage('dashboard');
 }
 
 bootApp();
