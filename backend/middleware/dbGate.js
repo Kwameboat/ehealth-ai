@@ -1,4 +1,4 @@
-const { isDbReady, ensureDbReady, getDbStatus } = require('../db/ensureDb');
+const { isDbReady, ensureDbForRequest, getDbStatus } = require('../db/ensureDb');
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -7,22 +7,23 @@ function sleep(ms) {
 /**
  * Fast DB gate for API middleware — never blocks more than maxMs.
  */
-async function gateDatabase(maxMs = 4000) {
+async function gateDatabase(maxMs = 8000) {
   if (isDbReady()) return { ok: true };
 
   try {
-    await Promise.race([
-      ensureDbReady(),
-      sleep(maxMs).then(() => {
-        throw new Error('Database busy — retry');
-      }),
+    const result = await Promise.race([
+      ensureDbForRequest(3),
+      sleep(maxMs).then(() => ({ ok: false, error: 'Database busy — retry' })),
     ]);
-    if (isDbReady()) return { ok: true };
+    if (result.ok && isDbReady()) return { ok: true };
+    return {
+      ok: false,
+      error: result.error || 'Database not ready',
+      status: getDbStatus(),
+    };
   } catch (err) {
     return { ok: false, error: err.message, status: getDbStatus() };
   }
-
-  return { ok: false, error: 'Database not ready', status: getDbStatus() };
 }
 
 module.exports = { gateDatabase };

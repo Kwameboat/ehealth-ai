@@ -180,10 +180,9 @@ app.use(async (req, res, next) => {
     return next();
   }
   if (req.path === '/api/health') return next();
-  if (req.path === '/admin/api/session' || req.path === '/admin/api/dashboard') return next();
-  const isAdminLogin = req.method === 'POST' && req.path === '/admin/api/login';
-  const gateMs = isAdminLogin ? 8000 : 4000;
-  const gate = await gateDatabase(gateMs);
+  // Admin console has its own DB middleware (longer recovery window).
+  if (req.path.startsWith('/admin/api')) return next();
+  const gate = await gateDatabase(8000);
   if (!gate.ok) {
     const diag = gate.status || getDbStatus();
     return res.status(503).json({

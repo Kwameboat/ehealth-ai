@@ -22,9 +22,12 @@ const {
 } = require('../services/packages');
 const { getDashboardData, getFreshCache, getStaleCache } = require('../services/dashboardCache');
 const { isDbReady } = require('../db/ensureDb');
+const { ensureAdminDatabase } = require('../middleware/adminDb');
 const { adminRouter: whatsappAdminRouter } = require('./whatsapp-bridge');
 
 const router = express.Router();
+
+router.use(ensureAdminDatabase);
 
 router.post('/login', async (req, res) => {
   try {

@@ -97,7 +97,7 @@ async function api(path, options = {}, attempt = 0, opts = {}) {
   if (token) headers.Authorization = `Bearer ${token}`;
   let res;
   try {
-    res = await fetchWithTimeout(apiUrl(path), { ...options, headers }, opts.timeoutMs || 7000);
+    res = await fetchWithTimeout(apiUrl(path), { ...options, headers }, opts.timeoutMs || 12000);
   } catch (err) {
     if (attempt < 1 && path !== '/login') {
       await new Promise((r) => setTimeout(r, 600));
@@ -111,8 +111,8 @@ async function api(path, options = {}, attempt = 0, opts = {}) {
     throw new Error('Session expired — please sign in again');
   }
   if (!res.ok) {
-    if (res.status === 503 && attempt < 1) {
-      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    if (res.status === 503 && attempt < 2) {
+      await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
       return api(path, options, attempt + 1, opts);
     }
     if (res.status === 404) {

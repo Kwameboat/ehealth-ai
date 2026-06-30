@@ -354,10 +354,11 @@ async function loadWhatsApp() {
   el.innerHTML = '<div class="wa-page"><p class="muted" style="padding:24px">Loading WhatsApp module…</p></div>';
 
   try {
+    const waOpts = { timeoutMs: 18000 };
     const [status, logs, webhookInfo] = await Promise.all([
-      api('/whatsapp/status'),
-      api('/whatsapp/logs?limit=50'),
-      api('/whatsapp/webhook-info').catch(() => null),
+      api('/whatsapp/status', {}, 0, waOpts),
+      api('/whatsapp/logs?limit=50', {}, 0, waOpts),
+      api('/whatsapp/webhook-info', {}, 0, waOpts).catch(() => null),
     ]);
 
     const conn = status.connection || {};
