@@ -1,3 +1,4 @@
+const https = require('https');
 const { getGeminiApiKey, getGeminiModel } = require('./settings');
 const { normalizeGeminiModel } = require('./geminiModels');
 const { sanitizePwaReply } = require('./replySanitizer');
@@ -16,6 +17,76 @@ const SYMPTOM_GENERATION_CONFIG = {
   temperature: 0.35,
 };
 
+/** cPanel/Passenger: native fetch (undici) can crash the worker — use https or axios. */
+function postGeminiJson(url, payload, timeoutMs = 22_000) {
+  return new Promise((resolve, reject) => {
+    let axios;
+    try {
+      axios = require('axios');
+    } catch {
+      axios = null;
+    }
+
+    if (axios) {
+      axios
+        .post(url, payload, {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: timeoutMs,
+          validateStatus: () => true,
+        })
+        .then(({ status, data }) => resolve({ status, data }))
+        .catch((err) => {
+          if (err.code === 'ECONNABORTED') {
+            const e = new Error('AI response timed out — please try again in a moment.');
+            e.status = 504;
+            reject(e);
+            return;
+          }
+          reject(err);
+        });
+      return;
+    }
+
+    const body = JSON.stringify(payload);
+    const target = new URL(url);
+    const req = https.request(
+      {
+        hostname: target.hostname,
+        path: `${target.pathname}${target.search}`,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        },
+        timeout: timeoutMs,
+      },
+      (res) => {
+        let raw = '';
+        res.on('data', (chunk) => {
+          raw += chunk;
+        });
+        res.on('end', () => {
+          try {
+            const data = raw ? JSON.parse(raw) : {};
+            resolve({ status: res.statusCode || 500, data });
+          } catch {
+            reject(new Error('Invalid response from Gemini API'));
+          }
+        });
+      }
+    );
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      const e = new Error('AI response timed out — please try again in a moment.');
+      e.status = 504;
+      reject(e);
+    });
+    req.write(body);
+    req.end();
+  });
+}
+
 async function callGemini(contents, model, options = {}) {
   const apiKey = getGeminiApiKey();
   const useModel = normalizeGeminiModel(model || getGeminiModel());
@@ -26,43 +97,24 @@ async function callGemini(contents, model, options = {}) {
     throw err;
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${useModel}:generateContent?key=${apiKey}`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), options.timeoutMs || 22_000);
-  let response;
-  try {
-    response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-      contents,
-      ...(options.generationConfig ? { generationConfig: options.generationConfig } : {}),
-      ...(options.systemInstruction
-        ? {
-            systemInstruction: {
-              parts: [{ text: options.systemInstruction }],
-            },
-          }
-        : {}),
-      }),
-    });
-  } catch (err) {
-    if (err.name === 'AbortError') {
-      const timeoutErr = new Error('AI response timed out — please try again in a moment.');
-      timeoutErr.status = 504;
-      throw timeoutErr;
-    }
-    throw err;
-  } finally {
-    clearTimeout(timer);
-  }
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${useModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const payload = {
+    contents,
+    ...(options.generationConfig ? { generationConfig: options.generationConfig } : {}),
+    ...(options.systemInstruction
+      ? {
+          systemInstruction: {
+            parts: [{ text: options.systemInstruction }],
+          },
+        }
+      : {}),
+  };
 
-  const data = await response.json();
-  if (!response.ok) {
-    const message = data?.error?.message || `Gemini request failed (${response.status})`;
+  const { status, data } = await postGeminiJson(url, payload, options.timeoutMs || 22_000);
+  if (status < 200 || status >= 300) {
+    const message = data?.error?.message || `Gemini request failed (${status})`;
     const err = new Error(message);
-    err.status = response.status;
+    err.status = status;
     throw err;
   }
   return data;

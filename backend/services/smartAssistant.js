@@ -53,6 +53,39 @@ function isActiveTriageSession(history) {
   return turns > 0 && !shouldGiveRecommendations(history);
 }
 
+function buildSymptomIntakeFallback(userText) {
+  const t = String(userText || '').toLowerCase();
+  if (/pregnan|vomit|nausea|morning sickness/.test(t)) {
+    return (
+      "I'm sorry to hear that. Nausea and vomiting in pregnancy are common, but they can become serious.\n\n" +
+      'Please tell me:\n• How many weeks pregnant is she?\n• Can she keep fluids down today?\n• Any fever, blood in vomit, severe headache, dizziness, or belly pain?\n\n' +
+      'If she cannot keep fluids for 24 hours, feels very weak, or has severe pain — please go to a clinic or hospital today. NHIS often covers antenatal visits.'
+    );
+  }
+  return (
+    "I hear you — let's figure this out safely.\n\n" +
+    'Please share:\n• Main symptom and when it started\n• How bad it is (mild, moderate, or severe)\n• Any fever, breathing trouble, chest pain, or confusion?\n\n' +
+    'Seek emergency care right away if symptoms are severe or sudden.'
+  );
+}
+
+async function safeChatCompletion(history, userText, attachment, attachments) {
+  try {
+    return await chatCompletion(history, userText, attachment, attachments);
+  } catch (err) {
+    console.error('[smartChat] chatCompletion failed:', err?.message || err);
+    const triageTurn = countTriageAssistantTurns(history);
+    const recommending = shouldGiveRecommendations(history);
+    if (triageTurn === 0 && !recommending && looksLikeSymptomTriage(userText)) {
+      return {
+        reply: buildSymptomIntakeFallback(userText),
+        meta: { triageTurn: 0, recommending: false, phase: 'intake' },
+      };
+    }
+    throw err;
+  }
+}
+
 async function generalHealthReply(userText, history) {
   const systemPrompt = getPwaSystemPrompt();
   const contents = [...historyToGemini(history), { role: 'user', parts: [{ text: String(userText).trim() }] }];
@@ -86,7 +119,7 @@ async function handleAttachments(userId, userText, attachment, attachments) {
   const files = Array.isArray(attachments) && attachments.length ? attachments : attachment ? [attachment] : [];
   const first = files[0];
   if (!first?.base64) {
-    const result = await chatCompletion([], userText, attachment, attachments);
+    const result = await safeChatCompletion([], userText, attachment, attachments);
     return buildResult({
       reply: result.reply,
       intent: 'symptom',
@@ -159,7 +192,7 @@ async function handleAttachments(userId, userText, attachment, attachments) {
     /* fall through */
   }
 
-  const result = await chatCompletion([], userText, attachment, attachments);
+  const result = await safeChatCompletion([], userText, attachment, attachments);
   return buildResult({
     reply: result.reply,
     intent: 'symptom',
@@ -190,7 +223,7 @@ async function smartChat(userId, history = [], userText = '', attachment = null,
   }
 
   if (isActiveTriageSession(history)) {
-    const result = await chatCompletion(history, text, null, null);
+    const result = await safeChatCompletion(history, text, null, null);
     return buildResult({
       reply: result.reply,
       intent: 'symptom',
@@ -306,7 +339,7 @@ async function smartChat(userId, history = [], userText = '', attachment = null,
   }
 
   if (looksLikeSymptomTriage(text)) {
-    const result = await chatCompletion(history, text, null, null);
+    const result = await safeChatCompletion(history, text, null, null);
     return buildResult({
       reply: result.reply,
       intent: 'symptom',

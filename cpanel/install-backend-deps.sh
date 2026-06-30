@@ -36,6 +36,7 @@ require('express');
 require('bcryptjs');
 require('sql.js');
 require('jsonwebtoken');
+require('axios');
 console.log('core deps OK');
 "
 

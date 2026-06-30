@@ -53,7 +53,7 @@ function looksLikeSymptomTriage(text) {
   const t = String(text || '').toLowerCase().trim();
   if (!t) return false;
   if (/\b(what is|how does|explain|tell me about|define)\b/.test(t)) return false;
-  return /\b(pain|hurt|hurts|ache|aching|fever|chills|cough|sick|symptom|feel ill|feel unwell|nausea|vomit|dizzy|swollen|rash|bleed|bleeding|can't breathe|cannot breathe|breathing trouble|headache|migraine|stomach|chest|throat|diarrhea|constipation|weakness|fatigue|palpitation|burning|itch|infection)\b/.test(
+  return /\b(pain|hurt|hurts|ache|aching|fever|chills|cough|sick|symptom|feel ill|feel unwell|nausea|vomit|pregnant|pregnancy|dizzy|swollen|rash|bleed|bleeding|can't breathe|cannot breathe|breathing trouble|headache|migraine|stomach|chest|throat|diarrhea|constipation|weakness|fatigue|palpitation|burning|itch|infection)\b/.test(
     t
   );
 }
