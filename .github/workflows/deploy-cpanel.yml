@@ -66,6 +66,8 @@ jobs:
             **/backend/.env
             **/backend/db/*.db
             **/backend/db/*.db-*
+            **/node_modules/**
+            **/backend/node_modules/**
 
       - name: Server bootstrap via SSH
         uses: appleboy/ssh-action@v1.2.0
@@ -82,5 +84,8 @@ jobs:
             cd ~/ehealth-ai
             if [ ! -f package.json ]; then echo "No package.json yet"; exit 0; fi
             echo "Deploy OK $(date -u)" >> DEPLOYED_AT.txt
-            chmod +x scripts/cpanel-post-deploy.sh 2>/dev/null || true
+            chmod +x scripts/cpanel-post-deploy.sh cpanel/repair-production.sh 2>/dev/null || true
             bash scripts/cpanel-post-deploy.sh || echo "WARN: cpanel-post-deploy had errors (check logs)"
+            bash cpanel/repair-production.sh || echo "WARN: repair-production had errors"
+            mkdir -p ~/public_html/tmp ~/ehealth-ai/tmp
+            touch ~/public_html/tmp/restart.txt ~/ehealth-ai/tmp/restart.txt

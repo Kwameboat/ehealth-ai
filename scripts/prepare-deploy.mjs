@@ -55,13 +55,8 @@ fs.mkdirSync(out, { recursive: true });
 
 for (const dir of COPY_DIRS) copyDir(path.join(root, dir), path.join(out, dir));
 
-// Ship backend/node_modules from CI (pure JS + linux sqlite binary); server rebuilds sqlite if needed
-const backendNm = path.join(root, 'backend', 'node_modules');
-if (fs.existsSync(backendNm)) {
-  console.log('Including backend/node_modules in deploy bundle');
-  copyDir(backendNm, path.join(out, 'backend', 'node_modules'));
-}
-
+// Do not ship backend/node_modules over FTP (symlinks in .bin break cPanel FTP).
+// Server installs deps via cpanel-post-deploy.sh → install-backend-deps.sh
 const wasmSrc = path.join(root, 'backend', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
 const wasmDest = path.join(out, 'backend', 'db', 'sql-wasm.wasm');
 if (fs.existsSync(wasmSrc)) {
