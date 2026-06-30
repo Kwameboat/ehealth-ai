@@ -181,11 +181,15 @@ app.use(async (req, res, next) => {
     return next();
   }
   if (req.path === '/api/health') return next();
+  const isAdminLogin = req.method === 'POST' && req.path === '/admin/api/login';
   try {
-    await waitForStartup(12_000);
-    const result = await ensureDbForRequest(6);
-    if (!result.ok) {
-      throw new Error(result.error || 'Database not ready');
+    if (isAdminLogin) {
+      const result = await ensureDbReadyWithRecovery(3);
+      if (!result.ok) throw new Error(result.error || 'Database not ready');
+    } else {
+      await waitForStartup(12_000);
+      const result = await ensureDbForRequest(6);
+      if (!result.ok) throw new Error(result.error || 'Database not ready');
     }
     next();
   } catch (err) {

@@ -27,13 +27,15 @@ const router = express.Router();
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body || {};
-    const admin = getDb()
-      .prepare('SELECT * FROM admins WHERE username = ?')
-      .get((username || '').trim());
+    const name = (username || '').trim();
+    if (!name || !password) {
+      return res.status(400).json({ error: { message: 'Username and password required' } });
+    }
+    const admin = getDb().prepare('SELECT * FROM admins WHERE username = ?').get(name);
     if (!admin?.password_hash) {
       return res.status(401).json({ error: { message: 'Invalid credentials' } });
     }
-    if (!bcrypt.compareSync(password || '', admin.password_hash)) {
+    if (!bcrypt.compareSync(password, admin.password_hash)) {
       return res.status(401).json({ error: { message: 'Invalid credentials' } });
     }
     const token = signAdminToken(admin);
@@ -47,6 +49,10 @@ router.post('/login', async (req, res) => {
       },
     });
   }
+});
+
+router.get('/session', requireAdminAuth, (req, res) => {
+  res.json({ ok: true, admin: { id: req.adminId, username: req.adminUsername } });
 });
 
 router.use(requireAdminAuth);

@@ -87,7 +87,7 @@ async function api(path, options = {}, attempt = 0) {
     throw new Error('Session expired');
   }
   if (!res.ok) {
-    if (res.status === 503 && attempt < 7 && path !== '/login') {
+    if (res.status === 503 && attempt < 7) {
       if (await tryRecoverDb()) {
         return api(path, options, attempt + 1);
       }
@@ -811,12 +811,18 @@ async function loadSettings() {
 document.getElementById('login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const errEl = document.getElementById('login-error');
+  const btn = e.target.querySelector('button[type="submit"]');
   errEl.classList.add('hidden');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+  }
   try {
+    await waitForDbReady(25000);
     const data = await api('/login', {
       method: 'POST',
       body: JSON.stringify({
-        username: document.getElementById('login-username').value,
+        username: document.getElementById('login-username').value.trim(),
         password: document.getElementById('login-password').value,
       }),
     });
@@ -827,9 +833,16 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
     const msg = err.message || 'Login failed';
     errEl.textContent =
       msg === 'Failed to fetch' || msg.includes('NetworkError')
-        ? 'Cannot reach API. cPanel → Setup Node.js App → RESTART (keeps Passenger + Node). Then open /api/health — you should see JSON.'
-        : msg;
+        ? 'Cannot reach API. cPanel → Node.js → RESTART, then test /api/health'
+        : msg.includes('Invalid credentials')
+          ? 'Invalid username or password. Use cPanel ADMIN_USERNAME / ADMIN_PASSWORD, or run reset-admin-password.sh'
+          : msg;
     errEl.classList.remove('hidden');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Sign in to dashboard';
+    }
   }
 });
 
@@ -1166,11 +1179,15 @@ async function bootApp() {
     showLogin();
     return;
   }
-  showApp();
-  document.getElementById('page-dashboard').innerHTML =
-    '<p class="muted">Connecting to database…</p>';
-  await waitForDbReady(35000);
-  showPage('dashboard');
+  try {
+    await waitForDbReady(20000);
+    await api('/session');
+    showApp();
+    showPage('dashboard');
+  } catch {
+    clearSession();
+    showLogin();
+  }
 }
 
 bootApp();

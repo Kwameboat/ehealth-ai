@@ -47,6 +47,7 @@ curl -fsSL -o "$BACKEND/routes/ai.js" "$BASE/backend/routes/ai.js"
 curl -fsSL -o "$BACKEND/routes/user.js" "$BASE/backend/routes/user.js"
 curl -fsSL -o "$BACKEND/routes/emergency.js" "$BASE/backend/routes/emergency.js"
 curl -fsSL -o "$BACKEND/routes/admin.js" "$BASE/backend/routes/admin.js"
+curl -fsSL -o "$BACKEND/services/adminUser.js" "$BASE/backend/services/adminUser.js"
 curl -fsSL -o "$BACKEND/public/admin/index.html" "$BASE/backend/public/admin/index.html"
 curl -fsSL -o "$BACKEND/public/admin/app.js" "$BASE/backend/public/admin/app.js"
 curl -fsSL -o "$BACKEND/public/admin/whatsapp-admin.js" "$BASE/backend/public/admin/whatsapp-admin.js"
@@ -131,6 +132,13 @@ require('./db/ensureDb').startupDatabase(45000).then(() => {
   console.log('REPAIR OK');
 }).catch(e => { console.error('REPAIR FAILED:', e.message); process.exit(1); });
 "
+
+echo "=== Sync admin password from cPanel env ==="
+bash "$APP/cpanel/reset-admin-password.sh" 2>/dev/null || {
+  curl -fsSL -o "$APP/cpanel/reset-admin-password.sh" "$BASE/cpanel/reset-admin-password.sh"
+  chmod +x "$APP/cpanel/reset-admin-password.sh" 2>/dev/null || true
+  bash "$APP/cpanel/reset-admin-password.sh" || echo "WARN: admin password reset skipped"
+}
 
 curl -fsSL -o "$APP/cpanel/fix-db-permanent.sh" "$BASE/cpanel/fix-db-permanent.sh" 2>/dev/null || true
 chmod +x "$APP/cpanel/fix-db-permanent.sh" 2>/dev/null || true

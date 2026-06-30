@@ -47,8 +47,8 @@ curl -fsSL -o "$BACKEND/db/driver-sqljs.js" "$BASE/backend/db/driver-sqljs.js"
 curl -fsSL -o "$BACKEND/db/ensureDb.js" "$BASE/backend/db/ensureDb.js"
 curl -fsSL -o "$BACKEND/db/resolveDbPath.js" "$BASE/backend/db/resolveDbPath.js"
 curl -fsSL -o "$BACKEND/db/init.js" "$BASE/backend/db/init.js"
-curl -fsSL -o "$BACKEND/server.js" "$BASE/backend/server.js"
-curl -fsSL -o "$APP/server.js" "$BASE/server.js"
+curl -fsSL -o "$BACKEND/services/adminUser.js" "$BASE/backend/services/adminUser.js"
+curl -fsSL -o "$BACKEND/routes/admin.js" "$BASE/backend/routes/admin.js"
 
 cd "$BACKEND"
 node -e "
@@ -66,6 +66,12 @@ require('./db/ensureDb').startupDatabase(45000).then(() => {
   process.exit(1);
 });
 "
+
+bash "$APP/cpanel/reset-admin-password.sh" 2>/dev/null || {
+  curl -fsSL -o "$APP/cpanel/reset-admin-password.sh" "$BASE/cpanel/reset-admin-password.sh"
+  chmod +x "$APP/cpanel/reset-admin-password.sh" 2>/dev/null || true
+  bash "$APP/cpanel/reset-admin-password.sh" || echo "WARN: admin password reset skipped"
+}
 
 touch "$HOME_DIR/public_html/tmp/restart.txt" 2>/dev/null || true
 

@@ -526,6 +526,8 @@ async function initDatabase() {
     seedSettings();
     seedWhatsAppSettings();
     seedAdmin();
+    const { ensureAdminUser } = require('../services/adminUser');
+    ensureAdminUser();
     syncEnvSecrets();
     const { migrateLegacyGeminiModel } = require('../services/settings');
     migrateLegacyGeminiModel();
