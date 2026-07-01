@@ -301,7 +301,7 @@ async function waRequestPairing(phone, { quiet = false, attempt = 0 } = {}) {
   } catch (err) {
     if (attempt < 1) {
       try {
-        await fetch('/api/health?recover=1', { cache: 'no-store' });
+        await fetch(`${(window.ehealthApiOrigin || (() => window.location.origin.replace(/\/$/, '')))()}/api/health?recover=1`, { cache: 'no-store' });
       } catch (_) {
         /* ignore */
       }

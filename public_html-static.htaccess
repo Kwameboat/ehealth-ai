@@ -1,0 +1,38 @@
+# eHealth AI — static PWA on cPanel (API runs on Railway, not Passenger)
+# Replace public_html/.htaccess with this file after migrating API to Railway.
+# cPanel → Setup Node.js App → STOP or delete the old Node app.
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  RewriteCond %{HTTP_HOST} ^ehealthaigh\.com$ [NC]
+  RewriteRule ^ https://www.ehealthaigh.com%{REQUEST_URI} [L,R=301]
+
+  RewriteCond %{HTTPS} off
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+  RewriteRule ^robots\.txt$ - [L]
+  RewriteRule ^sitemap\.xml$ - [L]
+  RewriteRule ^app-config\.js$ - [L]
+  RewriteRule ^_expo/ - [L]
+  RewriteRule ^assets/ - [L]
+  RewriteRule ^fonts/ - [L]
+  RewriteRule ^icon-fonts\.css$ - [L]
+  RewriteRule ^admin/.+\.(css|js|png|ico|svg|woff2?)$ - [L]
+  RewriteRule ^admin/?$ admin/index.html [L]
+  RewriteRule ^payment/ - [L]
+
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
+  Header always set Content-Security-Policy "upgrade-insecure-requests" env=HTTPS
+  Header always set Referrer-Policy "strict-origin-when-cross-origin" env=HTTPS
+</IfModule>

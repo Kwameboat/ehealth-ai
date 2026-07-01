@@ -1,4 +1,3 @@
-const API = '/admin/api';
 const TOKEN_KEY = 'medassistant_admin_token';
 const ADMIN_KEY = 'medassistant_admin_user';
 
@@ -6,13 +5,22 @@ function siteOrigin() {
   return window.location.origin;
 }
 
+function apiBaseOrigin() {
+  const cfg = window.__EHEALTH_CONFIG__ || {};
+  const fromCfg = cfg.apiUrl && String(cfg.apiUrl).replace(/\/$/, '');
+  if (fromCfg) return fromCfg;
+  return window.location.origin.replace(/\/$/, '');
+}
+
 function apiUrl(path) {
-  return `/admin/api${path}`;
+  return `${apiBaseOrigin()}/admin/api${path}`;
 }
 
 function healthUrl(recover = false) {
-  return recover ? '/api/health?recover=1' : '/api/health';
+  return `${apiBaseOrigin()}${recover ? '/api/health?recover=1' : '/api/health'}`;
 }
+
+window.ehealthApiOrigin = apiBaseOrigin;
 
 async function fetchWithTimeout(url, options = {}, ms = 15000) {
   const ctrl = new AbortController();
@@ -20,7 +28,7 @@ async function fetchWithTimeout(url, options = {}, ms = 15000) {
   try {
     return await fetch(url, { ...options, signal: ctrl.signal, cache: 'no-store' });
   } catch (err) {
-    if (err.name === 'AbortError') throw new Error('Request timed out — RESTART Node.js in cPanel');
+    if (err.name === 'AbortError') throw new Error('Request timed out — check Railway API is running');
     throw err;
   } finally {
     clearTimeout(timer);
@@ -117,7 +125,7 @@ async function api(path, options = {}, attempt = 0, opts = {}) {
     }
     if (res.status === 404) {
       throw new Error(
-        'API not found (404). cPanel → Setup Node.js App → RESTART, then test /api/health in the browser.'
+        'API not found (404). Check Railway API URL in app-config.js and /api/health on the API host.'
       );
     }
     const detail = data?.error?.detail || data?.error?.wasm || data?.error;

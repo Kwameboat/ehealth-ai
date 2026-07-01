@@ -1,5 +1,4 @@
-# Deploy eHealth AI to cPanel (SFTP) on push to main
-# Required GitHub Secrets: see DEPLOY.md → "GitHub Actions secrets"
+# Deploy eHealth AI — static PWA to cPanel + API on Railway
 
 name: Deploy to cPanel
 
@@ -21,13 +20,18 @@ jobs:
 
       - name: Set build environment
         env:
-          PUBLIC_URL: ${{ secrets.PUBLIC_APP_URL }}
+          SITE_URL: ${{ secrets.PUBLIC_APP_URL }}
+          API_URL: ${{ secrets.RAILWAY_PUBLIC_URL }}
           APP_SECRET: ${{ secrets.APP_API_SECRET }}
         run: |
-          echo "EXPO_PUBLIC_API_URL=${PUBLIC_URL:-https://www.ehealthaigh.com}" >> $GITHUB_ENV
-          echo "EXPO_PUBLIC_SITE_URL=${PUBLIC_URL:-https://www.ehealthaigh.com}" >> $GITHUB_ENV
+          echo "EXPO_PUBLIC_SITE_URL=${SITE_URL:-https://www.ehealthaigh.com}" >> $GITHUB_ENV
+          echo "EXPO_PUBLIC_API_URL=${API_URL}" >> $GITHUB_ENV
           echo "EXPO_PUBLIC_APP_API_SECRET=${APP_SECRET}" >> $GITHUB_ENV
-          echo "EXPO_PUBLIC_GOOGLE_SITE_VERIFICATION=EVGPzHgfdl7PWlqlelkWFexwIwDKMB2rVrO7sIGZ5N8" >> $GITHUB_ENV
+          echo "APP_API_SECRET=${APP_SECRET}" >> $GITHUB_ENV
+          if [ -z "$API_URL" ]; then
+            echo "::warning::RAILWAY_PUBLIC_URL not set — app will use same-origin API until Railway is configured"
+            echo "EXPO_PUBLIC_API_URL=${SITE_URL:-https://www.ehealthaigh.com}" >> $GITHUB_ENV
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -38,16 +42,16 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
-      - name: Install backend dependencies
-        run: npm ci --prefix backend
+      - name: Generate app-config.js
+        run: node scripts/generate-app-config.mjs
 
       - name: Build PWA (web export)
         run: npm run build:web
 
-      - name: Prepare deploy bundle
-        run: node scripts/prepare-deploy.mjs
+      - name: Prepare static deploy bundle
+        run: node scripts/prepare-static-deploy.mjs
 
-      - name: Deploy via SFTP
+      - name: Deploy static files via SFTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
@@ -58,18 +62,8 @@ jobs:
           local-dir: ./deploy-bundle/
           server-dir: ${{ secrets.FTP_REMOTE_DIR || './ehealth-ai/' }}
           dangerous-clean-slate: false
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/.env
-            **/.env.*
-            **/backend/.env
-            **/backend/db/*.db
-            **/backend/db/*.db-*
-            **/node_modules/**
-            **/backend/node_modules/**
 
-      - name: Server bootstrap via SSH
+      - name: Publish static PWA on server
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -78,14 +72,6 @@ jobs:
           port: ${{ secrets.SSH_PORT || 22 }}
           script_stop: false
           script: |
-            mkdir -p ~/ehealth-ai
-            for v in ~/nodevenv/*/bin/activate; do [ -f "$v" ] && . "$v" && break; done
-            for n in /opt/cpanel/ea-nodejs*/bin; do [ -x "$n/node" ] && export PATH="$n:$PATH" && break; done
             cd ~/ehealth-ai
-            if [ ! -f package.json ]; then echo "No package.json yet"; exit 0; fi
-            echo "Deploy OK $(date -u)" >> DEPLOYED_AT.txt
-            chmod +x scripts/cpanel-post-deploy.sh cpanel/repair-production.sh 2>/dev/null || true
-            bash scripts/cpanel-post-deploy.sh || echo "WARN: cpanel-post-deploy had errors (check logs)"
-            bash cpanel/repair-production.sh || echo "WARN: repair-production had errors"
-            mkdir -p ~/public_html/tmp ~/ehealth-ai/tmp
-            touch ~/public_html/tmp/restart.txt ~/ehealth-ai/tmp/restart.txt
+            chmod +x cpanel/publish-static-pwa.sh 2>/dev/null || true
+            bash cpanel/publish-static-pwa.sh || echo "WARN: publish-static-pwa failed"

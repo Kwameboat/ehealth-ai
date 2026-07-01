@@ -52,6 +52,11 @@
       return (window.__EHEALTH_CONFIG__ && window.__EHEALTH_CONFIG__.appApiSecret) || '';
     }
 
+    function getApiBase() {
+      const cfg = window.__EHEALTH_CONFIG__ || {};
+      return (cfg.apiUrl || window.location.origin).replace(/\/$/, '');
+    }
+
     function getToken() {
       return localStorage.getItem(TOKEN_KEY) || '';
     }
@@ -95,7 +100,7 @@
           'X-MedAssistant-Key': appSecret,
         };
 
-        const r = await fetch('/api/payments/verify/' + encodeURIComponent(reference), { headers });
+        const r = await fetch(getApiBase() + '/api/payments/verify/' + encodeURIComponent(reference), { headers });
         const data = await r.json();
         if (!r.ok) throw new Error(data?.error?.message || 'Verification failed');
 

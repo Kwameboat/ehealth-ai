@@ -47,3 +47,6 @@ data/*.tmp
 *.tsbuildinfo
 
 app-example
+
+# Generated at CI (contains APP_API_SECRET)
+public/app-config.js
