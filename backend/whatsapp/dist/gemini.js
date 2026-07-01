@@ -6,6 +6,7 @@ exports.analyzeAudio = analyzeAudio;
 exports.analyzeLabOrMedicineImage = analyzeLabOrMedicineImage;
 exports.extractPrescriptionFromImage = extractPrescriptionFromImage;
 exports.analyzeWithSpecialtyPrompt = analyzeWithSpecialtyPrompt;
+const { postJson } = require('../../services/httpsJson');
 const TEXT_MODEL = 'gemini-2.5-flash';
 exports.TEXT_MODEL = TEXT_MODEL;
 const VISION_MODEL = 'gemini-2.5-pro';
@@ -16,16 +17,11 @@ function extractText(data) {
 }
 async function geminiGenerate(apiKey, model, parts) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{ role: 'user', parts }],
-        }),
-    });
-    const data = (await res.json());
-    if (!res.ok) {
-        throw new Error(data?.error?.message || `Gemini request failed (${res.status})`);
+    const { status, data } = await postJson(url, {
+        contents: [{ role: 'user', parts }],
+    }, 22_000);
+    if (status < 200 || status >= 300) {
+        throw new Error(data?.error?.message || `Gemini request failed (${status})`);
     }
     return extractText(data);
 }

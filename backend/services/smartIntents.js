@@ -20,7 +20,9 @@ function detectIntent(text) {
   const t = String(text || '').toLowerCase().trim();
 
   if (/^(menu|help|features|options|what can you do)$/.test(t)) return 'menu';
-  if (/^(i need (some )?help|need help|can you help( me)?|help me|please help)[!.?\s]*$/.test(t)) {
+  if (
+    /^(i need (some )?help|need (some )?help|need help|can you help( me)?|help me|please help)[!.?\s]*$/.test(t)
+  ) {
     return 'menu';
   }
   if (/\b(emergency|ambulance|112|911|999|life.?threat)\b/.test(t)) return 'emergency';

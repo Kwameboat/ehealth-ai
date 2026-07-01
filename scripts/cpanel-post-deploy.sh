@@ -126,15 +126,10 @@ else
   echo "SKIP npm (no nodevenv yet) — create Node app root ehealth-ai, then Run NPM Install in cPanel"
 fi
 
-if [ -x "$SRC/cpanel/sync-whatsapp.sh" ]; then
+if [ -x "$SRC/cpanel/sync-whatsapp.sh" ] && [ "${SYNC_WHATSAPP:-0}" = "1" ]; then
   bash "$SRC/cpanel/sync-whatsapp.sh" || echo "WARN: sync-whatsapp failed"
-elif curl -fsSL "$SRC/cpanel/sync-whatsapp.sh" -o /dev/null 2>/dev/null; then
-  :
 else
-  echo "=== WhatsApp module (curl from GitHub — no git on server) ==="
-  curl -fsSL -o "$SRC/cpanel/sync-whatsapp.sh" "https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main/cpanel/sync-whatsapp.sh" 2>/dev/null || true
-  chmod +x "$SRC/cpanel/sync-whatsapp.sh" 2>/dev/null || true
-  bash "$SRC/cpanel/sync-whatsapp.sh" 2>/dev/null || echo "WARN: run: curl -fsSL https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main/cpanel/fix-whatsapp-live.sh | bash"
+  echo "SKIP sync-whatsapp (WhatsApp files ship with git deploy; set SYNC_WHATSAPP=1 to force)"
 fi
 
 mkdir -p "$PUBLIC/tmp" "$SRC/tmp" 2>/dev/null || true

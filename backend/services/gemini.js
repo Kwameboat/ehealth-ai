@@ -19,8 +19,8 @@ const SYMPTOM_GENERATION_CONFIG = {
   temperature: 0.35,
 };
 
-const USE_GEMINI_WORKER =
-  !!process.env.PASSENGER_APP_ENV || process.env.GEMINI_USE_WORKER === '1';
+/** Direct https is stable on Passenger; fork worker only when explicitly enabled. */
+const USE_GEMINI_WORKER = process.env.GEMINI_USE_WORKER === '1';
 
 /** Native https only — never fetch/axios (undici can crash Passenger workers). */
 function postGeminiJsonDirect(url, payload, timeoutMs = 22_000) {

@@ -296,6 +296,12 @@ if (webDistPath && fs.existsSync(webDistPath)) {
 
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
+  if (err?.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: { message: 'Invalid JSON body' } });
+  }
+  if (err?.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: { message: 'Origin not allowed', code: 'CORS' } });
+  }
   console.error('Unhandled error:', req.method, req.path, err);
   res.status(500).json({
     error: { message: 'Server error', detail: isProd ? undefined : err.message },

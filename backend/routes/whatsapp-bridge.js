@@ -7,15 +7,9 @@ const { getSetting, setSetting, getGeminiApiKey } = require('../services/setting
 const { findNearbyFacilities } = require('../services/nearbyPlaces');
 const { initializeTransaction } = require('../services/paystack');
 
-let whatsappModule;
+let whatsappModule = null;
 let whatsappLoadError = null;
-try {
-  whatsappModule = require('../whatsapp/dist/index.js');
-} catch (err) {
-  whatsappLoadError = err;
-  console.error('WhatsApp module load failed:', err.message);
-  whatsappModule = null;
-}
+let routersCache = null;
 
 function getUserEmail(userId) {
   const row = getDb().prepare('SELECT email FROM users WHERE id = ?').get(userId);
@@ -54,8 +48,22 @@ function buildDeps() {
   };
 }
 
+function loadWhatsAppModule() {
+  if (whatsappModule !== null) return whatsappModule;
+  try {
+    whatsappModule = require('../whatsapp/dist/index.js');
+    whatsappLoadError = null;
+  } catch (err) {
+    whatsappLoadError = err;
+    console.error('WhatsApp module load failed:', err.message);
+    whatsappModule = false;
+  }
+  return whatsappModule;
+}
+
 function createRouters() {
-  if (!whatsappModule?.createWhatsAppRouters) {
+  const mod = loadWhatsAppModule();
+  if (!mod?.createWhatsAppRouters) {
     const empty = express.Router();
     const detail = whatsappLoadError?.message || 'dist/index.js missing';
     empty.all('*', (_req, res) => {
@@ -63,15 +71,36 @@ function createRouters() {
         error: {
           message: 'WhatsApp module not available on server.',
           detail,
-          fix: 'Run in cPanel Terminal: bash ~/ehealth-ai/cpanel/sync-whatsapp.sh then RESTART Node.js app',
+          fix: 'Run deploy workflow or bash ~/ehealth-ai/cpanel/sync-whatsapp.sh then RESTART Node.js app',
         },
       });
     });
     return { adminRouter: empty, webhookRouter: empty };
   }
-  return whatsappModule.createWhatsAppRouters(buildDeps());
+  return mod.createWhatsAppRouters(buildDeps());
 }
 
-const { adminRouter, webhookRouter } = createRouters();
+function getRouters() {
+  if (!routersCache) routersCache = createRouters();
+  return routersCache;
+}
 
-module.exports = { adminRouter, webhookRouter, buildDeps };
+function lazyRouter(getInner) {
+  const router = express.Router();
+  router.use((req, res, next) => {
+    try {
+      return getInner()(req, res, next);
+    } catch (err) {
+      console.error('[whatsapp] route error:', err.message);
+      if (!res.headersSent) {
+        res.status(503).json({ error: { message: 'WhatsApp route failed', detail: err.message } });
+      }
+    }
+  });
+  return router;
+}
+
+const adminRouter = lazyRouter(() => getRouters().adminRouter);
+const webhookRouter = lazyRouter(() => getRouters().webhookRouter);
+
+module.exports = { adminRouter, webhookRouter, buildDeps, getRouters };

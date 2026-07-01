@@ -93,7 +93,11 @@ router.post('/chat', async (req, res) => {
           featureKey: 'chat_text',
           actions: [],
         };
-      } else if (/^(menu|help|features|options|what can you do|i need (some )?help|need help|can you help( me)?|help me|please help)[!.?\s]*$/i.test(text)) {
+      } else if (
+        /^(menu|help|features|options|what can you do|i need (some )?help|need (some )?help|need help|can you help( me)?|help me|please help)[!.?\s]*$/i.test(
+          text
+        )
+      ) {
         smart = {
           reply:
             "Here's what I can help with in this app:\n\n" +

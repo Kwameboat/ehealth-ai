@@ -1,12 +1,11 @@
 #!/bin/bash
-# Sync compiled WhatsApp module + bridge from GitHub and ensure npm deps (axios, @google/genai).
+# Verify WhatsApp module + npm deps. Does NOT overwrite dist/ — git deploy ships backend/.
 # Usage: bash ~/ehealth-ai/cpanel/sync-whatsapp.sh
 set -eo pipefail
 
 HOME_DIR="${HOME:-/home/ehealtha}"
 APP="$HOME_DIR/ehealth-ai"
 BACKEND="$APP/backend"
-BASE="${GITHUB_RAW:-https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main}"
 
 # shellcheck disable=SC1091
 . "$APP/cpanel/activate-nodevenv.sh" 2>/dev/null || {
@@ -15,31 +14,21 @@ BASE="${GITHUB_RAW:-https://raw.githubusercontent.com/Kwameboat/ehealth-ai/main}
   done
 }
 
-echo "=== Sync WhatsApp module from GitHub ==="
+echo "=== Verify WhatsApp module (no file overwrite — use git deploy) ==="
 
-mkdir -p "$BACKEND/whatsapp/dist/features" "$BACKEND/routes"
-
-curl -fsSL -o "$BACKEND/routes/whatsapp-bridge.js" "$BASE/backend/routes/whatsapp-bridge.js"
-
-DIST_FILES=(
-  index.js processor.js adminRouter.js webhookRouter.js messageRouter.js
-  scheduler.js buttonHandler.js sessionStore.js interactive.js intents.js
-  config.js deps.js evolution.js gemini.js logs.js phone.js httpClient.js
-)
-for f in "${DIST_FILES[@]}"; do
-  curl -fsSL -o "$BACKEND/whatsapp/dist/$f" "$BASE/backend/whatsapp/dist/$f"
-done
-
-for f in facilities.js family.js healthFeatures.js medication.js; do
-  curl -fsSL -o "$BACKEND/whatsapp/dist/features/$f" "$BASE/backend/whatsapp/dist/features/$f"
-done
-
-# Sanity: new gemini.js must NOT use @google/genai SDK
-if grep -q '@google/genai' "$BACKEND/whatsapp/dist/gemini.js" 2>/dev/null; then
-  echo "ERROR: Downloaded gemini.js is outdated (still uses @google/genai SDK)"
+if [ ! -f "$BACKEND/whatsapp/dist/index.js" ]; then
+  echo "ERROR: $BACKEND/whatsapp/dist/index.js missing — run GitHub deploy or upload backend/"
   exit 1
 fi
-echo "gemini.js OK (REST fetch, no SDK)"
+
+if grep -q '@google/genai' "$BACKEND/whatsapp/dist/gemini.js" 2>/dev/null; then
+  echo "ERROR: whatsapp/dist/gemini.js still uses @google/genai SDK — redeploy from latest main"
+  exit 1
+fi
+
+if grep -q "await fetch" "$BACKEND/whatsapp/dist/gemini.js" 2>/dev/null; then
+  echo "WARN: whatsapp gemini.js still uses fetch — redeploy from latest main for Passenger stability"
+fi
 
 echo "=== Ensure backend deps ==="
 if [ ! -f "$BACKEND/node_modules/express/package.json" ]; then
@@ -56,13 +45,13 @@ echo "=== Verify WhatsApp module loads ==="
 cd "$BACKEND"
 node -e "
 try {
-  const m = require('./whatsapp/dist/index.js');
-  if (typeof m.createWhatsAppRouters !== 'function') throw new Error('createWhatsAppRouters missing');
-  console.log('WhatsApp module OK');
+  const bridge = require('./routes/whatsapp-bridge.js');
+  if (!bridge.webhookRouter) throw new Error('webhookRouter missing');
+  console.log('WhatsApp bridge OK (lazy load)');
 } catch (e) {
   console.error('WhatsApp module FAILED:', e.message);
   process.exit(1);
 }
 "
 
-echo "SUCCESS — RESTART Node.js app in cPanel, then refresh /admin -> WhatsApp"
+echo "SUCCESS — RESTART Node.js app in cPanel if you changed backend files"

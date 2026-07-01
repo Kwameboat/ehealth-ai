@@ -7,9 +7,13 @@ const webhookRouter_1 = require("./webhookRouter");
 const scheduler_1 = require("./scheduler");
 let schedulerStarted = false;
 function createWhatsAppRouters(deps) {
-    if (!schedulerStarted) {
+    const config = (0, config_1.getWhatsAppConfig)(deps);
+    if (!schedulerStarted && config.enabled && config.baseUrl && config.apiKey && config.instanceName) {
         schedulerStarted = true;
         (0, scheduler_1.startWhatsAppScheduler)(deps);
+    }
+    else if (!config.enabled) {
+        console.log('[whatsapp] loaded (scheduler idle — WhatsApp disabled in admin)');
     }
     return {
         adminRouter: (0, adminRouter_1.createAdminRouter)(deps),
