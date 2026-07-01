@@ -8,6 +8,10 @@ const {
   answerDietQuestion,
   parseBloodPressure,
   bpInterpretation,
+  dietKeywordFallback,
+  nhisKeywordFallback,
+  GENERIC_DIET_FALLBACK,
+  GENERIC_NHIS_FALLBACK,
 } = require('../services/healthAssistant');
 const { findNearbyFacilities } = require('../services/nearbyPlaces');
 const { initializeTransaction } = require('../services/paystack');
@@ -27,34 +31,70 @@ function handlePointsError(res, e, userId, featureKey) {
 }
 
 router.post('/health/nhis', async (req, res) => {
+  const question = String(req.body?.question || '').trim();
+  const history = Array.isArray(req.body?.history) ? req.body.history : [];
+  const routeTimeout = setTimeout(() => {
+    if (!res.headersSent) {
+      res.setHeader('X-Health-Engine', 'fallback');
+      res.json({
+        answer: nhisKeywordFallback(question) || GENERIC_NHIS_FALLBACK,
+        points: { charged: 0, balance: null, fallback: true },
+      });
+    }
+  }, 24_000);
+
   try {
-    const question = String(req.body?.question || '').trim();
-    const history = Array.isArray(req.body?.history) ? req.body.history : [];
     if (!question) return res.status(400).json({ error: { message: 'Question is required' } });
     const answer = await answerNhisQuestion(question, history);
     const deduction = deductPoints(req.userId, 'pwa_nhis');
+    if (res.headersSent) return;
     res.setHeader('X-Health-Engine', '2');
     res.json({ answer, points: { charged: deduction.charged, balance: deduction.balance } });
   } catch (e) {
+    if (res.headersSent) return;
     const handled = handlePointsError(res, e, req.userId, 'pwa_nhis');
     if (handled) return handled;
-    res.status(500).json({ error: { message: e.message } });
+    res.setHeader('X-Health-Engine', 'fallback');
+    res.json({
+      answer: nhisKeywordFallback(question) || GENERIC_NHIS_FALLBACK,
+      points: { charged: 0, balance: null, fallback: true },
+    });
+  } finally {
+    clearTimeout(routeTimeout);
   }
 });
 
 router.post('/health/diet', async (req, res) => {
+  const question = String(req.body?.question || '').trim();
+  const history = Array.isArray(req.body?.history) ? req.body.history : [];
+  const routeTimeout = setTimeout(() => {
+    if (!res.headersSent) {
+      res.setHeader('X-Health-Engine', 'fallback');
+      res.json({
+        answer: dietKeywordFallback(question) || GENERIC_DIET_FALLBACK,
+        points: { charged: 0, balance: null, fallback: true },
+      });
+    }
+  }, 24_000);
+
   try {
-    const question = String(req.body?.question || '').trim();
-    const history = Array.isArray(req.body?.history) ? req.body.history : [];
     if (!question) return res.status(400).json({ error: { message: 'Question is required' } });
     const answer = await answerDietQuestion(question, history);
     const deduction = deductPoints(req.userId, 'pwa_diet');
+    if (res.headersSent) return;
     res.setHeader('X-Health-Engine', '2');
     res.json({ answer, points: { charged: deduction.charged, balance: deduction.balance } });
   } catch (e) {
+    if (res.headersSent) return;
     const handled = handlePointsError(res, e, req.userId, 'pwa_diet');
     if (handled) return handled;
-    res.status(500).json({ error: { message: e.message } });
+    res.setHeader('X-Health-Engine', 'fallback');
+    res.json({
+      answer: dietKeywordFallback(question) || GENERIC_DIET_FALLBACK,
+      points: { charged: 0, balance: null, fallback: true },
+    });
+  } finally {
+    clearTimeout(routeTimeout);
   }
 });
 
