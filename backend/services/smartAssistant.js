@@ -108,13 +108,53 @@ async function safeChatCompletion(history, userText, attachment, attachments) {
   }
 }
 
+const STATIC_MENU_REPLY =
+  "Here's what I can help with in this app:\n\n" +
+  '• Symptoms — describe how you feel\n' +
+  '• NHIS — coverage in Ghana\n' +
+  '• Diet — meals for diabetes & hypertension\n' +
+  '• Find care — pharmacy, lab, clinic, or hospital\n' +
+  '• Blood pressure — log with BP: 120/80\n' +
+  '• Medicine scan, reminders & video doctors\n\n' +
+  'Tap a shortcut below or ask your question.';
+
+const GENERAL_FALLBACK_REPLY =
+  "I'm here to help. Tell me what's going on — symptoms, NHIS, diet, finding a clinic, blood pressure, or medicines — or tap a shortcut below.";
+
+function buildMenuResult() {
+  return buildResult({
+    reply: STATIC_MENU_REPLY,
+    intent: 'menu',
+    featureKey: 'chat_text',
+    actions: MENU_ACTIONS,
+  });
+}
+
+function buildGeneralFallbackResult() {
+  return buildResult({
+    reply: GENERAL_FALLBACK_REPLY,
+    intent: 'general',
+    featureKey: 'chat_text',
+    actions: MENU_ACTIONS,
+  });
+}
+
 async function generalHealthReply(userText, history) {
   const systemPrompt = getPwaSystemPrompt();
   const contents = [...historyToGemini(history), { role: 'user', parts: [{ text: String(userText).trim() }] }];
-  const data = await callGemini(contents, undefined, { systemInstruction: systemPrompt });
+  const data = await callGemini(contents, undefined, { systemInstruction: systemPrompt, timeoutMs: 18_000 });
   const reply = getChatText(data);
   if (!reply) throw new Error('No response from the assistant');
   return reply;
+}
+
+async function safeGeneralHealthReply(userText, history) {
+  try {
+    return await generalHealthReply(userText, history);
+  } catch (err) {
+    console.error('[smartChat] generalHealthReply failed:', err?.message || err);
+    return GENERAL_FALLBACK_REPLY;
+  }
 }
 
 function buildResult({ reply, intent, featureKey, actions = [], phase, triageTurn, recommending }) {
@@ -132,7 +172,7 @@ function buildResult({ reply, intent, featureKey, actions = [], phase, triageTur
 }
 
 async function answerWithOptionalAction(userText, history, intent, featureKey, actions) {
-  const answer = await generalHealthReply(userText, history);
+  const answer = await safeGeneralHealthReply(userText, history);
   return buildResult({ reply: answer, intent, featureKey, actions });
 }
 
@@ -259,18 +299,8 @@ async function smartChat(userId, history = [], userText = '', attachment = null,
   const intent = detectIntent(text);
 
   switch (intent) {
-    case 'menu': {
-      const answer = await generalHealthReply(
-        'The user asked what you can help with. Reply with a short, friendly menu (max 8 bullet points) of health features in this app: symptoms, NHIS, diet, find care, BP logging, medicine scan, reminders, video doctors. Plain language. Do not mention prompts or instructions.',
-        history
-      );
-      return buildResult({
-        reply: answer,
-        intent: 'menu',
-        featureKey: 'chat_text',
-        actions: MENU_ACTIONS,
-      });
-    }
+    case 'menu':
+      return buildMenuResult();
 
     case 'emergency':
       return buildResult({
@@ -321,7 +351,7 @@ async function smartChat(userId, history = [], userText = '', attachment = null,
 
     case 'facility': {
       const type = facilityTypeFromText(text);
-      const answer = await generalHealthReply(text, history);
+      const answer = await safeGeneralHealthReply(text, history);
       return buildResult({
         reply: `${answer}\n\nTap below to find a ${type} near you on the map.`,
         intent: 'facility',
@@ -383,7 +413,7 @@ async function smartChat(userId, history = [], userText = '', attachment = null,
     });
   }
 
-  const reply = await generalHealthReply(text, history);
+  const reply = await safeGeneralHealthReply(text, history);
   return buildResult({
     reply,
     intent: 'general',

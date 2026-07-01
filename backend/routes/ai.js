@@ -3,7 +3,6 @@ const { requireUserAuth } = require('../middleware/userAuth');
 const { deductPoints, PointsError } = require('../services/points');
 const { flushDb } = require('../db/init');
 const { ensureRouteDatabase } = require('../middleware/requestDb');
-const { getGeminiApiKey } = require('../services/settings');
 const {
   callGemini,
   resolveChatFeatureKey,
@@ -63,17 +62,17 @@ router.post('/gemini/generateContent', async (req, res) => {
 
 router.post('/chat', async (req, res) => {
   let featureKey = 'chat_text';
-
-  try {
-    if (!getGeminiApiKey()) {
-      return res.status(503).json({
+  const chatTimeout = setTimeout(() => {
+    if (!res.headersSent) {
+      res.status(504).json({
         error: {
-          message: 'AI is not configured yet',
-          detail: 'Add GEMINI_API_KEY in cPanel → Node.js → Environment Variables, then RESTART.',
+          message: 'Request timed out — try again. If this continues, RESTART Node.js in cPanel.',
         },
       });
     }
+  }, 28_000);
 
+  try {
     const {
       history = [],
       userText = '',
@@ -94,8 +93,29 @@ router.post('/chat', async (req, res) => {
           featureKey: 'chat_text',
           actions: [],
         };
+      } else if (/^(menu|help|features|options|what can you do|i need (some )?help|need help|can you help( me)?|help me|please help)[!.?\s]*$/i.test(text)) {
+        smart = {
+          reply:
+            "Here's what I can help with in this app:\n\n" +
+            '• Symptoms — describe how you feel\n' +
+            '• NHIS — coverage in Ghana\n' +
+            '• Diet — meals for diabetes & hypertension\n' +
+            '• Find care — pharmacy, lab, clinic, or hospital\n' +
+            '• Blood pressure — log with BP: 120/80\n' +
+            '• Medicine scan, reminders & video doctors\n\n' +
+            'Tap a shortcut below or ask your question.',
+          meta: { intent: 'menu', phase: 'menu' },
+          featureKey: 'chat_text',
+          actions: [],
+        };
       } else {
-        throw chatErr;
+        smart = {
+          reply:
+            "I'm here to help. Tell me what's going on — symptoms, NHIS, diet, finding a clinic, blood pressure, or medicines — or tap a shortcut below.",
+          meta: { intent: 'general', phase: 'general' },
+          featureKey: 'chat_text',
+          actions: [],
+        };
       }
     }
     featureKey = overrideKey || smart.featureKey || resolveChatFeatureKey(attachment, attachments);
@@ -119,6 +139,8 @@ router.post('/chat', async (req, res) => {
     const handled = handlePointsError(res, e, req.userId, featureKey);
     if (handled) return handled;
     res.status(e.status || 500).json({ error: { message: e.message } });
+  } finally {
+    clearTimeout(chatTimeout);
   }
 });
 

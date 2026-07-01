@@ -76,7 +76,7 @@ export async function sendChatMessage({
         attachment: fileList[0] || null,
         attachments: fileList.length ? fileList : null,
       }),
-    }, 4);
+    }, 2);
     const data = await readApiJson(response);
     if (!response.ok) {
       const err = new Error(data?.error?.message || 'Unable to reach the assistant');
