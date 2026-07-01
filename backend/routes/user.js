@@ -2,10 +2,12 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { getDb, now } = require('../db/init');
 const { requireUserAuth } = require('../middleware/userAuth');
+const { ensureRouteDatabase } = require('../middleware/requestDb');
 const { getAllRules } = require('../services/points');
 const { isPointsEnabled } = require('../services/settings');
 
 const router = express.Router();
+router.use((req, res, next) => ensureRouteDatabase(req, res, next, 15_000));
 
 function sanitizeUser(row) {
   return {

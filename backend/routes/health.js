@@ -1,6 +1,7 @@
 const express = require('express');
 const { getDb, uuid, now } = require('../db/init');
 const { requireUserAuth } = require('../middleware/userAuth');
+const { ensureRouteDatabase } = require('../middleware/requestDb');
 const { deductPoints, PointsError } = require('../services/points');
 const {
   answerNhisQuestion,
@@ -13,6 +14,7 @@ const { initializeTransaction } = require('../services/paystack');
 const { analyzeMedicineImage, analyzePrescriptionImage } = require('../services/visionAssist');
 
 const router = express.Router();
+router.use((req, res, next) => ensureRouteDatabase(req, res, next, 15_000));
 router.use(requireUserAuth);
 
 function handlePointsError(res, e, userId, featureKey) {
@@ -29,8 +31,9 @@ router.post('/health/nhis', async (req, res) => {
     const question = String(req.body?.question || '').trim();
     const history = Array.isArray(req.body?.history) ? req.body.history : [];
     if (!question) return res.status(400).json({ error: { message: 'Question is required' } });
-    const deduction = deductPoints(req.userId, 'pwa_nhis');
     const answer = await answerNhisQuestion(question, history);
+    const deduction = deductPoints(req.userId, 'pwa_nhis');
+    res.setHeader('X-Health-Engine', '2');
     res.json({ answer, points: { charged: deduction.charged, balance: deduction.balance } });
   } catch (e) {
     const handled = handlePointsError(res, e, req.userId, 'pwa_nhis');
@@ -44,8 +47,9 @@ router.post('/health/diet', async (req, res) => {
     const question = String(req.body?.question || '').trim();
     const history = Array.isArray(req.body?.history) ? req.body.history : [];
     if (!question) return res.status(400).json({ error: { message: 'Question is required' } });
-    const deduction = deductPoints(req.userId, 'pwa_diet');
     const answer = await answerDietQuestion(question, history);
+    const deduction = deductPoints(req.userId, 'pwa_diet');
+    res.setHeader('X-Health-Engine', '2');
     res.json({ answer, points: { charged: deduction.charged, balance: deduction.balance } });
   } catch (e) {
     const handled = handlePointsError(res, e, req.userId, 'pwa_diet');

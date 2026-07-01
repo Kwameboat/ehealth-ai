@@ -1,5 +1,7 @@
 import { getApiAuthHeadersAsync } from './apiAuth';
 import { getApiUrl } from './appConfig';
+import { readApiJson } from './apiResponse';
+import { fetchWithRetry } from './fetchRetry';
 
 async function healthRequest(path, options = {}) {
   const apiBase = getApiUrl();
@@ -9,9 +11,16 @@ async function healthRequest(path, options = {}) {
     ...(await getApiAuthHeadersAsync()),
     ...(options.headers || {}),
   };
-  const res = await fetch(`${apiBase}${path}`, { ...options, headers, body: options.body });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data?.error?.message || 'Request failed');
+  const res = await fetchWithRetry(
+    `${apiBase}${path}`,
+    { ...options, headers, body: options.body },
+    3,
+    55_000
+  );
+  const data = await readApiJson(res);
+  if (!res.ok) {
+    throw new Error(data?.error?.message || `Request failed (${res.status})`);
+  }
   return data;
 }
 

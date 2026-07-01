@@ -1,6 +1,11 @@
 const { getGeminiApiKey } = require('./settings');
 const { callGemini } = require('./gemini');
 const { sanitizePwaReply } = require('./replySanitizer');
+const {
+  GENERIC_NHIS_FALLBACK,
+  nhisKeywordFallback,
+  dietKeywordFallback,
+} = require('./healthFallbacks');
 
 const NHIS_PROMPT = `You are Agyenim, an NHIS (National Health Insurance Scheme) assistant for Ghana.
 Explain typical NHIS coverage in plain language: outpatient visits, selected medications, maternity, child welfare, and that some drugs/procedures may need co-payment or are excluded.
@@ -34,11 +39,30 @@ async function specialtyAnswer(systemPrompt, question, history = []) {
 }
 
 async function answerNhisQuestion(question, history = []) {
-  return specialtyAnswer(NHIS_PROMPT, question, history);
+  const instant = nhisKeywordFallback(question);
+  if (instant) return instant;
+
+  try {
+    return await specialtyAnswer(NHIS_PROMPT, question, history);
+  } catch (err) {
+    console.error('[nhis] Gemini failed:', err?.message || err);
+    return nhisKeywordFallback(question) || GENERIC_NHIS_FALLBACK;
+  }
 }
 
 async function answerDietQuestion(question, history = []) {
-  return specialtyAnswer(DIET_PROMPT, question, history);
+  const instant = dietKeywordFallback(question);
+  if (instant) return instant;
+
+  try {
+    return await specialtyAnswer(DIET_PROMPT, question, history);
+  } catch (err) {
+    console.error('[diet] Gemini failed:', err?.message || err);
+    return (
+      dietKeywordFallback(question) ||
+      'For diabetes and hypertension, favour smaller portions of staples, more vegetables (kontomire, okro), grilled fish, and less sugary drinks. Confirm meal plans with your clinic.'
+    );
+  }
 }
 
 function parseBloodPressure(text) {

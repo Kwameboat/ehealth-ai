@@ -205,11 +205,13 @@ app.use(async (req, res, next) => {
   if (req.path === '/api/health') return next();
   // Admin console has its own DB middleware (longer recovery window).
   if (req.path.startsWith('/admin/api')) return next();
-  // Chat/auth routes handle DB in their routers — avoid double-gating + proxy timeouts.
+  // Chat/auth/health routes handle DB in their routers — avoid double-gating + proxy timeouts.
   if (
     req.path === '/api/chat' ||
     req.path === '/api/auth/login' ||
-    req.path === '/api/auth/register'
+    req.path === '/api/auth/register' ||
+    req.path === '/api/me' ||
+    req.path.startsWith('/api/health/')
   ) {
     return next();
   }
